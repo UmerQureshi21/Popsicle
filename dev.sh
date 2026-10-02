@@ -17,7 +17,8 @@ trap 'kill 0' EXIT
 (cd "$ROOT/frontend" && npm run dev -- --port 3000) &
 
 echo
-echo "  App:      http://localhost:3000"
+echo "  Landing:  http://localhost:3000"
+echo "  App:      http://localhost:3000/compose"
 echo "  API docs: http://localhost:8000/docs"
 echo
 wait
