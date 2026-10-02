@@ -8,7 +8,7 @@ from .campaigns import mark_interrupted_on_startup
 from .config import settings
 from .db import engine
 from .models import Base
-from .routers import campaigns, misc, people
+from .routers import campaigns, misc, people, people_search
 
 logging.basicConfig(level=logging.INFO)
 
@@ -31,6 +31,7 @@ app.add_middleware(
 app.include_router(campaigns.router)
 app.include_router(people.router)
 app.include_router(misc.router)
+app.include_router(people_search.router)
 
 
 @app.get("/api/health")

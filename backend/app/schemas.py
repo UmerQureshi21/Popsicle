@@ -193,3 +193,61 @@ class Stats(BaseModel):
     companies: int
     contacts: int
     failed_total: int
+
+
+# ---- Finding people (Hunter.io) -----------------------------------------
+
+
+class HunterStatus(BaseModel):
+    configured: bool
+    credits_used: int | None = None
+    credits_available: int | None = None
+    reset_date: str | None = None
+    error: str | None = None
+
+
+class FoundPerson(BaseModel):
+    email: str
+    first_name: str | None = None
+    last_name: str | None = None
+    full_name: str | None = None
+    position: str | None = None
+    department: str | None = None
+    seniority: str | None = None
+    confidence: int | None = None  # Hunter's 0-100 score that the email is right
+    verification_status: str | None = None  # valid | accept_all | unknown | ...
+    linkedin_url: str | None = None
+    already_emailed_at: datetime | None = None
+
+
+class PeopleSearchIn(BaseModel):
+    query: str = Field(min_length=1)  # company name or domain
+    limit: int = Field(10, ge=1, le=100)
+    offset: int = Field(0, ge=0)
+    department: str | None = None
+    seniority: str | None = None
+    job_titles: str | None = None
+    refresh: bool = False  # bypass the cache and spend credits again
+
+
+class PeopleSearchOut(BaseModel):
+    domain: str | None
+    organization: str | None
+    pattern: str | None  # e.g. "{first}.{last}"
+    total: int  # how many people Hunter knows at this company
+    offset: int
+    limit: int
+    people: list[FoundPerson]
+    cached: bool
+
+
+class EmailFinderIn(BaseModel):
+    company: str = Field(min_length=1)  # company name or domain
+    full_name: str | None = None
+    linkedin_url: str | None = None
+    refresh: bool = False
+
+
+class EmailFinderOut(BaseModel):
+    person: FoundPerson | None  # None when Hunter couldn't find an email (no credit used)
+    cached: bool
