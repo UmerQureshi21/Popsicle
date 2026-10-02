@@ -150,3 +150,40 @@ export type Stats = {
   contacts: number;
   failed_total: number;
 };
+
+// ---- Finding people (Hunter.io) ----
+
+export type HunterStatus = {
+  configured: boolean;
+  credits_used: number | null;
+  credits_available: number | null;
+  reset_date: string | null;
+  error: string | null;
+};
+
+export type FoundPerson = {
+  email: string;
+  first_name: string | null;
+  last_name: string | null;
+  full_name: string | null;
+  position: string | null;
+  department: string | null;
+  seniority: string | null;
+  confidence: number | null;
+  verification_status: string | null;
+  linkedin_url: string | null;
+  already_emailed_at: string | null;
+};
+
+export type PeopleSearch = {
+  domain: string | null;
+  organization: string | null;
+  pattern: string | null;
+  total: number;
+  offset: number;
+  limit: number;
+  people: FoundPerson[];
+  cached: boolean;
+};
+
+export type EmailFinderResult = { person: FoundPerson | null; cached: boolean };

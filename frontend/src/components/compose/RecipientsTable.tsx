@@ -160,7 +160,7 @@ export default function RecipientsTable({ variables, onVariablesChange, rows, on
                           onChange={(e) => setCell(r, v, e.target.value)}
                           onKeyDown={(e) => onKeyDown(e, r, c)}
                           onPaste={(e) => onPaste(e, r, c)}
-                          placeholder={r === 0 ? (PLACEHOLDERS[v] ?? v.replace(/_/g, " ")) : ""}
+                          placeholder={r === 0 && !Object.values(row).some((x) => x?.trim()) ? (PLACEHOLDERS[v] ?? v.replace(/_/g, " ")) : ""}
                           type={v === "email" ? "email" : "text"}
                           aria-label={`Row ${r + 1} ${v}`}
                           className="w-full bg-transparent px-3 py-2.5 text-ink outline-none placeholder:text-steel/50 focus:bg-scarlet/5 focus:shadow-[inset_0_0_0_2px_var(--color-scarlet)]"

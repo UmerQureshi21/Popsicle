@@ -12,6 +12,7 @@ import {
   Paperclip,
   Send,
   UserCheck,
+  UserSearch,
   Users,
 } from "lucide-react";
 import {
@@ -22,6 +23,7 @@ import {
   type CampaignDraft,
   type Company,
   type GmailStatus,
+  type FoundPerson,
   type Template,
 } from "@/lib/api";
 import { formatBytes } from "@/lib/format";
@@ -31,6 +33,7 @@ import CampaignProgress from "@/components/CampaignProgress";
 import HighlightEditor, { type EditorHandle } from "./HighlightEditor";
 import PreviewModal from "./PreviewModal";
 import TemplateMenu from "./TemplateMenu";
+import FindPeopleModal from "./FindPeopleModal";
 import RecipientsTable from "./RecipientsTable";
 
 type Draft = {
@@ -99,6 +102,7 @@ export default function Compose() {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [uploading, setUploading] = useState(false);
   const [reviewing, setReviewing] = useState<CampaignDraft | null>(null);
+  const [findingPeople, setFindingPeople] = useState(false);
   const [campaign, setCampaign] = useState<CampaignDetail | null>(null);
 
   const subjectRef = useRef<EditorHandle>(null);
@@ -178,6 +182,45 @@ export default function Compose() {
       skip_already_sent: skipAlreadySent,
       delay_seconds: delaySeconds,
     });
+
+  // People picked in "Find people" become rows, filling whichever columns match what Hunter knows.
+  const addFoundPeople = (people: FoundPerson[], organization: string | null) => {
+    const withRole = people.some((p) => p.position) && !["role", "title", "position"].some((v) => variables.includes(v));
+    const vars = withRole ? [...variables, "role"] : variables;
+    const fieldFor = (p: FoundPerson): Record<string, string | null> => ({
+      full_name: p.full_name ?? p.first_name,
+      name: p.full_name ?? p.first_name,
+      first_name: p.first_name,
+      last_name: p.last_name,
+      email: p.email,
+      role: p.position,
+      title: p.position,
+      position: p.position,
+      department: p.department,
+      seniority: p.seniority,
+      linkedin: p.linkedin_url,
+      linkedin_url: p.linkedin_url,
+    });
+    const existing = new Set(rows.map((r) => (r.email ?? "").trim().toLowerCase()).filter(Boolean));
+    const kept = rows.filter((r) => Object.values(r).some((v) => v?.trim()));
+    const added = people
+      .filter((p) => !existing.has(p.email))
+      .map((p) => {
+        const known = fieldFor(p);
+        return Object.fromEntries(vars.map((v) => [v, known[v] ?? ""]));
+      });
+    set({
+      variables: vars,
+      rows: kept.length + added.length ? [...kept, ...added] : [{}],
+      ...(company.trim() || !organization ? {} : { company: organization }),
+    });
+    setPanelOpen(true);
+    const skipped = people.length - added.length;
+    setNotice(
+      `Added ${added.length} ${added.length === 1 ? "person" : "people"} to recipients` +
+        (skipped ? ` (${skipped} already in the list).` : "."),
+    );
+  };
 
   const startNextBatch = () => {
     set({ rows: [{}], company: "" });
@@ -273,6 +316,13 @@ export default function Compose() {
               Recipients
               {rowErrors > 0 && <span className="size-1.5 rounded-full bg-scarlet" />}
               <ChevronDown className={`size-4 transition-transform ${panelOpen ? "rotate-180" : ""}`} />
+            </button>
+            <button
+              onClick={() => setFindingPeople(true)}
+              className="flex shrink-0 items-center gap-1.5 rounded-xl bg-crimson/10 px-3 py-1.5 text-sm font-medium text-crimson transition-colors hover:bg-crimson/15"
+            >
+              <UserSearch className="size-4" />
+              Find people
             </button>
           </div>
 
@@ -485,6 +535,10 @@ export default function Compose() {
           </div>
         </div>
       </div>
+
+      {findingPeople && (
+        <FindPeopleModal initialQuery={company} onClose={() => setFindingPeople(false)} onAdd={addFoundPeople} />
+      )}
 
       {reviewing && (
         <PreviewModal
