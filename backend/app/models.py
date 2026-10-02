@@ -167,6 +167,18 @@ class Email(Base):
     contact: Mapped[Contact | None] = relationship(back_populates="emails")
 
 
+class HunterLookup(Base):
+    """Cached Hunter.io responses, so repeating a search doesn't spend credits again."""
+
+    __tablename__ = "hunter_lookups"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    kind: Mapped[str] = mapped_column(String(30))  # domain_search | email_finder
+    cache_key: Mapped[str] = mapped_column(Text, unique=True)  # kind + the exact query params
+    response: Mapped[dict] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class GmailAccount(Base):
     __tablename__ = "gmail_accounts"
 

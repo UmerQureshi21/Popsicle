@@ -14,6 +14,8 @@ class Settings(BaseSettings):
     backend_url: str = "http://localhost:8000"
     # OAuth client downloaded from Google Cloud Console ("Web application" type).
     google_client_secrets: Path = BACKEND_DIR / "credentials.json"
+    # https://hunter.io/api-keys, used to find people and emails at a company.
+    hunter_api_key: str | None = None
 
 
 settings = Settings()
