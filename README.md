@@ -49,6 +49,17 @@ Tables are created automatically when the API starts.
 
 While the Google app is in "Testing" mode, Google expires the login after 7 days. When that happens, click Connect Gmail again.
 
+### Connecting Hunter.io (once, for Find people)
+
+1. Copy your API key from https://hunter.io/api-keys.
+2. Add it to `backend/.env` (create the file if it doesn't exist; git ignores it):
+   ```
+   HUNTER_API_KEY=your-key
+   ```
+3. Restart `./dev.sh`.
+
+The free plan has 50 credits a month, about one per email found. Find people shows how many you have left.
+
 ## Using it
 
 1. **Company:** type the company name. It becomes `{{company}}`.
@@ -63,12 +74,24 @@ While the Google app is in "Testing" mode, Google expires the login after 7 days
 
 Your draft is saved in the browser, so a refresh doesn't lose it. Use the template icon to save and load templates.
 
+### Finding people
+
+Click **Find people** next to Recipients:
+
+1. **Search:** type a company name or domain. You can filter by department and seniority and choose how many people to fetch.
+2. **Pick people:** each result shows their title, Hunter's confidence in the email, and whether you've already emailed them. People already emailed start unticked.
+3. **Add them:** ticked people go into the recipients table. A `role` column is added from their job titles, and Company is filled in if it's empty.
+4. **Missing someone?** Use **Look them up** with their name or LinkedIn URL to find a single person's email.
+
+Results are saved for 30 days, so repeating a search costs nothing. Use **refresh** on saved results to search Hunter again.
+
 ## Data model
 
 ```
 companies 1─* contacts 1─* emails *─1 campaigns *─* attachments
                                        campaigns *─1 templates
 gmail_accounts (the connected sender)
+hunter_lookups (cached Hunter.io responses)
 ```
 
 - **campaigns:** one batch, e.g. "Stripe, 10 people". It keeps a copy of the exact subject and body used, so editing a template later doesn't change history.
