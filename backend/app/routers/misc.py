@@ -111,14 +111,14 @@ def gmail_connect():
 def gmail_callback(request: Request, state: str = "", error: str | None = None, db: Session = Depends(get_db)):
     back = settings.frontend_url
     if error:
-        return RedirectResponse(f"{back}/?gmail_error={error}")
+        return RedirectResponse(f"{back}/compose?gmail_error={error}")
     try:
         gmail.finish_auth(db, state, str(request.url))
     except gmail.MissingSendPermission:
-        return RedirectResponse(f"{back}/?gmail_error=missing_send_permission")
+        return RedirectResponse(f"{back}/compose?gmail_error=missing_send_permission")
     except Exception as e:
-        return RedirectResponse(f"{back}/?gmail_error={type(e).__name__}")
-    return RedirectResponse(f"{back}/?gmail=connected")
+        return RedirectResponse(f"{back}/compose?gmail_error={type(e).__name__}")
+    return RedirectResponse(f"{back}/compose?gmail=connected")
 
 
 @router.delete("/gmail", status_code=204, tags=["gmail"])

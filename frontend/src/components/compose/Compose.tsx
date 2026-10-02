@@ -304,7 +304,7 @@ export default function Compose() {
             />
 
             {/* Variable toolbar */}
-            <div className="sticky top-20 z-10 mt-4 flex justify-end">
+            <div className="sticky top-20 z-10 mt-4 flex justify-start">
               <div className="flex max-w-full flex-wrap items-center gap-1 rounded-xl bg-ink p-1 shadow-lg">
                 <span className="px-2 text-xs text-white/50">Insert</span>
                 {[...variables, ...derived].map((v) => (

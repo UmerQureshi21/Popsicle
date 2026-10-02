@@ -17,7 +17,7 @@ Write one email template, paste in a list of people, and send each person a pers
 ./dev.sh
 ```
 
-This starts Postgres if it isn't running, then the API on :8000 and the UI on http://localhost:3000.
+This starts Postgres if it isn't running, then the API on :8000 and the UI on http://localhost:3000 (landing page; the app itself is at `/compose`).
 
 To start Postgres yourself instead, follow the same steps as your other clusters:
 
