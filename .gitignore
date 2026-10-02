@@ -1,0 +1,63 @@
+# ---- Separate cloned repo, not part of this project ----
+linkedin_scraper/
+
+# ---- Secrets: never commit ----
+credentials.json
+token.json
+client_secret*.json
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# ---- Local data ----
+cli/sent_log.csv
+cli/contacts*.csv
+!cli/contacts.example.csv
+*.sqlite
+*.db
+logfile
+pgdata/
+
+# ---- Python ----
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# ---- Node / Next.js ----
+node_modules/
+.next/
+out/
+next-env.d.ts
+*.tsbuildinfo
+.vercel/
+.turbo/
+coverage/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# ---- Editors / OS ----
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.swp
+*~
+
+# ---- Logs ----
+*.log

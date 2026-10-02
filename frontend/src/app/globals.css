@@ -1,0 +1,69 @@
+@import "tailwindcss";
+
+@theme {
+  /* Palette: d90429 · ef233c · edf2f4 · 8d99ae · 2b2d42 */
+  --color-crimson: #d90429;
+  --color-scarlet: #ef233c;
+  --color-cloud: #edf2f4;
+  --color-steel: #8d99ae;
+  --color-ink: #2b2d42;
+
+  /* Montserrat everywhere, including the variable chips and tuple box. */
+  --font-sans: var(--font-montserrat), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-montserrat), ui-sans-serif, system-ui, sans-serif;
+}
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: #ffffff;
+  color: var(--color-ink);
+}
+
+::selection {
+  background: color-mix(in srgb, var(--color-scarlet) 22%, transparent);
+}
+
+/* The compose editor draws highlighted text behind a transparent textarea. */
+.editor-layer {
+  font: inherit;
+  letter-spacing: inherit;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  tab-size: 4;
+}
+
+.placeholder-chip {
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--color-scarlet) 12%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-scarlet) 12%, transparent);
+  color: var(--color-crimson);
+}
+
+.placeholder-chip-unknown {
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--color-steel) 18%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-steel) 18%, transparent);
+  color: var(--color-ink);
+  text-decoration: underline wavy var(--color-scarlet);
+  text-underline-offset: 3px;
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.animate-fade-up {
+  animation: fade-up 0.25s ease-out both;
+}
