@@ -74,6 +74,7 @@ def search_company(body: PeopleSearchIn, db: Session = Depends(get_db)):
         department=body.department,
         seniority=body.seniority,
         job_titles=body.job_titles,
+        location=[loc.model_dump(exclude_none=True) for loc in body.location] if body.location else None,
         refresh=body.refresh,
     )
     data, meta = res.get("data") or {}, res.get("meta") or {}

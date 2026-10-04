@@ -37,13 +37,16 @@ def configured() -> bool:
     return bool(settings.hunter_api_key)
 
 
-def _get(path: str, params: dict) -> dict:
+def _request(path: str, params: dict, body: dict | None = None) -> dict:
+    """GET with query params, or POST when there's a JSON body (Hunter's location filter needs one)."""
     if not configured():
         raise HunterError(400, "Hunter isn't set up. Add HUNTER_API_KEY to backend/.env and restart the backend.")
     try:
-        r = requests.get(
+        r = requests.request(
+            "POST" if body else "GET",
             BASE_URL + path,
             params={k: v for k, v in params.items() if v not in (None, "")},
+            json=body,
             headers={"X-API-KEY": settings.hunter_api_key},
             timeout=TIMEOUT_SECONDS,
         )
@@ -91,9 +94,14 @@ def domain_search(
     department: str | None = None,
     seniority: str | None = None,
     job_titles: str | None = None,
+    location: list[dict] | None = None,
     refresh: bool = False,
 ) -> tuple[dict, bool]:
-    """People at a company, by domain ('stripe.com') or company name ('Stripe')."""
+    """People at a company, by domain ('stripe.com') or company name ('Stripe').
+
+    `location` limits results to where each person is based, e.g.
+    [{"city": "Toronto", "country": "CA"}, {"city": "Mississauga", "country": "CA"}].
+    """
     domain = clean_domain(query)
     params = {
         "domain" if domain else "company": domain or query.strip(),
@@ -105,7 +113,9 @@ def domain_search(
         "job_titles": job_titles,
     }
     params = {k: v for k, v in params.items() if v not in (None, "")}
-    return _cached(db, "domain_search", params, lambda: _get("/domain-search", params), refresh)
+    body = {"location": {"include": location}} if location else None
+    cache_params = {**params, **(body or {})}
+    return _cached(db, "domain_search", cache_params, lambda: _request("/domain-search", params, body), refresh)
 
 
 def email_finder(
@@ -123,12 +133,12 @@ def email_finder(
         params["linkedin_handle"] = linkedin_handle
     if full_name:
         params["full_name"] = full_name.strip()
-    return _cached(db, "email_finder", params, lambda: _get("/email-finder", params), refresh)
+    return _cached(db, "email_finder", params, lambda: _request("/email-finder", params), refresh)
 
 
 def account() -> dict:
     """Credits used / available this month. Never cached."""
-    return _get("/account", {})["data"]
+    return _request("/account", {})["data"]
 
 
 def linkedin_handle(url_or_handle: str) -> str | None:

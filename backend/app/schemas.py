@@ -220,6 +220,15 @@ class FoundPerson(BaseModel):
     already_emailed_at: datetime | None = None
 
 
+class LocationFilter(BaseModel):
+    """One place a person can be based. Hunter needs a country (ISO code like "CA") with a city."""
+
+    city: str | None = None
+    country: str | None = None
+    state: str | None = None  # US state codes only
+    continent: str | None = None
+
+
 class PeopleSearchIn(BaseModel):
     query: str = Field(min_length=1)  # company name or domain
     limit: int = Field(10, ge=1, le=100)
@@ -227,6 +236,7 @@ class PeopleSearchIn(BaseModel):
     department: str | None = None
     seniority: str | None = None
     job_titles: str | None = None
+    location: list[LocationFilter] | None = None  # only people based in any of these places
     refresh: bool = False  # bypass the cache and spend credits again
 
 
