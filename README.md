@@ -97,7 +97,7 @@ A template stores the subject and body. Loading one adds any variables it uses a
 
 Open the **Find people** tab:
 
-1. **Companies:** list them one per line, by name or domain (`stripe.com` is the most accurate).
+1. **Companies:** start typing a name and pick the company from the suggestions (logo, domain, and how many people Hunter has, biggest first). Picking one searches that exact domain, so "Harvey" means harvey.ai and not harvey.net. You can also type a name or domain and press Enter, or paste several at once.
 2. **Job title:** defaults to `software engineer`, at any seniority. Separate several titles with commas.
 3. **Location:** defaults to **Greater Toronto Area**: people based in Toronto or the surrounding Peel, York, Halton and Durham cities. You can also choose anywhere in Canada, or anywhere. This filters on where each person lives and works, not the company's HQ.
 4. **People per company:** choose how many to fetch, then click **Search**.
@@ -107,6 +107,8 @@ Open the **Find people** tab:
 There's also a quicker **Find people** button inside Compose that searches one company and adds people to the current batch. Its **Look them up** section finds a single person's email from their name or LinkedIn URL.
 
 Results are saved for 30 days, so repeating a search costs nothing. Use **refresh** on saved results to search Hunter again.
+
+If a company search finds no one, Popsicle checks (for free) how many people Hunter has there in total and tells you whether the filters are the reason. It then offers one-click **Search anywhere** or **Remove the job title** retries.
 
 ## Data model
 
