@@ -76,12 +76,15 @@ Your draft is saved in the browser, so a refresh doesn't lose it. Use the templa
 
 ### Finding people
 
-Click **Find people** next to Recipients:
+Open the **Find people** tab:
 
-1. **Search:** type a company name or domain. You can filter by department and seniority and choose how many people to fetch.
-2. **Pick people:** each result shows their title, Hunter's confidence in the email, and whether you've already emailed them. People already emailed start unticked.
-3. **Add them:** ticked people go into the recipients table. A `role` column is added from their job titles, and Company is filled in if it's empty.
-4. **Missing someone?** Use **Look them up** with their name or LinkedIn URL to find a single person's email.
+1. **Companies:** list them one per line, by name or domain (`stripe.com` is the most accurate).
+2. **Job title:** defaults to `software engineer`, at any seniority. Separate several titles with commas.
+3. **People per company:** choose how many to fetch, then click **Search**.
+4. **Pick people:** results appear per company. Each person shows their title, Hunter's confidence in the email, and whether you've already emailed them; people already emailed start unticked.
+5. **Email them:** click **Email N people** on a company. Compose opens with those people as recipients, the company filled in, and a `role` column from their job titles.
+
+There's also a quicker **Find people** button inside Compose that searches one company and adds people to the current batch. Its **Look them up** section finds a single person's email from their name or LinkedIn URL.
 
 Results are saved for 30 days, so repeating a search costs nothing. Use **refresh** on saved results to search Hunter again.
 
