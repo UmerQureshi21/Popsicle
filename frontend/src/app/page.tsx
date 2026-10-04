@@ -75,7 +75,7 @@ export default function LandingPage() {
           <span className="text-xl font-bold tracking-tight text-ink">Popsicle</span>
         </Link>
         <Link
-          href="/compose"
+          href="/login"
           className="rounded-xl border border-steel/30 bg-white/70 px-5 py-2.5 text-sm font-semibold text-ink backdrop-blur transition-all duration-300 hover:-translate-y-0.5 hover:border-ink/30 hover:shadow-lg"
         >
           Log in
@@ -117,9 +117,23 @@ export default function LandingPage() {
           </span>
 
           <h1
-            className="animate-fade-in text-[clamp(4rem,13vw,9.5rem)] leading-[0.9] font-extrabold tracking-[-0.05em] text-ink"
+            className="animate-fade-in flex items-center gap-[0.12em] text-[clamp(3.25rem,13vw,9.5rem)] leading-[0.9] font-extrabold tracking-[-0.05em] text-ink"
             style={{ animationDelay: "200ms" }}
           >
+            {/* Sized in em so the logo always matches the title's letters */}
+            <span
+              className="animate-pop-in inline-block"
+              style={{ "--r": "-8deg", animationDelay: "450ms" } as React.CSSProperties}
+            >
+              <Image
+                src="/cold-emailer-logo.png"
+                alt=""
+                width={527}
+                height={474}
+                priority
+                className="h-[0.78em] w-auto drop-shadow-[0_16px_24px_rgba(43,45,66,0.25)]"
+              />
+            </span>
             Popsicle
           </h1>
 
