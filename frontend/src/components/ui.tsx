@@ -12,6 +12,7 @@ export function Modal({
   children,
   footer,
   wide,
+  compact,
 }: {
   open: boolean;
   onClose: () => void;
@@ -19,33 +20,56 @@ export function Modal({
   children: ReactNode;
   footer?: ReactNode;
   wide?: boolean;
+  /** Short confirmations stay a centred card on phones instead of going full-screen. */
+  compact?: boolean;
 }) {
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    // Keep the page behind from scrolling while the modal is open.
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = overflow;
+    };
   }, [open, onClose]);
 
   if (!open) return null;
+  // On phones a modal is a full-screen page, like a native app; from tablet up it's a floating card.
+  const sheet = compact
+    ? "max-h-[88vh] rounded-3xl"
+    : "h-[100dvh] rounded-none sm:h-auto sm:max-h-[88vh] sm:rounded-3xl";
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/30 p-4 backdrop-blur-sm" onMouseDown={onClose}>
+    <div
+      className={`fixed inset-0 z-50 flex items-center justify-center bg-ink/30 backdrop-blur-sm ${compact ? "p-4" : "p-0 sm:p-4"}`}
+      onMouseDown={onClose}
+    >
       <div
         role="dialog"
         aria-modal="true"
-        className={`animate-fade-up flex max-h-[88vh] w-full flex-col overflow-hidden rounded-3xl bg-white shadow-2xl ${
-          wide ? "max-w-5xl" : "max-w-xl"
-        }`}
+        className={`animate-fade-up flex w-full flex-col overflow-hidden bg-white shadow-2xl ${sheet} ${
+          wide ? "sm:max-w-5xl" : "sm:max-w-xl"
+        } ${compact ? "max-w-sm sm:max-w-md" : ""}`}
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between gap-3 border-b border-cloud px-4 py-4 sm:px-6">
+        <div
+          className={`flex items-center justify-between gap-3 border-b border-cloud px-4 py-4 sm:px-6 ${compact ? "" : "pt-[calc(1rem+env(safe-area-inset-top))] sm:pt-4"}`}
+        >
           <h2 className="text-lg font-semibold text-ink">{title}</h2>
           <button onClick={onClose} className="rounded-lg p-1.5 text-steel hover:bg-cloud hover:text-ink" aria-label="Close">
             <X className="size-5" />
           </button>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
-        {footer && <div className="border-t border-cloud bg-cloud/40 px-4 py-4 sm:px-6">{footer}</div>}
+        {footer && (
+          <div
+            className={`border-t border-cloud bg-cloud/40 px-4 py-4 sm:px-6 ${compact ? "" : "pb-[calc(1rem+env(safe-area-inset-bottom))] sm:pb-4"}`}
+          >
+            {footer}
+          </div>
+        )}
       </div>
     </div>
   );

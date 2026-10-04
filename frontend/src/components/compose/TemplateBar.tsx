@@ -231,6 +231,7 @@ export default function TemplateBar({ subject, body, variables, templateId, onLo
       {/* Unsaved changes */}
       <Modal
         open={!!pending}
+        compact
         onClose={() => setPending(null)}
         title="Unsaved changes"
         footer={
