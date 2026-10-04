@@ -80,7 +80,18 @@ Your remaining credits show in the top nav and update after every search.
    - If you have a `full_name` variable, `{{first_name}}` and `{{last_name}}` are filled in automatically.
 5. **Send:** you get a per-person preview first. Then emails go out one at a time, about 30 seconds apart (adjust with the clock icon). You can stop a batch partway through.
 
-Your draft is saved in the browser, so a refresh doesn't lose it. Use the template icon to save and load templates.
+Your draft is saved in the browser, so a refresh doesn't lose it.
+
+### Saving templates
+
+The bar at the top of the email editor shows which template you're working on. A red dot marks unsaved changes ("Edited" for a saved template, "Not saved" for a new draft).
+
+- **Save draft:** names an untitled draft (e.g. "Learning more about the industry") and saves it to the database.
+- **Save:** updates the saved template you're editing. **Save as new** keeps the original and saves your version under a new name.
+- **Switch:** the dropdown lists your saved templates. Pick one to load it, or choose **New blank draft** to start fresh. Each template can be deleted from the dropdown.
+- **Unsaved changes:** if switching would lose your edits, Popsicle asks whether to save them first, discard them, or keep editing.
+
+A template stores the subject and body. Loading one adds any variables it uses as columns in the recipients table, without removing yours.
 
 ### Finding people
 
