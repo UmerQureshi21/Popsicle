@@ -9,11 +9,11 @@ import { useHunterStatus } from "@/lib/credits";
 import { formatDate } from "@/lib/format";
 
 const TABS = [
-  { href: "/compose", label: "Compose", icon: Mail },
-  { href: "/find", label: "Find people", icon: UserSearch },
-  { href: "/sent", label: "Sent", icon: Send },
-  { href: "/contacts", label: "Contacts", icon: Users },
-  { href: "/companies", label: "Companies", icon: Building2 },
+  { href: "/compose", label: "Compose", short: "Compose", icon: Mail },
+  { href: "/find", label: "Find people", short: "Find", icon: UserSearch },
+  { href: "/sent", label: "Sent", short: "Sent", icon: Send },
+  { href: "/contacts", label: "Contacts", short: "Contacts", icon: Users },
+  { href: "/companies", label: "Companies", short: "Companies", icon: Building2 },
 ];
 
 /** Hunter credits left this month; refreshes after every search. */
@@ -52,40 +52,70 @@ export default function Nav() {
   if (pathname === "/") return null;
 
   return (
-    <header className="fixed inset-x-0 top-0 z-40 flex justify-center px-4 pt-4">
+    <>
+      {/* Top bar: a floating pill from tablet up; a slim full-width bar on phones */}
+      <header className="fixed inset-x-0 top-0 z-40 pt-[env(safe-area-inset-top)] sm:flex sm:justify-center sm:px-4 sm:pt-4">
+        <nav
+          aria-label="Main"
+          className={`flex w-full items-center justify-between gap-2 border-b px-3 py-2 backdrop-blur-xl sm:max-w-5xl sm:rounded-2xl sm:border sm:px-3 sm:shadow-sm ${
+            onCompose ? "border-cloud bg-white/90 sm:border-white/50 sm:bg-white/70" : "border-cloud bg-white/90"
+          }`}
+        >
+          <Link href="/compose" className="flex shrink-0 items-center gap-2 px-1.5 sm:px-2" aria-label="Popsicle">
+            <Image src="/cold-emailer-logo.png" alt="" width={34} height={31} priority />
+            <span className="text-[17px] font-bold tracking-tight text-ink">Popsicle</span>
+          </Link>
+          <div className="flex min-w-0 items-center gap-0.5 sm:gap-1">
+            <CreditsPill />
+            <ul className="hidden items-center gap-1 sm:flex">
+              {TABS.map(({ href, label, icon: Icon }) => {
+                const active = pathname.startsWith(href);
+                return (
+                  <li key={href}>
+                    <Link
+                      href={href}
+                      aria-label={label}
+                      title={label}
+                      className={`flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium whitespace-nowrap transition-colors ${
+                        active ? "bg-ink text-white" : "text-ink/70 hover:bg-cloud hover:text-ink"
+                      }`}
+                    >
+                      <Icon className="size-4" />
+                      <span className="hidden lg:inline">{label}</span>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        </nav>
+      </header>
+
+      {/* Phones: tabs live in a bottom bar, like a native app */}
       <nav
-        className={`flex w-full max-w-5xl items-center justify-between gap-2 rounded-2xl border px-2 py-2 shadow-sm backdrop-blur-xl sm:px-3 ${
-          onCompose ? "border-white/50 bg-white/70" : "border-cloud bg-white/90"
-        }`}
+        aria-label="Tabs"
+        className="fixed inset-x-0 bottom-0 z-40 border-t border-cloud bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl sm:hidden"
       >
-        <Link href="/compose" className="flex shrink-0 items-center gap-2 px-1.5 sm:px-2" aria-label="Popsicle">
-          <Image src="/cold-emailer-logo.png" alt="" width={34} height={31} priority />
-          <span className="hidden text-[17px] font-bold tracking-tight text-ink sm:inline">Popsicle</span>
-        </Link>
-        <div className="flex min-w-0 items-center gap-0.5 sm:gap-1">
-          <CreditsPill />
-          <ul className="flex items-center gap-0.5 sm:gap-1">
-            {TABS.map(({ href, label, icon: Icon }) => {
-              const active = pathname.startsWith(href);
-              return (
-                <li key={href}>
-                  <Link
-                    href={href}
-                    aria-label={label}
-                    title={label}
-                    className={`flex items-center gap-2 rounded-xl px-2.5 py-2 text-sm font-medium whitespace-nowrap transition-colors sm:px-3 ${
-                      active ? "bg-ink text-white" : "text-ink/70 hover:bg-cloud hover:text-ink"
-                    }`}
-                  >
-                    <Icon className="size-4" />
-                    <span className="hidden lg:inline">{label}</span>
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
+        <ul className="grid h-[60px] grid-cols-5">
+          {TABS.map(({ href, short, icon: Icon }) => {
+            const active = pathname.startsWith(href);
+            return (
+              <li key={href}>
+                <Link
+                  href={href}
+                  aria-current={active ? "page" : undefined}
+                  className={`flex h-full flex-col items-center justify-center gap-1 text-[11px] font-medium transition-colors ${
+                    active ? "text-crimson" : "text-ink/55 active:text-ink"
+                  }`}
+                >
+                  <Icon className="size-5" strokeWidth={active ? 2.25 : 1.75} />
+                  {short}
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
       </nav>
-    </header>
+    </>
   );
 }

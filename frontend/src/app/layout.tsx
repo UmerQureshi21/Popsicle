@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Montserrat } from "next/font/google";
 import Nav from "@/components/Nav";
 import "./globals.css";
@@ -11,6 +11,12 @@ const montserrat = Montserrat({
 export const metadata: Metadata = {
   title: "Popsicle",
   description: "Send templated cold emails through Gmail",
+};
+
+// "cover" lets the phone tab bar sit flush with the bottom edge, padded by the safe-area inset.
+export const viewport: Viewport = {
+  viewportFit: "cover",
+  themeColor: "#ffffff",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
