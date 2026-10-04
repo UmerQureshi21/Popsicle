@@ -179,6 +179,30 @@ class HunterLookup(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class User(Base):
+    """Someone allowed into Popsicle. Created only from the command line (app/manage.py)."""
+
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    email: Mapped[str] = mapped_column(String(320), unique=True)  # always stored lowercase
+    # Null for an invited email that hasn't chosen a password yet (they do that via Sign up).
+    password_hash: Mapped[str | None] = mapped_column(String(300))
+    name: Mapped[str | None] = mapped_column(String(200))
+    created_at: Mapped[datetime] = _created_at()
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class AuthSession(Base):
+    __tablename__ = "auth_sessions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)  # sha256 of the cookie value
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = _created_at()
+
+
 class GmailAccount(Base):
     __tablename__ = "gmail_accounts"
 

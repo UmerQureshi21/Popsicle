@@ -17,5 +17,13 @@ class Settings(BaseSettings):
     # https://hunter.io/api-keys, used to find people and emails at a company.
     hunter_api_key: str | None = None
 
+    # Accounts are invite-only (created with `python -m app.manage`). Locally anyone gets in;
+    # set AUTH_REQUIRED=true when deployed so only those accounts can use the app.
+    auth_required: bool = False
+    # Session cookie: deployed over https, set COOKIE_SECURE=true. If the frontend and API are on
+    # different sites (not just different subdomains), COOKIE_SAMESITE must be "none" (with secure).
+    cookie_secure: bool = False
+    cookie_samesite: str = "lax"
+
 
 settings = Settings()

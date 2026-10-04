@@ -1,13 +1,15 @@
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from .auth import require_user
 from .campaigns import mark_interrupted_on_startup
 from .config import settings
 from .db import engine
 from .models import Base
+from .routers import auth as auth_routes
 from .routers import campaigns, misc, people, people_search
 
 logging.basicConfig(level=logging.INFO)
@@ -25,13 +27,17 @@ app = FastAPI(title="Popsicle", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[settings.frontend_url],
+    allow_credentials=True,  # the session cookie
     allow_methods=["*"],
     allow_headers=["*"],
 )
-app.include_router(campaigns.router)
-app.include_router(people.router)
-app.include_router(misc.router)
-app.include_router(people_search.router)
+app.include_router(auth_routes.router)
+# Everything else needs a session when AUTH_REQUIRED is on (see app/auth.py).
+protected = [Depends(require_user)]
+app.include_router(campaigns.router, dependencies=protected)
+app.include_router(people.router, dependencies=protected)
+app.include_router(misc.router, dependencies=protected)
+app.include_router(people_search.router, dependencies=protected)
 
 
 @app.get("/api/health")
