@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { ChevronDown, Loader2, Search, UserPlus } from "lucide-react";
 import { api, type EmailFinderResult, type FoundPerson, type PeopleSearch } from "@/lib/api";
-import { creditsChanged, useHunterStatus } from "@/lib/credits";
+import { creditsChanged, creditsText, searchCost, useHunterStatus } from "@/lib/credits";
 import { formatDate } from "@/lib/format";
 import { DEFAULT_LOCATION, LOCATIONS, locationById, type LocationId } from "@/lib/locations";
 import { Button, Modal } from "@/components/ui";
@@ -267,7 +267,7 @@ export default function FindPeopleModal({ initialQuery, onClose, onAdd }: Props)
             >
               {PAGE_SIZES.map((n) => (
                 <option key={n} value={n}>
-                  {n} people
+                  {n} people ({creditsText(searchCost(n))})
                 </option>
               ))}
             </select>
@@ -277,7 +277,7 @@ export default function FindPeopleModal({ initialQuery, onClose, onAdd }: Props)
             </Button>
           </form>
           <p className="mt-2 text-xs text-steel">
-            Uses 1 credit per search, however many people it returns. Free if no one is found or you’ve searched it before.
+            Uses up to {creditsText(searchCost(limit))} (1 per 10 people found). Free if no one is found or you’ve searched it before.
           </p>
 
           {error && <p className="mt-4 rounded-xl bg-crimson/5 px-4 py-2.5 text-sm text-crimson">{error}</p>}
@@ -329,7 +329,7 @@ export default function FindPeopleModal({ initialQuery, onClose, onAdd }: Props)
                 <div className="mt-3 text-center">
                   <Button variant="ghost" disabled={!!loading} onClick={() => search(true)}>
                     {loading === "more" && <Loader2 className="size-4 animate-spin" />}
-                    Load {Math.min(limit, result.total - result.offset - result.limit)} more (1 credit)
+                    Load {Math.min(limit, result.total - result.offset - result.limit)} more (up to {creditsText(searchCost(limit))})
                   </Button>
                 </div>
               )}

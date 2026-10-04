@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ArrowRight, Building2, Loader2, Search, UserSearch } from "lucide-react";
 import { api, type FoundPerson, type PeopleSearch } from "@/lib/api";
-import { creditsChanged, useHunterStatus } from "@/lib/credits";
+import { creditsChanged, creditsText, searchCost, useHunterStatus } from "@/lib/credits";
 import { formatDate } from "@/lib/format";
 import { DEFAULT_LOCATION, LOCATIONS, locationById, type LocationId } from "@/lib/locations";
 import { saveHandoff } from "@/lib/people";
@@ -151,7 +151,7 @@ export default function FindPeople() {
     );
   }
 
-  const maxCredits = companies.length;
+  const maxCredits = companies.length * searchCost(perCompany);
 
   return (
     <div className="space-y-6">
@@ -211,7 +211,7 @@ export default function FindPeople() {
               >
                 {PER_COMPANY.map((n) => (
                   <option key={n} value={n}>
-                    Up to {n}
+                    Up to {n} (up to {creditsText(searchCost(n))})
                   </option>
                 ))}
               </select>
@@ -229,8 +229,8 @@ export default function FindPeople() {
               </>
             )}
             {companies.length > 0
-              ? `uses up to ${maxCredits} credit${maxCredits === 1 ? "" : "s"}, one per company`
-              : "1 credit per company searched"}
+              ? `uses up to ${creditsText(maxCredits)} (1 per 10 people found, per company)`
+              : "1 credit per 10 people found"}
             {" · "}free if no one is found or you’ve searched it before
           </span>
           <Button type="submit" variant="primary" disabled={!companies.length || searching}>
@@ -270,7 +270,7 @@ export default function FindPeople() {
                     <button
                       onClick={() => fetchCompany(r.query, 0, true)}
                       className="rounded-full bg-cloud px-2.5 py-1 text-xs text-steel hover:bg-steel/20"
-                      title="Saved earlier, so no credits were used. Click to search Hunter again (1 credit)."
+                      title="Saved earlier, so no credits were used. Click to search Hunter again (Hunter doesn’t charge for repeating a search in the same month)."
                     >
                       saved results · refresh
                     </button>
@@ -324,7 +324,7 @@ export default function FindPeople() {
                       }
                     >
                       {r.state === "loading" && <Loader2 className="size-4 animate-spin" />}
-                      Load more (1 credit)
+                      Load more (up to {creditsText(searchCost(perCompany))})
                     </Button>
                   </div>
                 )}

@@ -58,7 +58,14 @@ While the Google app is in "Testing" mode, Google expires the login after 7 days
    ```
 3. Restart `./dev.sh`.
 
-The free plan has 50 credits a month. A company search costs 1 credit however many people it returns, and it's free if Hunter finds no one or you've run the same search before. **Load more** costs 1 credit per extra page, and looking up a single person costs 1 credit only if their email is found. Your remaining credits show in the top nav and update after every search.
+The free plan has 50 credits a month. Per [Hunter's credit rules](https://help.hunter.io/en/articles/1911617-how-do-credits-work-in-hunter):
+
+- **Company search:** 1 credit per 10 people found, so up to 10 people costs 1 credit and up to 25 costs up to 3.
+- **Nothing found:** free.
+- **Repeating a search** in the same month: free.
+- **Looking up one person:** 1 credit, only if their email is found.
+
+Your remaining credits show in the top nav and update after every search.
 
 ## Using it
 
