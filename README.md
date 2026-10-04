@@ -67,6 +67,23 @@ The free plan has 50 credits a month. Per [Hunter's credit rules](https://help.h
 
 Your remaining credits show in the top nav and update after every search.
 
+### Accounts and login
+
+Popsicle is invite-only. Accounts are created from the terminal, never from the website. From the `backend/` folder:
+
+```sh
+.venv/bin/python -m app.manage create-user you@example.com   # asks for a password (typed twice, not shown)
+.venv/bin/python -m app.manage list-users
+.venv/bin/python -m app.manage set-password you@example.com
+.venv/bin/python -m app.manage delete-user someone@example.com
+.venv/bin/python -m app.manage invite friend@example.com     # optional: they choose their own password via Sign up
+```
+
+- **Locally**, anyone can use the app without logging in (`AUTH_REQUIRED=false`, the default). The login page still works if you want to try it.
+- **When deployed**, set `AUTH_REQUIRED=true` in `backend/.env`. Every page and API call then requires logging in, so only accounts you've created can get in. Serve the site over https and also set `COOKIE_SECURE=true`.
+- **Sign up** never creates an account. It only lets an *invited* email choose a password; anyone else is told Popsicle is invite-only.
+- **Security:** passwords are stored hashed (scrypt). Sessions last 30 days in a cookie that JavaScript can't read. Five wrong passwords lock that email out for 15 minutes.
+
 ## Using it
 
 1. **Company:** type the company name. It becomes `{{company}}`.
@@ -117,6 +134,7 @@ companies 1─* contacts 1─* emails *─1 campaigns *─* attachments
                                        campaigns *─1 templates
 gmail_accounts (the connected sender)
 hunter_lookups (cached Hunter.io responses)
+users, auth_sessions (invite-only accounts and their login sessions)
 ```
 
 - **campaigns:** one batch, e.g. "Stripe, 10 people". It keeps a copy of the exact subject and body used, so editing a template later doesn't change history.
