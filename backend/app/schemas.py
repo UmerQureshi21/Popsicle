@@ -200,9 +200,11 @@ class Stats(BaseModel):
 
 class HunterStatus(BaseModel):
     configured: bool
+    plan_name: str | None = None
     credits_used: int | None = None
-    credits_available: int | None = None
-    reset_date: str | None = None
+    credits_total: int | None = None  # the monthly allowance
+    credits_remaining: int | None = None
+    reset_date: str | None = None  # when the allowance resets, e.g. "2026-11-02"
     error: str | None = None
 
 

@@ -39,6 +39,10 @@ def _mark_already_emailed(db: Session, people: list[FoundPerson]) -> list[FoundP
     return people
 
 
+def _int(v: float | None) -> int | None:
+    return int(v) if v is not None else None
+
+
 def _call(fn, *args, **kwargs):
     try:
         return fn(*args, **kwargs)
@@ -51,15 +55,23 @@ def status():
     if not hunter.configured():
         return HunterStatus(configured=False)
     try:
-        req = hunter.account().get("requests", {})
+        account = hunter.account()
     except hunter.HunterError as e:
         return HunterStatus(configured=True, error=str(e))
-    credits = req.get("credits") or req.get("searches") or {}
+    # Hunter reports credits as {"used": 3.0, "available": 50.0, "remaining": 47.0}, where
+    # "available" is the monthly allowance, not what's left.
+    credits = (account.get("requests") or {}).get("credits") or {}
+    used, total = credits.get("used"), credits.get("available")
+    remaining = credits.get("remaining")
+    if remaining is None and used is not None and total is not None:
+        remaining = total - used
     return HunterStatus(
         configured=True,
-        credits_used=credits.get("used"),
-        credits_available=credits.get("available"),
-        reset_date=req.get("reset_date"),
+        plan_name=account.get("plan_name"),
+        credits_used=_int(used),
+        credits_total=_int(total),
+        credits_remaining=_int(remaining),
+        reset_date=account.get("reset_date"),
     )
 
 
