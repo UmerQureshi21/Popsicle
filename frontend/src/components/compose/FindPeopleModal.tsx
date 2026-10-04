@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ChevronDown, ExternalLink, Loader2, Search, UserPlus } from "lucide-react";
+import { ChevronDown, Loader2, Search, UserPlus } from "lucide-react";
 import { api, type EmailFinderResult, type FoundPerson, type HunterStatus, type PeopleSearch } from "@/lib/api";
 import { formatDate } from "@/lib/format";
-import { Avatar, Button, Modal } from "@/components/ui";
+import { Button, Modal } from "@/components/ui";
+import PersonRow from "@/components/PersonRow";
 
 // Hunter's department and seniority filters (https://hunter.io/api-documentation/v2#domain-search).
 const DEPARTMENTS: [string, string][] = [
@@ -36,22 +37,12 @@ type Props = {
   onAdd: (people: FoundPerson[], organization: string | null) => void;
 };
 
-function ConfidencePill({ value }: { value: number | null }) {
-  if (value == null) return null;
-  const style =
-    value >= 90 ? "bg-emerald-50 text-emerald-700" : value >= 70 ? "bg-cloud text-ink" : "bg-crimson/10 text-crimson";
-  return (
-    <span className={`rounded-full px-1.5 py-0.5 text-[11px] font-semibold ${style}`} title="Hunter's confidence that this email is right">
-      {value}%
-    </span>
-  );
-}
-
 export default function FindPeopleModal({ initialQuery, onClose, onAdd }: Props) {
   const [status, setStatus] = useState<HunterStatus | null>(null);
   const [query, setQuery] = useState(initialQuery);
   const [department, setDepartment] = useState("");
   const [seniority, setSeniority] = useState("");
+  const [jobTitle, setJobTitle] = useState("");
   const [limit, setLimit] = useState(10);
 
   const [result, setResult] = useState<PeopleSearch | null>(null);
@@ -94,6 +85,7 @@ export default function FindPeopleModal({ initialQuery, onClose, onAdd }: Props)
         offset: more && result ? result.offset + result.limit : 0,
         department: department || null,
         seniority: seniority || null,
+        job_titles: jobTitle.trim() || null,
         refresh,
       });
       setResult(res);
@@ -228,6 +220,13 @@ export default function FindPeopleModal({ initialQuery, onClose, onAdd }: Props)
                 className="flex-1 bg-transparent py-2.5 text-sm outline-none placeholder:text-steel"
               />
             </label>
+            <input
+              aria-label="Job title"
+              value={jobTitle}
+              onChange={(e) => setJobTitle(e.target.value)}
+              placeholder="Job title, e.g. software engineer"
+              className="w-56 rounded-xl border border-steel/30 bg-white px-3 py-2.5 text-sm outline-none placeholder:text-steel focus:border-scarlet"
+            />
             {(
               [
                 [department, setDepartment, DEPARTMENTS, "Department"],
@@ -308,48 +307,7 @@ export default function FindPeopleModal({ initialQuery, onClose, onAdd }: Props)
                 <ul className="divide-y divide-cloud rounded-2xl border border-cloud">
                   {people.map((p) => (
                     <li key={p.email}>
-                      <label
-                        className={`flex cursor-pointer items-center gap-3 px-4 py-3 transition-colors hover:bg-cloud/50 ${
-                          selected.has(p.email) ? "bg-crimson/[0.03]" : ""
-                        }`}
-                      >
-                        <input
-                          type="checkbox"
-                          className="size-4 accent-crimson"
-                          checked={selected.has(p.email)}
-                          onChange={() => toggle(p.email)}
-                        />
-                        <Avatar name={p.full_name || p.email} size={34} />
-                        <span className="min-w-0 flex-1">
-                          <span className="flex items-center gap-2">
-                            <span className="truncate text-sm font-semibold text-ink">{p.full_name || p.email}</span>
-                            {p.linkedin_url && (
-                              <a
-                                href={p.linkedin_url}
-                                target="_blank"
-                                rel="noreferrer"
-                                onClick={(e) => e.stopPropagation()}
-                                className="text-steel hover:text-ink"
-                                aria-label="LinkedIn profile"
-                              >
-                                <ExternalLink className="size-3.5" />
-                              </a>
-                            )}
-                            {p.already_emailed_at && (
-                              <span className="rounded-full bg-cloud px-2 py-0.5 text-[11px] font-medium text-steel">
-                                emailed {formatDate(p.already_emailed_at)}
-                              </span>
-                            )}
-                          </span>
-                          <span className="block truncate text-xs text-steel">
-                            {[p.position, p.seniority && `${p.seniority} level`].filter(Boolean).join(" · ") || "No title listed"}
-                          </span>
-                        </span>
-                        <span className="flex shrink-0 items-center gap-2 text-sm text-ink">
-                          {p.email}
-                          <ConfidencePill value={p.confidence} />
-                        </span>
-                      </label>
+                      <PersonRow person={p} selected={selected.has(p.email)} onToggle={() => toggle(p.email)} />
                     </li>
                   ))}
                 </ul>

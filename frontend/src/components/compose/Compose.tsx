@@ -27,6 +27,7 @@ import {
   type Template,
 } from "@/lib/api";
 import { formatBytes } from "@/lib/format";
+import { peopleToRows } from "@/lib/people";
 import { derivedVariables, parseTuples, placeholdersIn, validateRows } from "@/lib/tuples";
 import { Avatar, Button, Modal, Popover, Tooltip } from "@/components/ui";
 import CampaignProgress from "@/components/CampaignProgress";
@@ -185,30 +186,12 @@ export default function Compose() {
 
   // People picked in "Find people" become rows, filling whichever columns match what Hunter knows.
   const addFoundPeople = (people: FoundPerson[], organization: string | null) => {
-    const withRole = people.some((p) => p.position) && !["role", "title", "position"].some((v) => variables.includes(v));
-    const vars = withRole ? [...variables, "role"] : variables;
-    const fieldFor = (p: FoundPerson): Record<string, string | null> => ({
-      full_name: p.full_name ?? p.first_name,
-      name: p.full_name ?? p.first_name,
-      first_name: p.first_name,
-      last_name: p.last_name,
-      email: p.email,
-      role: p.position,
-      title: p.position,
-      position: p.position,
-      department: p.department,
-      seniority: p.seniority,
-      linkedin: p.linkedin_url,
-      linkedin_url: p.linkedin_url,
-    });
     const existing = new Set(rows.map((r) => (r.email ?? "").trim().toLowerCase()).filter(Boolean));
     const kept = rows.filter((r) => Object.values(r).some((v) => v?.trim()));
-    const added = people
-      .filter((p) => !existing.has(p.email))
-      .map((p) => {
-        const known = fieldFor(p);
-        return Object.fromEntries(vars.map((v) => [v, known[v] ?? ""]));
-      });
+    const { variables: vars, rows: added } = peopleToRows(
+      people.filter((p) => !existing.has(p.email)),
+      variables,
+    );
     set({
       variables: vars,
       rows: kept.length + added.length ? [...kept, ...added] : [{}],
