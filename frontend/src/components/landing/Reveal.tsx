@@ -3,8 +3,19 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 /** Fades its children up the first time they scroll into view. */
-export default function Reveal({ children, delay = 0, className = "" }: { children: ReactNode; delay?: number; className?: string }) {
-  const ref = useRef<HTMLDivElement>(null);
+export default function Reveal({
+  children,
+  delay = 0,
+  className = "",
+  as: Tag = "div",
+}: {
+  children: ReactNode;
+  delay?: number;
+  className?: string;
+  /** Render as a list item when used inside <ol>/<ul>. */
+  as?: "div" | "li";
+}) {
+  const ref = useRef<HTMLElement>(null);
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
@@ -24,8 +35,12 @@ export default function Reveal({ children, delay = 0, className = "" }: { childr
   }, []);
 
   return (
-    <div ref={ref} className={`reveal ${visible ? "is-visible" : ""} ${className}`} style={{ transitionDelay: `${delay}ms` }}>
+    <Tag
+      ref={ref as React.RefObject<HTMLDivElement & HTMLLIElement>}
+      className={`reveal ${visible ? "is-visible" : ""} ${className}`}
+      style={{ transitionDelay: `${delay}ms` }}
+    >
       {children}
-    </div>
+    </Tag>
   );
 }

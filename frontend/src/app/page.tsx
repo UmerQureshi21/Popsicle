@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, Mail, ShieldCheck, Variable } from "lucide-react";
 import Reveal from "@/components/landing/Reveal";
+import HowItWorks from "@/components/landing/HowItWorks";
 import TemplateDemo from "@/components/landing/TemplateDemo";
 
 const FEATURES: { icon?: typeof Mail; image?: string; title: string; text: string }[] = [
@@ -170,6 +171,14 @@ export default function LandingPage() {
         <Reveal className="mb-14 text-center">
           <p className="text-sm font-semibold tracking-widest text-crimson uppercase">How it works</p>
           <h2 className="mt-3 text-4xl font-bold tracking-tight text-balance text-ink sm:text-5xl">One template. Every inbox personal.</h2>
+          <p className="mx-auto mt-4 max-w-xl text-lg text-balance text-steel">From a company name to a sent email in four steps.</p>
+        </Reveal>
+
+        <HowItWorks />
+
+        <Reveal className="mt-20 mb-6 text-center">
+          <p className="text-sm font-semibold text-ink">Step 3 in action</p>
+          <p className="mt-1 text-sm text-steel">You write one template; each person gets their own version.</p>
         </Reveal>
         <Reveal delay={150}>
           <TemplateDemo />
