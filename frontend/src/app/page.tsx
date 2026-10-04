@@ -108,13 +108,6 @@ export default function LandingPage() {
         </div>
 
         <div className="relative z-10 flex flex-col items-center">
-          <span
-            className="animate-fade-in mb-8 inline-flex items-center gap-2 rounded-full border border-cloud bg-white/80 px-4 py-1.5 text-sm font-medium text-ink/80 shadow-sm backdrop-blur"
-            style={{ animationDelay: "100ms" }}
-          >
-            <span className="size-1.5 rounded-full bg-crimson" />
-            Cold outreach, without the copy-paste
-          </span>
 
           <h1
             className="animate-fade-in flex items-center gap-[0.12em] text-[clamp(3.25rem,13vw,9.5rem)] leading-[0.9] font-extrabold tracking-[-0.05em] text-ink"
@@ -141,7 +134,7 @@ export default function LandingPage() {
             className="animate-fade-in mt-6 text-[clamp(1.5rem,3.4vw,2.5rem)] font-semibold tracking-tight text-ink"
             style={{ animationDelay: "350ms" }}
           >
-            Cold emails that <span className="whitespace-nowrap text-crimson">don’t feel cold.</span>
+            <span className="text-crimson">Streamline</span> your cold emails
           </p>
 
           <p className="animate-fade-in mt-5 max-w-xl text-lg leading-relaxed text-balance text-steel" style={{ animationDelay: "500ms" }}>
