@@ -8,7 +8,16 @@ from .. import hunter
 from ..campaigns import last_sent_by_address
 from ..db import get_db
 from ..models import Company
-from ..schemas import EmailFinderIn, EmailFinderOut, FoundPerson, HunterStatus, PeopleSearchIn, PeopleSearchOut
+from ..schemas import (
+    CompanySuggestion,
+    EmailFinderIn,
+    EmailFinderOut,
+    FoundPerson,
+    HunterStatus,
+    PeopleCount,
+    PeopleSearchIn,
+    PeopleSearchOut,
+)
 
 router = APIRouter(prefix="/api/people-search", tags=["people search"])
 
@@ -72,6 +81,28 @@ def status():
         credits_total=_int(total),
         credits_remaining=_int(remaining),
         reset_date=account.get("reset_date"),
+    )
+
+
+@router.get("/suggest", response_model=list[CompanySuggestion])
+def suggest_companies(q: str = ""):
+    """Company autocomplete. Free on Hunter, so it isn't cached."""
+    if len(q.strip()) < 2:
+        return []
+    return [
+        CompanySuggestion(name=s.get("name"), domain=s["domain"], logo=s.get("logo"), email_count=s.get("email_count"))
+        for s in _call(hunter.company_suggestions, q)
+    ]
+
+
+@router.get("/count", response_model=PeopleCount)
+def count_people(query: str):
+    """How many people Hunter has at a company in total (free), to explain an empty filtered search."""
+    data = _call(hunter.email_count, query)
+    return PeopleCount(
+        total=data.get("personal_emails") or data.get("total") or 0,
+        by_department={k: v for k, v in (data.get("department") or {}).items() if v},
+        by_seniority={k: v for k, v in (data.get("seniority") or {}).items() if v},
     )
 
 

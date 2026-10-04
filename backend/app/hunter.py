@@ -136,6 +136,19 @@ def email_finder(
     return _cached(db, "email_finder", params, lambda: _request("/email-finder", params), refresh)
 
 
+def company_suggestions(query: str, limit: int = 6) -> list[dict]:
+    """Companies matching a name as you type, with domain, logo and how many emails Hunter has. Free."""
+    data = _request("/domains-suggestion", {"query": query.strip(), "limit": limit}).get("data") or []
+    return [d for d in data if d.get("domain")]
+
+
+def email_count(query: str) -> dict:
+    """How many people Hunter knows at a company, by department and seniority. Free."""
+    domain = clean_domain(query)
+    params = {"domain" if domain else "company": domain or query.strip(), "type": "personal"}
+    return _request("/email-count", params).get("data") or {}
+
+
 def account() -> dict:
     """Credits used / available this month. Never cached."""
     return _request("/account", {})["data"]

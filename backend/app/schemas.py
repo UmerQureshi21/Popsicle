@@ -253,6 +253,19 @@ class PeopleSearchOut(BaseModel):
     cached: bool
 
 
+class CompanySuggestion(BaseModel):
+    name: str | None
+    domain: str
+    logo: str | None = None
+    email_count: int | None = None
+
+
+class PeopleCount(BaseModel):
+    total: int
+    by_department: dict[str, int]  # e.g. {"it": 154, "sales": 135}
+    by_seniority: dict[str, int]
+
+
 class EmailFinderIn(BaseModel):
     company: str = Field(min_length=1)  # company name or domain
     full_name: str | None = None
