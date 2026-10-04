@@ -58,7 +58,7 @@ While the Google app is in "Testing" mode, Google expires the login after 7 days
    ```
 3. Restart `./dev.sh`.
 
-The free plan has 50 credits a month, about one per email found. Find people shows how many you have left.
+The free plan has 50 credits a month. A company search costs 1 credit however many people it returns, and it's free if Hunter finds no one or you've run the same search before. **Load more** costs 1 credit per extra page, and looking up a single person costs 1 credit only if their email is found. Your remaining credits show in the top nav and update after every search.
 
 ## Using it
 
