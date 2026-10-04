@@ -1,5 +1,8 @@
 export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
+/** Fired when the API says we're not logged in; AuthProvider sends the user to /login. */
+export const UNAUTHORIZED_EVENT = "popsicle:unauthorized";
+
 export class ApiError extends Error {
   constructor(public status: number, message: string) {
     super(message);
@@ -10,9 +13,14 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   const isForm = body instanceof FormData;
   const res = await fetch(API_URL + path, {
     method,
+    credentials: "include", // send the session cookie
     headers: body && !isForm ? { "content-type": "application/json" } : undefined,
     body: body === undefined ? undefined : isForm ? body : JSON.stringify(body),
   });
+  // Logged out (or the session expired) while login is required: go log in, then come back here.
+  if (res.status === 401 && !path.startsWith("/api/auth/") && typeof window !== "undefined") {
+    window.dispatchEvent(new Event(UNAUTHORIZED_EVENT));
+  }
   if (!res.ok) {
     let msg = res.statusText;
     try {
@@ -193,3 +201,9 @@ export type EmailFinderResult = { person: FoundPerson | null; cached: boolean };
 export type CompanySuggestion = { name: string | null; domain: string; logo: string | null; email_count: number | null };
 
 export type PeopleCount = { total: number; by_department: Record<string, number>; by_seniority: Record<string, number> };
+
+// ---- Auth ----
+
+export type AuthUser = { email: string; name: string | null };
+
+export type Me = { user: AuthUser | null; auth_required: boolean };

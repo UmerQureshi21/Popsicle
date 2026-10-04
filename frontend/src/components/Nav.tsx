@@ -3,8 +3,10 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Building2, Coins, Mail, Send, UserSearch, Users } from "lucide-react";
-import { Tooltip } from "@/components/ui";
+import { useState } from "react";
+import { Building2, Coins, LogOut, Mail, Send, UserSearch, Users } from "lucide-react";
+import { Avatar, Popover, Tooltip } from "@/components/ui";
+import { useAuth } from "@/lib/auth";
 import { useHunterStatus } from "@/lib/credits";
 import { formatDate } from "@/lib/format";
 
@@ -44,12 +46,44 @@ function CreditsPill() {
   );
 }
 
+/** Who's logged in, with a log-out option. Hidden when nobody is (e.g. running locally). */
+function AccountMenu() {
+  const { me, logout } = useAuth();
+  const [open, setOpen] = useState(false);
+  if (!me?.user) return null;
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen(!open)}
+        aria-label="Account"
+        aria-expanded={open}
+        className="flex items-center rounded-full p-1 transition-colors hover:bg-cloud"
+      >
+        <Avatar name={me.user.name || me.user.email} size={28} />
+      </button>
+      <Popover open={open} onClose={() => setOpen(false)} className="top-full right-0 mt-2 w-64 p-2">
+        <p className="px-3 pt-1.5 text-xs text-steel">Signed in as</p>
+        <p className="truncate px-3 pb-2 text-sm font-medium text-ink">{me.user.email}</p>
+        <button
+          onClick={() => {
+            setOpen(false);
+            logout();
+          }}
+          className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm text-ink hover:bg-cloud"
+        >
+          <LogOut className="size-4 text-steel" /> Log out
+        </button>
+      </Popover>
+    </div>
+  );
+}
+
 export default function Nav() {
   const pathname = usePathname();
   const onCompose = pathname === "/compose";
 
-  // The landing page has its own header.
-  if (pathname === "/") return null;
+  // The landing and login pages have their own layout.
+  if (pathname === "/" || pathname === "/login") return null;
 
   return (
     <>
@@ -87,6 +121,7 @@ export default function Nav() {
                 );
               })}
             </ul>
+            <AccountMenu />
           </div>
         </nav>
       </header>
