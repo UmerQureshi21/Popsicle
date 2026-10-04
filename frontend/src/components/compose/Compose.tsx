@@ -6,7 +6,6 @@ import {
   Building2,
   ChevronDown,
   Clock,
-  FileText,
   Loader2,
   MoreVertical,
   Paperclip,
@@ -33,7 +32,7 @@ import { Avatar, Button, Modal, Popover, Tooltip } from "@/components/ui";
 import CampaignProgress from "@/components/CampaignProgress";
 import HighlightEditor, { type EditorHandle } from "./HighlightEditor";
 import PreviewModal from "./PreviewModal";
-import TemplateMenu from "./TemplateMenu";
+import TemplateBar from "./TemplateBar";
 import FindPeopleModal from "./FindPeopleModal";
 import RecipientsTable from "./RecipientsTable";
 
@@ -111,7 +110,7 @@ export default function Compose() {
   const { company, variables, rows, subject, body, attachments, delaySeconds, skipAlreadySent, templateId } = draft;
 
   const [panelOpen, setPanelOpen] = useState(true);
-  const [menu, setMenu] = useState<"templates" | "delay" | "skip" | null>(null);
+  const [menu, setMenu] = useState<"delay" | "skip" | null>(null);
   const [gmail, setGmail] = useState<GmailStatus | null>(null);
   const [notice, setNotice] = useState<string | null>(initial.notice);
   const [companies, setCompanies] = useState<Company[]>([]);
@@ -181,8 +180,8 @@ export default function Compose() {
       subject: t.subject,
       body: t.body,
       templateId: t.id,
-      // Keep the current variables unless the template brings its own.
-      variables: t.variables.length ? t.variables : variables,
+      // Add any variables the template uses, but never drop columns that hold recipient data.
+      variables: [...variables, ...t.variables.filter((v) => !variables.includes(v))],
     });
   };
 
@@ -341,6 +340,16 @@ export default function Compose() {
 
           {/* Email: same panel style as the recipients table */}
           <div className="mt-6 rounded-2xl bg-cloud/70 p-5">
+            <TemplateBar
+              subject={subject}
+              body={body}
+              variables={variables}
+              templateId={templateId}
+              onLoad={loadTemplate}
+              onNew={() => set({ subject: "", body: "", templateId: null })}
+              onSaved={(t) => set({ templateId: t.id })}
+              onDeleted={(id) => id === templateId && set({ templateId: null })}
+            />
             {/* Subject */}
             <HighlightEditor
               ref={subjectRef}
@@ -473,25 +482,6 @@ export default function Compose() {
                   className="mt-3 w-full accent-crimson"
                 />
               </Popover>
-            </div>
-
-            <div className="relative">
-              <Tooltip label="Use template">
-                <button
-                  onClick={() => setMenu(menu === "templates" ? null : "templates")}
-                  className={`rounded-xl p-2.5 hover:bg-white/80 hover:text-ink ${menu === "templates" ? "bg-white text-ink" : "text-ink/60"}`}
-                >
-                  <FileText className="size-5" />
-                </button>
-              </Tooltip>
-              <TemplateMenu
-                open={menu === "templates"}
-                onClose={() => setMenu(null)}
-                current={{ subject, body, variables }}
-                loadedId={templateId}
-                onLoad={loadTemplate}
-                onSaved={(t) => set({ templateId: t.id })}
-              />
             </div>
 
             <div className="relative">

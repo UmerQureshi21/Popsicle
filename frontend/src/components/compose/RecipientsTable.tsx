@@ -218,14 +218,14 @@ export default function RecipientsTable({ variables, onVariablesChange, rows, on
         </table>
       </div>
 
-      <div className="mt-3 flex items-center justify-between">
+      <div className="mt-3 flex items-center justify-between gap-4">
         <button
           onClick={() => addRow()}
-          className="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-sm font-medium text-ink hover:bg-white"
+          className="flex shrink-0 items-center gap-1.5 rounded-xl px-3 py-1.5 text-sm font-medium whitespace-nowrap text-ink hover:bg-white"
         >
           <Plus className="size-4" /> Add recipient
         </button>
-        <span className="hidden text-xs text-steel sm:inline">Enter moves to the next row · Shift+Enter for a new line · paste from a spreadsheet to fill many</span>
+        <span className="hidden text-right text-xs text-steel sm:inline">Enter moves to the next row · Shift+Enter for a new line · paste from a spreadsheet to fill many</span>
       </div>
     </div>
   );
