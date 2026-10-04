@@ -10,6 +10,7 @@ import { DEFAULT_LOCATION, LOCATIONS, locationById, type LocationId } from "@/li
 import { saveHandoff } from "@/lib/people";
 import { Button, EmptyState } from "@/components/ui";
 import CompanyAutocomplete, { CompanyLogo } from "@/components/CompanyAutocomplete";
+import EmptyResultHelp from "@/components/EmptyResultHelp";
 import PersonRow from "@/components/PersonRow";
 import Select from "@/components/Select";
 
@@ -21,7 +22,10 @@ type CompanyResult = {
   people: FoundPerson[];
   selected: string[]; // emails
   filterLabel?: string; // e.g. “software engineer” in the GTA, as searched
+  filters?: Filters; // what this company was searched with, reused for load more and refresh
 };
+
+type Filters = { jobTitle: string; location: LocationId };
 
 /** A company to search: a picked suggestion (exact domain) or text typed as-is. */
 type Chip = { query: string; label: string; domain: string | null };
@@ -107,15 +111,15 @@ export default function FindPeople() {
   const update = (query: string, patch: Partial<CompanyResult> | ((r: CompanyResult) => Partial<CompanyResult>)) =>
     setResults((prev) => prev.map((r) => (r.query === query ? { ...r, ...(typeof patch === "function" ? patch(r) : patch) } : r)));
 
-  const fetchCompany = async (query: string, offset = 0, refresh = false) => {
+  const fetchCompany = async (query: string, offset = 0, refresh = false, filters: Filters = { jobTitle, location }) => {
     update(query, { state: "loading", error: undefined });
     try {
       const res = await api.post<PeopleSearch>("/api/people-search/company", {
         query,
         limit: perCompany,
         offset,
-        job_titles: jobTitle.trim() || null,
-        location: locationById(location).filters,
+        job_titles: filters.jobTitle.trim() || null,
+        location: locationById(filters.location).filters,
         refresh,
       });
       update(query, (r) => {
@@ -127,7 +131,10 @@ export default function FindPeople() {
         return {
           state: "done",
           search: res,
-          filterLabel: [jobTitle.trim() && `matching “${jobTitle.trim()}”`, locationById(location).short].filter(Boolean).join(" "),
+          filters,
+          filterLabel: [filters.jobTitle.trim() && `matching “${filters.jobTitle.trim()}”`, locationById(filters.location).short]
+            .filter(Boolean)
+            .join(" "),
           people: [...base, ...fresh],
           selected: offset ? [...r.selected, ...autoSelect] : autoSelect,
         };
@@ -309,7 +316,7 @@ export default function FindPeople() {
                 <div className="flex items-center gap-3">
                   {r.search?.cached && (
                     <button
-                      onClick={() => fetchCompany(r.query, 0, true)}
+                      onClick={() => fetchCompany(r.query, 0, true, r.filters)}
                       className="rounded-full bg-cloud px-2.5 py-1 text-xs whitespace-nowrap text-steel hover:bg-steel/20"
                       title="Saved earlier, so no credits were used. Click to search Hunter again (Hunter doesn’t charge for repeating a search in the same month)."
                     >
@@ -331,10 +338,20 @@ export default function FindPeople() {
             )}
             {r.state === "error" && <p className="px-5 py-5 text-sm text-crimson">{r.error}</p>}
             {r.state === "done" && r.people.length === 0 && (
-              <p className="px-5 py-8 text-sm text-steel">
-                Hunter has no one {r.filterLabel || "for this search"} at this company. Try the company’s domain, a
-                broader title like “engineer”, or a wider location.
-              </p>
+              <EmptyResultHelp
+                company={r.search?.domain ?? r.query}
+                organization={r.search?.organization ?? null}
+                filterLabel={r.filterLabel ?? ""}
+                retryCost={`Up to ${creditsText(searchCost(perCompany))}`}
+                onAnywhere={
+                  r.filters && r.filters.location !== "any"
+                    ? () => fetchCompany(r.query, 0, false, { ...r.filters!, location: "any" })
+                    : undefined
+                }
+                onWithoutTitle={
+                  r.filters?.jobTitle.trim() ? () => fetchCompany(r.query, 0, false, { ...r.filters!, jobTitle: "" }) : undefined
+                }
+              />
             )}
 
             {r.people.length > 0 && (
@@ -361,7 +378,7 @@ export default function FindPeople() {
                       variant="ghost"
                       disabled={r.state === "loading"}
                       onClick={() =>
-                        fetchCompany(r.query, r.search!.offset + r.search!.limit)
+                        fetchCompany(r.query, r.search!.offset + r.search!.limit, false, r.filters)
                       }
                     >
                       {r.state === "loading" && <Loader2 className="size-4 animate-spin" />}

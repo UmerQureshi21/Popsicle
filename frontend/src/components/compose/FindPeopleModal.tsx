@@ -8,6 +8,7 @@ import { formatDate } from "@/lib/format";
 import { DEFAULT_LOCATION, LOCATIONS, locationById, type LocationId } from "@/lib/locations";
 import { Button, Modal } from "@/components/ui";
 import CompanyAutocomplete from "@/components/CompanyAutocomplete";
+import EmptyResultHelp from "@/components/EmptyResultHelp";
 import PersonRow from "@/components/PersonRow";
 import Select from "@/components/Select";
 
@@ -75,8 +76,18 @@ export default function FindPeopleModal({ initialQuery, onClose, onAdd }: Props)
     });
   };
 
-  const search = async (more = false, refresh = false, q = query) => {
+  const search = async (
+    more = false,
+    refresh = false,
+    q = query,
+    // Retries from the "no one found" panel loosen a filter for this search and in the form.
+    loosen: { location?: LocationId; jobTitle?: string } = {},
+  ) => {
     if (!q.trim()) return;
+    const loc = loosen.location ?? location;
+    const title = loosen.jobTitle ?? jobTitle;
+    if (loosen.location) setLocation(loosen.location);
+    if (loosen.jobTitle !== undefined) setJobTitle(loosen.jobTitle);
     setLoading(more ? "more" : "search");
     setError(null);
     try {
@@ -86,8 +97,8 @@ export default function FindPeopleModal({ initialQuery, onClose, onAdd }: Props)
         offset: more && result ? result.offset + result.limit : 0,
         department: department || null,
         seniority: seniority || null,
-        job_titles: jobTitle.trim() || null,
-        location: locationById(location).filters,
+        job_titles: title.trim() || null,
+        location: locationById(loc).filters,
         refresh,
       });
       setResult(res);
@@ -300,9 +311,23 @@ export default function FindPeopleModal({ initialQuery, onClose, onAdd }: Props)
               </div>
 
               {people.length === 0 ? (
-                <p className="rounded-2xl border border-dashed border-steel/40 px-4 py-10 text-center text-sm text-steel">
-                  Hunter has no people for this search. Try the company’s domain, or loosen the filters.
-                </p>
+                <div className="rounded-2xl border border-dashed border-steel/40">
+                  <EmptyResultHelp
+                    company={result.domain ?? query.trim()}
+                    organization={result.organization}
+                    filterLabel={[
+                      jobTitle.trim() && `matching “${jobTitle.trim()}”`,
+                      department && `in ${DEPARTMENTS.find(([v]) => v === department)?.[1]}`,
+                      seniority && `at ${seniority} level`,
+                      locationById(location).short,
+                    ]
+                      .filter(Boolean)
+                      .join(" ")}
+                    retryCost={`Up to ${creditsText(searchCost(limit))}`}
+                    onAnywhere={location !== "any" ? () => search(false, false, query, { location: "any" }) : undefined}
+                    onWithoutTitle={jobTitle.trim() ? () => search(false, false, query, { jobTitle: "" }) : undefined}
+                  />
+                </div>
               ) : (
                 <ul className="divide-y divide-cloud rounded-2xl border border-cloud">
                   {people.map((p) => (
