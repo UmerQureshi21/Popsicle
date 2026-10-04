@@ -3,7 +3,8 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ArrowRight, Building2, Loader2, Search, UserSearch } from "lucide-react";
-import { api, type FoundPerson, type HunterStatus, type PeopleSearch } from "@/lib/api";
+import { api, type FoundPerson, type PeopleSearch } from "@/lib/api";
+import { creditsChanged, useHunterStatus } from "@/lib/credits";
 import { formatDate } from "@/lib/format";
 import { DEFAULT_LOCATION, LOCATIONS, locationById, type LocationId } from "@/lib/locations";
 import { saveHandoff } from "@/lib/people";
@@ -69,16 +70,9 @@ export default function FindPeople() {
   const [location, setLocation] = useState<LocationId>(initial.location);
   const [perCompany, setPerCompany] = useState(initial.perCompany);
   const [results, setResults] = useState<CompanyResult[]>(initial.results);
-  const [status, setStatus] = useState<HunterStatus | null>(null);
+  const status = useHunterStatus();
   const [searching, setSearching] = useState(false);
 
-  const refreshStatus = () => api.get<HunterStatus>("/api/people-search/status").then(setStatus, () => setStatus(null));
-  useEffect(() => {
-    refreshStatus();
-  }, []);
-  const refreshIfSpent = (spent: boolean) => {
-    if (spent) refreshStatus();
-  };
 
   useEffect(() => {
     try {
@@ -115,10 +109,10 @@ export default function FindPeople() {
           selected: offset ? [...r.selected, ...autoSelect] : autoSelect,
         };
       });
-      return !res.cached;
     } catch (e) {
       update(query, { state: "error", error: (e as Error).message });
-      return false;
+    } finally {
+      creditsChanged();
     }
   };
 
@@ -126,10 +120,8 @@ export default function FindPeople() {
     if (!companies.length) return;
     setSearching(true);
     setResults(companies.map((query) => ({ query, state: "loading", people: [], selected: [] })));
-    let spent = false;
-    // One at a time keeps us well inside Hunter's rate limit and shows results as they arrive.
-    for (const query of companies) spent = (await fetchCompany(query)) || spent;
-    refreshIfSpent(spent);
+    // One at a time keeps us well inside Hunter's rate limit, and results (and the credit count) update as they arrive.
+    for (const query of companies) await fetchCompany(query);
     setSearching(false);
   };
 
@@ -159,7 +151,7 @@ export default function FindPeople() {
     );
   }
 
-  const maxCredits = companies.length * perCompany;
+  const maxCredits = companies.length;
 
   return (
     <div className="space-y-6">
@@ -229,14 +221,17 @@ export default function FindPeople() {
 
         <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-cloud pt-5">
           <span className="text-xs text-steel">
-            {status?.credits_available != null && (
+            {status?.credits_remaining != null && (
               <>
-                <span className="font-semibold text-ink">{status.credits_available}</span> credits left
+                <span className="font-semibold text-ink">{status.credits_remaining}</span>
+                {status.credits_total != null && <> of {status.credits_total}</>} credits left
                 {status.reset_date && <> (resets {formatDate(status.reset_date)})</>} ·{" "}
               </>
             )}
-            {companies.length > 0 ? `uses up to ${maxCredits} credits, about one per person found` : "about one credit per person found"}
-            {" · "}repeat searches are free
+            {companies.length > 0
+              ? `uses up to ${maxCredits} credit${maxCredits === 1 ? "" : "s"}, one per company`
+              : "1 credit per company searched"}
+            {" · "}free if no one is found or you’ve searched it before
           </span>
           <Button type="submit" variant="primary" disabled={!companies.length || searching}>
             {searching ? <Loader2 className="size-4 animate-spin" /> : <Search className="size-4" />}
@@ -273,9 +268,9 @@ export default function FindPeople() {
                 <div className="flex items-center gap-3">
                   {r.search?.cached && (
                     <button
-                      onClick={() => fetchCompany(r.query, 0, true).then(refreshIfSpent)}
+                      onClick={() => fetchCompany(r.query, 0, true)}
                       className="rounded-full bg-cloud px-2.5 py-1 text-xs text-steel hover:bg-steel/20"
-                      title="Saved earlier, so no credits were used. Click to search Hunter again."
+                      title="Saved earlier, so no credits were used. Click to search Hunter again (1 credit)."
                     >
                       saved results · refresh
                     </button>
@@ -325,11 +320,11 @@ export default function FindPeople() {
                       variant="ghost"
                       disabled={r.state === "loading"}
                       onClick={() =>
-                        fetchCompany(r.query, r.search!.offset + r.search!.limit).then(refreshIfSpent)
+                        fetchCompany(r.query, r.search!.offset + r.search!.limit)
                       }
                     >
                       {r.state === "loading" && <Loader2 className="size-4 animate-spin" />}
-                      Load more (uses credits)
+                      Load more (1 credit)
                     </Button>
                   </div>
                 )}

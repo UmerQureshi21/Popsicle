@@ -155,8 +155,10 @@ export type Stats = {
 
 export type HunterStatus = {
   configured: boolean;
+  plan_name: string | null;
   credits_used: number | null;
-  credits_available: number | null;
+  credits_total: number | null; // the monthly allowance
+  credits_remaining: number | null;
   reset_date: string | null;
   error: string | null;
 };

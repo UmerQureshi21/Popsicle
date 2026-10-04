@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { ChevronDown, Loader2, Search, UserPlus } from "lucide-react";
-import { api, type EmailFinderResult, type FoundPerson, type HunterStatus, type PeopleSearch } from "@/lib/api";
+import { api, type EmailFinderResult, type FoundPerson, type PeopleSearch } from "@/lib/api";
+import { creditsChanged, useHunterStatus } from "@/lib/credits";
 import { formatDate } from "@/lib/format";
 import { DEFAULT_LOCATION, LOCATIONS, locationById, type LocationId } from "@/lib/locations";
 import { Button, Modal } from "@/components/ui";
@@ -39,7 +40,7 @@ type Props = {
 };
 
 export default function FindPeopleModal({ initialQuery, onClose, onAdd }: Props) {
-  const [status, setStatus] = useState<HunterStatus | null>(null);
+  const status = useHunterStatus();
   const [query, setQuery] = useState(initialQuery);
   const [department, setDepartment] = useState("");
   const [seniority, setSeniority] = useState("");
@@ -58,10 +59,6 @@ export default function FindPeopleModal({ initialQuery, onClose, onAdd }: Props)
   const [lookupUrl, setLookupUrl] = useState("");
   const [lookupMessage, setLookupMessage] = useState<string | null>(null);
 
-  const refreshStatus = () => api.get<HunterStatus>("/api/people-search/status").then(setStatus, () => setStatus(null));
-  useEffect(() => {
-    refreshStatus();
-  }, []);
 
   // New people are pre-selected unless they've already been emailed.
   const addResults = (found: FoundPerson[], replace: boolean) => {
@@ -93,11 +90,11 @@ export default function FindPeopleModal({ initialQuery, onClose, onAdd }: Props)
       });
       setResult(res);
       addResults(res.people, !more);
-      if (!res.cached) refreshStatus();
     } catch (e) {
       setError((e as Error).message);
     } finally {
       setLoading(null);
+      creditsChanged();
     }
   };
 
@@ -118,7 +115,6 @@ export default function FindPeopleModal({ initialQuery, onClose, onAdd }: Props)
         setLookupMessage(`Found ${res.person.email}`);
         setLookupName("");
         setLookupUrl("");
-        if (!res.cached) refreshStatus();
       } else {
         setLookupMessage(`Hunter couldn’t find an email for them at ${company}. No credit was used.`);
       }
@@ -126,6 +122,7 @@ export default function FindPeopleModal({ initialQuery, onClose, onAdd }: Props)
       setLookupMessage((e as Error).message);
     } finally {
       setLoading(null);
+      creditsChanged();
     }
   };
 
@@ -142,9 +139,9 @@ export default function FindPeopleModal({ initialQuery, onClose, onAdd }: Props)
   const hasMore = !!result && result.offset + result.limit < result.total;
 
   const credits =
-    status?.configured && status.credits_available != null ? (
+    status?.configured && status.credits_remaining != null ? (
       <span className="text-xs text-steel">
-        <span className="font-semibold text-ink">{status.credits_available}</span> Hunter credits left
+        <span className="font-semibold text-ink">{status.credits_remaining}</span> Hunter credits left
         {status.reset_date && <> · resets {formatDate(status.reset_date)}</>}
       </span>
     ) : null;
@@ -280,7 +277,7 @@ export default function FindPeopleModal({ initialQuery, onClose, onAdd }: Props)
             </Button>
           </form>
           <p className="mt-2 text-xs text-steel">
-            Uses up to {limit} credit{limit === 1 ? "" : "s"} (about one per email found). Repeating the same search is free.
+            Uses 1 credit per search, however many people it returns. Free if no one is found or you’ve searched it before.
           </p>
 
           {error && <p className="mt-4 rounded-xl bg-crimson/5 px-4 py-2.5 text-sm text-crimson">{error}</p>}
@@ -332,7 +329,7 @@ export default function FindPeopleModal({ initialQuery, onClose, onAdd }: Props)
                 <div className="mt-3 text-center">
                   <Button variant="ghost" disabled={!!loading} onClick={() => search(true)}>
                     {loading === "more" && <Loader2 className="size-4 animate-spin" />}
-                    Load {Math.min(limit, result.total - result.offset - result.limit)} more (uses credits)
+                    Load {Math.min(limit, result.total - result.offset - result.limit)} more (1 credit)
                   </Button>
                 </div>
               )}
