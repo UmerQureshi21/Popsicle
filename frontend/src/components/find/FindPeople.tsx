@@ -2,13 +2,14 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { ArrowRight, Building2, Loader2, Search, UserSearch } from "lucide-react";
+import { ArrowRight, Loader2, Search, UserSearch, X } from "lucide-react";
 import { api, type FoundPerson, type PeopleSearch } from "@/lib/api";
 import { creditsChanged, creditsText, searchCost, useHunterStatus } from "@/lib/credits";
 import { formatDate } from "@/lib/format";
 import { DEFAULT_LOCATION, LOCATIONS, locationById, type LocationId } from "@/lib/locations";
 import { saveHandoff } from "@/lib/people";
 import { Button, EmptyState } from "@/components/ui";
+import CompanyAutocomplete, { CompanyLogo } from "@/components/CompanyAutocomplete";
 import PersonRow from "@/components/PersonRow";
 import Select from "@/components/Select";
 
@@ -22,8 +23,11 @@ type CompanyResult = {
   filterLabel?: string; // e.g. “software engineer” in the GTA, as searched
 };
 
+/** A company to search: a picked suggestion (exact domain) or text typed as-is. */
+type Chip = { query: string; label: string; domain: string | null };
+
 type Saved = {
-  companiesText: string;
+  chips: Chip[];
   jobTitle: string;
   location: LocationId;
   perCompany: number;
@@ -33,7 +37,7 @@ type Saved = {
 const STORAGE_KEY = "popsicle:find-people:v1";
 const PER_COMPANY = [5, 10, 25];
 const DEFAULTS: Saved = {
-  companiesText: "",
+  chips: [],
   jobTitle: "software engineer",
   location: DEFAULT_LOCATION,
   perCompany: 10,
@@ -44,7 +48,10 @@ function load(): Saved {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
-      const saved: Saved = { ...DEFAULTS, ...JSON.parse(raw) };
+      const { companiesText, ...rest } = JSON.parse(raw);
+      const saved: Saved = { ...DEFAULTS, ...rest };
+      // Searches saved before chips stored companies as text, one per line.
+      if (!rest.chips && companiesText) saved.chips = textToChips(companiesText);
       // A search interrupted by leaving the page can't finish; show it as failed instead of spinning.
       saved.results = saved.results.map((r) =>
         r.state === "loading" ? { ...r, state: "error", error: "Interrupted. Search again." } : r,
@@ -55,18 +62,26 @@ function load(): Saved {
   return DEFAULTS;
 }
 
-function parseCompanies(text: string): string[] {
-  const seen = new Set<string>();
+const DOMAIN = /^[a-z0-9-]+(\.[a-z0-9-]+)+$/i;
+
+function textChip(text: string): Chip {
+  const q = text.trim().replace(/^https?:\/\//i, "").replace(/^www\./i, "").split("/")[0];
+  return DOMAIN.test(q) ? { query: q.toLowerCase(), label: q.toLowerCase(), domain: q.toLowerCase() } : { query: text.trim(), label: text.trim(), domain: null };
+}
+
+function textToChips(text: string): Chip[] {
   return text
     .split(/[\n,]/)
     .map((s) => s.trim())
-    .filter((s) => s && !seen.has(s.toLowerCase()) && seen.add(s.toLowerCase()));
+    .filter(Boolean)
+    .map(textChip);
 }
 
 export default function FindPeople() {
   const router = useRouter();
   const [initial] = useState(load);
-  const [companiesText, setCompaniesText] = useState(initial.companiesText);
+  const [chips, setChips] = useState<Chip[]>(initial.chips);
+  const [draftCompany, setDraftCompany] = useState("");
   const [jobTitle, setJobTitle] = useState(initial.jobTitle);
   const [location, setLocation] = useState<LocationId>(initial.location);
   const [perCompany, setPerCompany] = useState(initial.perCompany);
@@ -77,11 +92,18 @@ export default function FindPeople() {
 
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ companiesText, jobTitle, location, perCompany, results }));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ chips, jobTitle, location, perCompany, results }));
     } catch {}
-  }, [companiesText, jobTitle, location, perCompany, results]);
+  }, [chips, jobTitle, location, perCompany, results]);
 
-  const companies = parseCompanies(companiesText);
+  const companies = chips.map((c) => c.query);
+  const addChips = (added: Chip[]) => {
+    setChips((prev) => {
+      const seen = new Set(prev.map((c) => c.query.toLowerCase()));
+      return [...prev, ...added.filter((c) => !seen.has(c.query.toLowerCase()) && seen.add(c.query.toLowerCase()))];
+    });
+    setDraftCompany("");
+  };
   const update = (query: string, patch: Partial<CompanyResult> | ((r: CompanyResult) => Partial<CompanyResult>)) =>
     setResults((prev) => prev.map((r) => (r.query === query ? { ...r, ...(typeof patch === "function" ? patch(r) : patch) } : r)));
 
@@ -165,18 +187,46 @@ export default function FindPeople() {
         }}
       >
         <div className="grid gap-5 md:grid-cols-[1fr_280px]">
-          <label className="block">
+          <div>
             <span className="text-sm font-semibold text-ink">Companies</span>
-            <span className="ml-2 text-xs text-steel">one per line · name or domain</span>
-            <textarea
-              value={companiesText}
-              onChange={(e) => setCompaniesText(e.target.value)}
-              rows={Math.min(8, Math.max(4, companiesText.split("\n").length + 1))}
-              placeholder={"stripe.com\nFigma\nnotion.so"}
-              spellCheck={false}
-              className="mt-2 w-full resize-y rounded-2xl border border-steel/25 bg-cloud/40 px-4 py-3 text-sm leading-relaxed text-ink outline-none placeholder:text-steel/60 focus:border-scarlet focus:bg-white focus:ring-4 focus:ring-scarlet/10"
-            />
-          </label>
+            <span className="ml-2 text-xs text-steel">type a name and pick from the list, or paste several</span>
+            <div className="mt-2 flex min-h-[7.5rem] flex-wrap content-start items-center gap-2 rounded-2xl border border-steel/25 bg-cloud/40 p-2.5 focus-within:border-scarlet focus-within:bg-white focus-within:ring-4 focus-within:ring-scarlet/10">
+              {chips.map((c) => (
+                <span
+                  key={c.query}
+                  className="flex max-w-full items-center gap-2 rounded-xl border border-cloud bg-white py-1 pr-1.5 pl-1.5 text-sm shadow-sm"
+                >
+                  <CompanyLogo domain={c.domain} size={22} />
+                  <span className="truncate font-medium text-ink">{c.label}</span>
+                  {c.domain && c.domain !== c.label && <span className="truncate text-xs text-steel">{c.domain}</span>}
+                  <button
+                    type="button"
+                    onClick={() => setChips(chips.filter((x) => x.query !== c.query))}
+                    className="rounded-md p-0.5 text-steel hover:bg-cloud hover:text-crimson"
+                    aria-label={`Remove ${c.label}`}
+                  >
+                    <X className="size-3.5" />
+                  </button>
+                </span>
+              ))}
+              <CompanyAutocomplete
+                ariaLabel="Add a company"
+                value={draftCompany}
+                onChange={setDraftCompany}
+                onPick={(sug) => addChips([{ query: sug.domain, label: sug.name || sug.domain, domain: sug.domain }])}
+                onSubmitRaw={(text) => addChips([textChip(text)])}
+                onBackspaceEmpty={() => setChips(chips.slice(0, -1))}
+                onPaste={(e) => {
+                  const text = e.clipboardData.getData("text");
+                  if (!/[\n,]/.test(text)) return;
+                  e.preventDefault();
+                  addChips(textToChips(text));
+                }}
+                placeholder={chips.length ? "Add another company" : "e.g. Harvey, Shopify, stripe.com"}
+                className="min-w-48 flex-1 px-1.5"
+              />
+            </div>
+          </div>
           <div className="space-y-4">
             <label className="block">
               <span className="text-sm font-semibold text-ink">Job title</span>
@@ -242,9 +292,7 @@ export default function FindPeople() {
           <section key={r.query} className="animate-fade-up -mx-4 overflow-hidden border-y border-cloud bg-white sm:mx-0 sm:rounded-3xl sm:border sm:shadow-sm">
             <header className="flex flex-wrap items-center justify-between gap-3 border-b border-cloud px-5 py-4">
               <div className="flex items-center gap-3">
-                <span className="grid size-10 place-items-center rounded-xl bg-cloud text-ink">
-                  <Building2 className="size-5" />
-                </span>
+                <CompanyLogo domain={r.search?.domain ?? chips.find((c) => c.query === r.query)?.domain} size={40} />
                 <div>
                   <p className="font-semibold text-ink">{r.search?.organization ?? r.query}</p>
                   <p className="text-xs text-steel">

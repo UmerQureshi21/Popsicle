@@ -7,6 +7,7 @@ import { creditsChanged, creditsText, searchCost, useHunterStatus } from "@/lib/
 import { formatDate } from "@/lib/format";
 import { DEFAULT_LOCATION, LOCATIONS, locationById, type LocationId } from "@/lib/locations";
 import { Button, Modal } from "@/components/ui";
+import CompanyAutocomplete from "@/components/CompanyAutocomplete";
 import PersonRow from "@/components/PersonRow";
 import Select from "@/components/Select";
 
@@ -74,13 +75,13 @@ export default function FindPeopleModal({ initialQuery, onClose, onAdd }: Props)
     });
   };
 
-  const search = async (more = false, refresh = false) => {
-    if (!query.trim()) return;
+  const search = async (more = false, refresh = false, q = query) => {
+    if (!q.trim()) return;
     setLoading(more ? "more" : "search");
     setError(null);
     try {
       const res = await api.post<PeopleSearch>("/api/people-search/company", {
-        query: query.trim(),
+        query: q.trim(),
         limit,
         offset: more && result ? result.offset + result.limit : 0,
         department: department || null,
@@ -211,16 +212,20 @@ export default function FindPeopleModal({ initialQuery, onClose, onAdd }: Props)
               search();
             }}
           >
-            <label className="flex min-w-60 flex-1 items-center gap-2 rounded-xl border border-steel/30 bg-white px-3 focus-within:border-scarlet focus-within:ring-4 focus-within:ring-scarlet/10">
-              <Search className="size-4 text-steel" />
-              <input
-                autoFocus
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Company name or domain, e.g. stripe.com"
-                className="flex-1 bg-transparent py-2.5 text-sm outline-none placeholder:text-steel"
-              />
-            </label>
+            <CompanyAutocomplete
+              autoFocus
+              ariaLabel="Company"
+              value={query}
+              onChange={setQuery}
+              onPick={(sug) => {
+                // A picked suggestion is an exact domain, so search it straight away.
+                setQuery(sug.domain);
+                search(false, false, sug.domain);
+              }}
+              placeholder="Company name or domain, e.g. Harvey"
+              leading={<Search className="size-4 shrink-0 text-steel" />}
+              className="min-w-60 flex-1 rounded-xl border border-steel/30 bg-white px-3 focus-within:border-scarlet focus-within:ring-4 focus-within:ring-scarlet/10"
+            />
             <input
               aria-label="Job title"
               value={jobTitle}

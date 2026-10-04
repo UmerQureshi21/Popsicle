@@ -189,3 +189,7 @@ export type PeopleSearch = {
 };
 
 export type EmailFinderResult = { person: FoundPerson | null; cached: boolean };
+
+export type CompanySuggestion = { name: string | null; domain: string; logo: string | null; email_count: number | null };
+
+export type PeopleCount = { total: number; by_department: Record<string, number>; by_seniority: Record<string, number> };
