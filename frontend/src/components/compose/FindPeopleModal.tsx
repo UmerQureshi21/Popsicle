@@ -8,6 +8,7 @@ import { formatDate } from "@/lib/format";
 import { DEFAULT_LOCATION, LOCATIONS, locationById, type LocationId } from "@/lib/locations";
 import { Button, Modal } from "@/components/ui";
 import PersonRow from "@/components/PersonRow";
+import Select from "@/components/Select";
 
 // Hunter's department and seniority filters (https://hunter.io/api-documentation/v2#domain-search).
 const DEPARTMENTS: [string, string][] = [
@@ -227,50 +228,32 @@ export default function FindPeopleModal({ initialQuery, onClose, onAdd }: Props)
               placeholder="Job title, e.g. software engineer"
               className="w-56 rounded-xl border border-steel/30 bg-white px-3 py-2.5 text-sm outline-none placeholder:text-steel focus:border-scarlet"
             />
-            <select
-              aria-label="Location"
+            <Select
+              ariaLabel="Location"
               value={location}
-              onChange={(e) => setLocation(e.target.value as LocationId)}
-              className="rounded-xl border border-steel/30 bg-white px-3 py-2.5 text-sm text-ink outline-none focus:border-scarlet"
-            >
-              {LOCATIONS.map((l) => (
-                <option key={l.id} value={l.id}>
-                  {l.label}
-                </option>
-              ))}
-            </select>
+              onChange={setLocation}
+              options={LOCATIONS.map((l) => ({ value: l.id, label: l.label }))}
+            />
             {(
               [
                 [department, setDepartment, DEPARTMENTS, "Department"],
                 [seniority, setSeniority, SENIORITIES, "Seniority"],
               ] as const
             ).map(([value, setValue, options, label]) => (
-              <select
+              <Select
                 key={label}
-                aria-label={label}
+                ariaLabel={label}
                 value={value}
-                onChange={(e) => setValue(e.target.value)}
-                className="rounded-xl border border-steel/30 bg-white px-3 py-2.5 text-sm text-ink outline-none focus:border-scarlet"
-              >
-                {options.map(([v, l]) => (
-                  <option key={v} value={v}>
-                    {l}
-                  </option>
-                ))}
-              </select>
+                onChange={setValue}
+                options={options.map(([v, l]) => ({ value: v, label: l }))}
+              />
             ))}
-            <select
-              aria-label="How many people"
+            <Select
+              ariaLabel="How many people"
               value={limit}
-              onChange={(e) => setLimit(Number(e.target.value))}
-              className="rounded-xl border border-steel/30 bg-white px-3 py-2.5 text-sm text-ink outline-none focus:border-scarlet"
-            >
-              {PAGE_SIZES.map((n) => (
-                <option key={n} value={n}>
-                  {n} people ({creditsText(searchCost(n))})
-                </option>
-              ))}
-            </select>
+              onChange={setLimit}
+              options={PAGE_SIZES.map((n) => ({ value: n, label: `${n} people`, hint: creditsText(searchCost(n)) }))}
+            />
             <Button type="submit" variant="primary" disabled={!query.trim() || !!loading}>
               {loading === "search" ? <Loader2 className="size-4 animate-spin" /> : <Search className="size-4" />}
               Search

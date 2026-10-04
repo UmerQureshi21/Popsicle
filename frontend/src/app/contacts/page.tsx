@@ -6,6 +6,7 @@ import { api, type Company, type Contact } from "@/lib/api";
 import { formatDate } from "@/lib/format";
 import { Avatar, EmptyState, StatusBadge } from "@/components/ui";
 import PageShell from "@/components/PageShell";
+import Select from "@/components/Select";
 
 export default function ContactsPage() {
   const [contacts, setContacts] = useState<Contact[] | null>(null);
@@ -44,18 +45,13 @@ export default function ContactsPage() {
             className="flex-1 bg-transparent text-sm outline-none placeholder:text-steel"
           />
         </label>
-        <select
+        <Select
+          ariaLabel="Filter by company"
           value={companyId}
-          onChange={(e) => setCompanyId(e.target.value)}
-          className="rounded-xl border border-steel/25 bg-white px-3 py-2 text-sm text-ink shadow-sm outline-none focus:border-scarlet"
-        >
-          <option value="">All companies</option>
-          {companies.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-        </select>
+          onChange={setCompanyId}
+          options={[{ value: "", label: "All companies" }, ...companies.map((c) => ({ value: String(c.id), label: c.name }))]}
+          className="min-w-48 py-2 shadow-sm"
+        />
       </div>
 
       {contacts && contacts.length === 0 ? (

@@ -10,6 +10,7 @@ import { DEFAULT_LOCATION, LOCATIONS, locationById, type LocationId } from "@/li
 import { saveHandoff } from "@/lib/people";
 import { Button, EmptyState } from "@/components/ui";
 import PersonRow from "@/components/PersonRow";
+import Select from "@/components/Select";
 
 type CompanyResult = {
   query: string;
@@ -189,32 +190,24 @@ export default function FindPeople() {
             </label>
             <label className="block">
               <span className="text-sm font-semibold text-ink">Location</span>
-              <select
+              <Select
+                ariaLabel="Location"
                 value={location}
-                onChange={(e) => setLocation(e.target.value as LocationId)}
-                className="mt-2 w-full rounded-xl border border-steel/25 bg-white px-3 py-2.5 text-sm text-ink outline-none focus:border-scarlet"
-              >
-                {LOCATIONS.map((l) => (
-                  <option key={l.id} value={l.id}>
-                    {l.label}
-                  </option>
-                ))}
-              </select>
+                onChange={setLocation}
+                options={LOCATIONS.map((l) => ({ value: l.id, label: l.label }))}
+                className="mt-2 w-full"
+              />
               <span className="mt-1 block text-xs text-steel">Where each person is based, not the company’s HQ.</span>
             </label>
             <label className="block">
               <span className="text-sm font-semibold text-ink">People per company</span>
-              <select
+              <Select
+                ariaLabel="People per company"
                 value={perCompany}
-                onChange={(e) => setPerCompany(Number(e.target.value))}
-                className="mt-2 w-full rounded-xl border border-steel/25 bg-white px-3 py-2.5 text-sm text-ink outline-none focus:border-scarlet"
-              >
-                {PER_COMPANY.map((n) => (
-                  <option key={n} value={n}>
-                    Up to {n} (up to {creditsText(searchCost(n))})
-                  </option>
-                ))}
-              </select>
+                onChange={setPerCompany}
+                options={PER_COMPANY.map((n) => ({ value: n, label: `Up to ${n}`, hint: `up to ${creditsText(searchCost(n))}` }))}
+                className="mt-2 w-full"
+              />
             </label>
           </div>
         </div>
