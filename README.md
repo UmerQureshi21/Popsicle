@@ -72,8 +72,9 @@ Your remaining credits show in the top nav and update after every search.
 1. **Company:** type the company name. It becomes `{{company}}`.
 2. **Recipients:** open the recipients table. Each column is a variable (`full_name` and `email` to start; `email` is required). Add a column with **+ variable** and remove one with its ×.
 3. **Fill the table:** one row per person.
-   - Enter moves to the same column in the next row, adding a row if needed.
-   - You can paste rows copied from a spreadsheet into a cell; they fill the table from that cell.
+   - Cells wrap their text and grow taller, so a whole paragraph is readable at once.
+   - Enter moves to the same column in the next row, adding a row if needed. Shift+Enter starts a new line inside a cell.
+   - You can paste rows copied from a spreadsheet into a cell; they fill the table from that cell. Pasted text with line breaks but no tabs, such as a paragraph, stays in that one cell.
    - Blank rows are ignored, and rows with a missing or invalid email are flagged.
 4. **Template:** write the subject and body. Click a variable in the dark toolbar to insert `{{variable}}` at the cursor. Valid placeholders show in red; ones that don't match a variable get a wavy underline.
    - If you have a `full_name` variable, `{{first_name}}` and `{{last_name}}` are filled in automatically.

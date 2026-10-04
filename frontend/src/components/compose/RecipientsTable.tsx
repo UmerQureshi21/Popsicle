@@ -1,6 +1,14 @@
 "use client";
 
-import { Fragment, useLayoutEffect, useRef, useState, type ClipboardEvent, type KeyboardEvent } from "react";
+import {
+  Fragment,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ClipboardEvent,
+  type KeyboardEvent,
+  type TextareaHTMLAttributes,
+} from "react";
 import { AlertCircle, Lock, Plus, X } from "lucide-react";
 import { normalizeVariableName, type RecipientRow } from "@/lib/tuples";
 
@@ -26,6 +34,18 @@ const PLACEHOLDERS: Record<string, string> = {
   linkedin: "linkedin.com/in/…",
 };
 
+/** A cell that wraps its text and grows taller to show all of it, so paragraphs stay readable. */
+function CellText({ value, ...props }: TextareaHTMLAttributes<HTMLTextAreaElement> & { value: string }) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "0px";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [value]);
+  return <textarea ref={ref} rows={1} value={value} {...props} />;
+}
+
 export default function RecipientsTable({ variables, onVariablesChange, rows, onRowsChange, recipients }: Props) {
   const [draftVar, setDraftVar] = useState("");
   const tableRef = useRef<HTMLDivElement>(null);
@@ -34,7 +54,7 @@ export default function RecipientsTable({ variables, onVariablesChange, rows, on
 
   useLayoutEffect(() => {
     if (!pendingFocus.current) return;
-    tableRef.current?.querySelector<HTMLInputElement>(`[data-cell="${pendingFocus.current}"]`)?.focus();
+    tableRef.current?.querySelector<HTMLTextAreaElement>(`[data-cell="${pendingFocus.current}"]`)?.focus();
     pendingFocus.current = null;
   }, [rows.length]);
 
@@ -42,7 +62,7 @@ export default function RecipientsTable({ variables, onVariablesChange, rows, on
   const filled = recipients.length;
 
   const focusCell = (r: number, c: number) =>
-    tableRef.current?.querySelector<HTMLInputElement>(`[data-cell="${r}-${c}"]`)?.focus();
+    tableRef.current?.querySelector<HTMLTextAreaElement>(`[data-cell="${r}-${c}"]`)?.focus();
 
   const setCell = (r: number, key: string, value: string) =>
     onRowsChange(rows.map((row, i) => (i === r ? { ...row, [key]: value } : row)));
@@ -60,17 +80,19 @@ export default function RecipientsTable({ variables, onVariablesChange, rows, on
     setDraftVar("");
   };
 
-  const onKeyDown = (e: KeyboardEvent<HTMLInputElement>, r: number, c: number) => {
-    if (e.key !== "Enter") return;
+  // Enter moves down a row; Shift+Enter adds a line break inside the cell.
+  const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>, r: number, c: number) => {
+    if (e.key !== "Enter" || e.shiftKey) return;
     e.preventDefault();
     if (r === rows.length - 1) addRow(c);
     else focusCell(r + 1, c);
   };
 
-  // Pasting rows copied from a spreadsheet fills the table starting at this cell.
-  const onPaste = (e: ClipboardEvent<HTMLInputElement>, r: number, c: number) => {
+  // Pasting rows copied from a spreadsheet (tab-separated) fills the table starting at this cell.
+  // Text with line breaks but no tabs is a paragraph, so it stays in this one cell.
+  const onPaste = (e: ClipboardEvent<HTMLTextAreaElement>, r: number, c: number) => {
     const text = e.clipboardData.getData("text").replace(/\r/g, "").replace(/\n+$/, "");
-    if (!/[\t\n]/.test(text)) return;
+    if (!text.includes("\t")) return;
     e.preventDefault();
     const next = rows.map((row) => ({ ...row }));
     text.split("\n").forEach((line, i) => {
@@ -151,23 +173,27 @@ export default function RecipientsTable({ variables, onVariablesChange, rows, on
               return (
                 <Fragment key={r}>
                   <tr className={`group ${error ? "bg-crimson/5" : "border-b border-cloud last:border-0"}`}>
-                    <td className="px-2 text-center text-xs text-steel">{r + 1}</td>
+                    <td className="px-2 pt-3 text-center align-top text-xs text-steel">{r + 1}</td>
                     {variables.map((v, c) => (
-                      <td key={v} className="border-l border-cloud p-0">
-                        <input
+                      <td
+                        key={v}
+                        className="cursor-text border-l border-cloud p-0 align-top focus-within:bg-scarlet/5 focus-within:shadow-[inset_0_0_0_2px_var(--color-scarlet)]"
+                        onClick={(e) => e.currentTarget.querySelector("textarea")?.focus()}
+                      >
+                        <CellText
                           data-cell={`${r}-${c}`}
                           value={row[v] ?? ""}
                           onChange={(e) => setCell(r, v, e.target.value)}
                           onKeyDown={(e) => onKeyDown(e, r, c)}
                           onPaste={(e) => onPaste(e, r, c)}
                           placeholder={r === 0 && !Object.values(row).some((x) => x?.trim()) ? (PLACEHOLDERS[v] ?? v.replace(/_/g, " ")) : ""}
-                          type={v === "email" ? "email" : "text"}
+                          spellCheck={v !== "email"}
                           aria-label={`Row ${r + 1} ${v}`}
-                          className="w-full bg-transparent px-3 py-2.5 text-ink outline-none placeholder:text-steel/50 focus:bg-scarlet/5 focus:shadow-[inset_0_0_0_2px_var(--color-scarlet)]"
+                          className="block w-full resize-none overflow-hidden bg-transparent px-3 py-2.5 leading-snug [overflow-wrap:anywhere] whitespace-pre-wrap text-ink outline-none placeholder:text-steel/50"
                         />
                       </td>
                     ))}
-                    <td className="border-l border-cloud px-2 text-right">
+                    <td className="border-l border-cloud px-2 pt-2 text-right align-top">
                       <button
                         onClick={() => removeRow(r)}
                         className="rounded-lg p-1 text-steel opacity-0 group-hover:opacity-100 hover:bg-cloud hover:text-crimson focus:opacity-100"
@@ -199,7 +225,7 @@ export default function RecipientsTable({ variables, onVariablesChange, rows, on
         >
           <Plus className="size-4" /> Add recipient
         </button>
-        <span className="hidden text-xs text-steel sm:inline">Enter moves to the next row · paste from a spreadsheet to fill many</span>
+        <span className="hidden text-xs text-steel sm:inline">Enter moves to the next row · Shift+Enter for a new line · paste from a spreadsheet to fill many</span>
       </div>
     </div>
   );
