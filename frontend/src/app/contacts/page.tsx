@@ -59,7 +59,7 @@ export default function ContactsPage() {
           {q || companyId ? "Try a different search." : "People are added here automatically when you send a batch."}
         </EmptyState>
       ) : (
-        <div className="overflow-x-auto rounded-2xl border border-cloud bg-white shadow-sm">
+        <div className="-mx-4 overflow-x-auto border-y border-cloud bg-white sm:mx-0 sm:rounded-2xl sm:border sm:shadow-sm">
           <table className="w-full text-left text-sm">
             <thead className="border-b border-cloud bg-cloud/40 text-xs text-steel">
               <tr>
@@ -73,8 +73,8 @@ export default function ContactsPage() {
             <tbody>
               {contacts?.map((c) => (
                 <tr key={c.id} className="group border-b border-cloud last:border-0 hover:bg-cloud/30">
-                  <td className="px-4 py-3 sm:px-5">
-                    <div className="flex items-center gap-3">
+                  <td className="max-w-[calc(100vw-8.5rem)] px-4 py-3 sm:max-w-none sm:px-5">
+                    <div className="flex min-w-0 items-center gap-3">
                       <Avatar name={c.full_name || c.email} size={32} />
                       <div className="min-w-0">
                         <div className="flex items-center gap-1.5 font-medium text-ink">

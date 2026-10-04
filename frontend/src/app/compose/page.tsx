@@ -14,7 +14,7 @@ export default function ComposePage() {
   const mounted = useSyncExternalStore(subscribe, () => true, () => false);
 
   return (
-    <main className="relative min-h-screen bg-cloud px-4 pt-28 pb-16">
+    <main className="relative min-h-screen bg-white pt-[calc(53px+env(safe-area-inset-top))] pb-[calc(60px+env(safe-area-inset-bottom))] sm:bg-cloud sm:px-4 sm:pt-28 sm:pb-16">
       <div aria-hidden className="pointer-events-none fixed inset-0 hidden items-center justify-center gap-12 xl:flex">
         <Image src="/left-pop.png" alt="" width={500} height={500} priority className="h-auto -rotate-6" style={{ width: POP_WIDTH }} />
         <div className="w-full max-w-3xl shrink-0" />

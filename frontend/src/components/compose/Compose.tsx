@@ -231,7 +231,7 @@ export default function Compose() {
   return (
     <>
       {notice && (
-        <div className="animate-fade-up mx-auto mb-4 flex max-w-3xl items-center justify-between rounded-2xl bg-white/90 px-4 py-3 text-sm text-ink shadow-lg backdrop-blur">
+        <div className="animate-fade-up mx-auto flex max-w-3xl items-center justify-between gap-3 border-b border-cloud bg-cloud/60 px-5 py-3 text-sm text-ink sm:mb-4 sm:rounded-2xl sm:border-0 sm:bg-white/90 sm:px-4 sm:shadow-lg sm:backdrop-blur">
           {notice}
           <button className="text-steel hover:text-ink" onClick={() => setNotice(null)}>
             Dismiss
@@ -239,8 +239,8 @@ export default function Compose() {
         </div>
       )}
 
-      <div className="mx-auto max-w-3xl rounded-[28px] border border-white/60 bg-white/70 p-2 shadow-[0_40px_100px_-30px_rgba(43,45,66,0.55)] backdrop-blur-2xl">
-        <div className="rounded-[22px] bg-white/95 px-5 pt-6 pb-5 shadow-sm sm:px-8 sm:pt-7 sm:pb-6">
+      <div className="mx-auto max-w-3xl sm:rounded-[28px] sm:border sm:border-white/60 sm:bg-white/70 sm:p-2 sm:shadow-[0_40px_100px_-30px_rgba(43,45,66,0.55)] sm:backdrop-blur-2xl">
+        <div className="bg-white px-5 pt-5 pb-5 sm:rounded-[22px] sm:bg-white/95 sm:px-8 sm:pt-7 sm:pb-6 sm:shadow-sm">
           {/* Header */}
           <div className="flex items-center justify-between gap-3">
             <h1 className="shrink-0 text-lg font-semibold text-ink">New email</h1>
@@ -450,8 +450,8 @@ export default function Compose() {
           )}
         </div>
 
-        {/* Footer toolbar */}
-        <div className="flex items-center justify-between px-4 py-3">
+        {/* Footer toolbar: pinned above the tab bar on phones */}
+        <div className="sticky bottom-[calc(60px+env(safe-area-inset-bottom))] z-20 flex items-center justify-between border-t border-cloud bg-white/95 px-3 py-2.5 backdrop-blur-xl sm:static sm:border-0 sm:bg-transparent sm:px-4 sm:py-3 sm:backdrop-blur-none">
           <div className="flex items-center gap-1">
             <Tooltip label="Attach files">
               <button onClick={() => fileInput.current?.click()} className="rounded-xl p-2.5 text-ink/60 hover:bg-white/80 hover:text-ink">

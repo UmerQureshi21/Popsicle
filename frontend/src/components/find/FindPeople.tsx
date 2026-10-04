@@ -158,7 +158,7 @@ export default function FindPeople() {
     <div className="space-y-6">
       {/* Search */}
       <form
-        className="rounded-3xl border border-cloud bg-white p-6 shadow-sm"
+        className="-mx-4 border-y border-cloud bg-white p-5 sm:mx-0 sm:rounded-3xl sm:border sm:p-6 sm:shadow-sm"
         onSubmit={(e) => {
           e.preventDefault();
           searchAll();
@@ -239,7 +239,7 @@ export default function FindPeople() {
         const hasMore = !!r.search && r.search.offset + r.search.limit < total;
         const allSelected = r.people.length > 0 && r.people.every((p) => r.selected.includes(p.email));
         return (
-          <section key={r.query} className="animate-fade-up overflow-hidden rounded-3xl border border-cloud bg-white shadow-sm">
+          <section key={r.query} className="animate-fade-up -mx-4 overflow-hidden border-y border-cloud bg-white sm:mx-0 sm:rounded-3xl sm:border sm:shadow-sm">
             <header className="flex flex-wrap items-center justify-between gap-3 border-b border-cloud px-5 py-4">
               <div className="flex items-center gap-3">
                 <span className="grid size-10 place-items-center rounded-xl bg-cloud text-ink">
