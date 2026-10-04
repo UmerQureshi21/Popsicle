@@ -153,7 +153,7 @@ export default function LandingPage() {
       </section>
 
       {/* How it works */}
-      <section id="how" className="relative mx-auto max-w-5xl scroll-mt-10 px-6 py-24">
+      <section id="how" className="relative mx-auto max-w-6xl scroll-mt-10 px-6 py-24">
         <Reveal className="mb-14 text-center">
           <p className="text-sm font-semibold tracking-widest text-crimson uppercase">How it works</p>
           <h2 className="mt-3 text-4xl font-bold tracking-tight text-balance text-ink sm:text-5xl">One template. Every inbox personal.</h2>
@@ -172,22 +172,22 @@ export default function LandingPage() {
       </section>
 
       {/* Features */}
-      <section className="mx-auto max-w-6xl px-6 pb-28">
-        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+      <section className="mx-auto max-w-5xl px-6 pb-28">
+        <div className="grid gap-6 sm:grid-cols-2">
           {FEATURES.map(({ icon: Icon, image, title, text }, n) => (
             <Reveal key={title} delay={n * 120}>
-              <div className="h-full rounded-3xl border border-cloud bg-white p-7 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_30px_60px_-30px_rgba(43,45,66,0.4)]">
+              <div className="h-full rounded-[2rem] border border-cloud bg-white p-8 shadow-sm transition-all duration-300 sm:p-10 hover:-translate-y-1 hover:shadow-[0_30px_60px_-30px_rgba(43,45,66,0.4)]">
                 {image ? (
-                  <Image src={image} alt="" width={44} height={44} className="size-11" />
+                  <Image src={image} alt="" width={64} height={64} className="size-16" />
                 ) : (
                   Icon && (
-                    <span className="grid size-11 place-items-center rounded-2xl bg-crimson/10 text-crimson">
-                      <Icon className="size-5" />
+                    <span className="grid size-16 place-items-center rounded-2xl bg-crimson/10 text-crimson">
+                      <Icon className="size-7" />
                     </span>
                   )
                 )}
-                <h3 className="mt-5 text-lg font-semibold text-balance text-ink">{title}</h3>
-                <p className="mt-2 leading-relaxed text-pretty text-steel">{text}</p>
+                <h3 className="mt-7 text-2xl font-semibold tracking-tight text-balance text-ink">{title}</h3>
+                <p className="mt-3 text-lg leading-relaxed text-pretty text-steel">{text}</p>
               </div>
             </Reveal>
           ))}
