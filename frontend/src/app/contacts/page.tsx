@@ -59,21 +59,21 @@ export default function ContactsPage() {
           {q || companyId ? "Try a different search." : "People are added here automatically when you send a batch."}
         </EmptyState>
       ) : (
-        <div className="overflow-hidden rounded-2xl border border-cloud bg-white shadow-sm">
+        <div className="overflow-x-auto rounded-2xl border border-cloud bg-white shadow-sm">
           <table className="w-full text-left text-sm">
             <thead className="border-b border-cloud bg-cloud/40 text-xs text-steel">
               <tr>
-                <th className="px-5 py-3 font-medium">Person</th>
-                <th className="px-5 py-3 font-medium">Company</th>
-                <th className="px-5 py-3 font-medium">Emailed</th>
-                <th className="px-5 py-3 font-medium">Last status</th>
+                <th className="px-4 py-3 font-medium sm:px-5">Person</th>
+                <th className="hidden px-5 py-3 font-medium sm:table-cell">Company</th>
+                <th className="hidden px-5 py-3 font-medium md:table-cell">Emailed</th>
+                <th className="px-4 py-3 font-medium sm:px-5">Status</th>
                 <th className="w-12" />
               </tr>
             </thead>
             <tbody>
               {contacts?.map((c) => (
                 <tr key={c.id} className="group border-b border-cloud last:border-0 hover:bg-cloud/30">
-                  <td className="px-5 py-3">
+                  <td className="px-4 py-3 sm:px-5">
                     <div className="flex items-center gap-3">
                       <Avatar name={c.full_name || c.email} size={32} />
                       <div className="min-w-0">
@@ -89,11 +89,12 @@ export default function ContactsPage() {
                           {c.email}
                           {c.title && <> · {c.title}</>}
                         </div>
+                        {c.company_name && <div className="truncate text-xs text-steel sm:hidden">{c.company_name}</div>}
                       </div>
                     </div>
                   </td>
-                  <td className="px-5 py-3 text-ink">{c.company_name ?? <span className="text-steel">—</span>}</td>
-                  <td className="px-5 py-3 text-ink">
+                  <td className="hidden px-5 py-3 text-ink sm:table-cell">{c.company_name ?? <span className="text-steel">—</span>}</td>
+                  <td className="hidden px-5 py-3 text-ink md:table-cell">
                     {c.sent_count > 0 ? (
                       <>
                         {c.sent_count}× <span className="text-steel">· {formatDate(c.last_sent_at)}</span>
@@ -102,7 +103,7 @@ export default function ContactsPage() {
                       <span className="text-steel">never</span>
                     )}
                   </td>
-                  <td className="px-5 py-3">{c.last_status && <StatusBadge status={c.last_status} />}</td>
+                  <td className="px-4 py-3 sm:px-5">{c.last_status && <StatusBadge status={c.last_status} />}</td>
                   <td className="px-3 py-3">
                     <button
                       onClick={() => remove(c)}

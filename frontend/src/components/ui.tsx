@@ -38,14 +38,14 @@ export function Modal({
         }`}
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-cloud px-6 py-4">
+        <div className="flex items-center justify-between gap-3 border-b border-cloud px-4 py-4 sm:px-6">
           <h2 className="text-lg font-semibold text-ink">{title}</h2>
           <button onClick={onClose} className="rounded-lg p-1.5 text-steel hover:bg-cloud hover:text-ink" aria-label="Close">
             <X className="size-5" />
           </button>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
-        {footer && <div className="border-t border-cloud bg-cloud/40 px-6 py-4">{footer}</div>}
+        {footer && <div className="border-t border-cloud bg-cloud/40 px-4 py-4 sm:px-6">{footer}</div>}
       </div>
     </div>
   );
@@ -94,7 +94,7 @@ export function Tooltip({ label, children }: { label: string; children: ReactNod
   return (
     <span className="group/tip relative inline-flex">
       {children}
-      <span className="pointer-events-none absolute bottom-full left-1/2 mb-2 -translate-x-1/2 whitespace-nowrap rounded-lg bg-ink px-2.5 py-1.5 text-xs font-medium text-white opacity-0 shadow-lg transition-opacity group-hover/tip:opacity-100">
+      <span className="pointer-events-none absolute bottom-full left-1/2 mb-2 -translate-x-1/2 hidden whitespace-nowrap rounded-lg bg-ink px-2.5 py-1.5 text-xs font-medium text-white shadow-lg group-hover/tip:block">
         {label}
       </span>
     </span>

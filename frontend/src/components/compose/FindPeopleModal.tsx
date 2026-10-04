@@ -155,11 +155,11 @@ export default function FindPeopleModal({ initialQuery, onClose, onAdd }: Props)
       title={
         <span className="flex items-center gap-3">
           Find people
-          {credits}
+          <span className="hidden sm:inline">{credits}</span>
         </span>
       }
       footer={
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <span className="text-sm text-steel">
             {chosen.length} selected
             {chosen.some((p) => p.already_emailed_at) && (
@@ -200,7 +200,7 @@ export default function FindPeopleModal({ initialQuery, onClose, onAdd }: Props)
           </ol>
         </div>
       ) : (
-        <div className="p-6">
+        <div className="p-4 sm:p-6">
           {status?.error && <p className="mb-4 rounded-xl bg-crimson/5 px-4 py-2.5 text-sm text-crimson">{status.error}</p>}
 
           {/* Search */}
@@ -226,7 +226,7 @@ export default function FindPeopleModal({ initialQuery, onClose, onAdd }: Props)
               value={jobTitle}
               onChange={(e) => setJobTitle(e.target.value)}
               placeholder="Job title, e.g. software engineer"
-              className="w-56 rounded-xl border border-steel/30 bg-white px-3 py-2.5 text-sm outline-none placeholder:text-steel focus:border-scarlet"
+              className="w-full rounded-xl border border-steel/30 bg-white px-3 py-2.5 text-sm outline-none placeholder:text-steel focus:border-scarlet sm:w-56"
             />
             <Select
               ariaLabel="Location"
@@ -268,7 +268,7 @@ export default function FindPeopleModal({ initialQuery, onClose, onAdd }: Props)
           {/* Results */}
           {result && (
             <div className="mt-6">
-              <div className="mb-2 flex items-center justify-between text-sm">
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-sm">
                 <label className="flex cursor-pointer items-center gap-2.5 font-medium text-ink">
                   <input
                     type="checkbox"

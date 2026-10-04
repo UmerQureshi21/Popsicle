@@ -31,14 +31,14 @@ function CreditsPill() {
     <Tooltip label={label}>
       <Link
         href="/find"
-        className={`flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-medium transition-colors hover:bg-cloud ${
+        className={`flex items-center gap-1.5 rounded-xl px-2.5 py-2 text-sm font-medium whitespace-nowrap transition-colors hover:bg-cloud sm:px-3 ${
           low ? "text-crimson" : "text-ink/70"
         }`}
         aria-label={label}
       >
         <Coins className="size-4" />
         {status.credits_remaining}
-        <span className="hidden md:inline">credits</span>
+        <span className="hidden lg:inline">credits</span>
       </Link>
     </Tooltip>
   );
@@ -54,29 +54,31 @@ export default function Nav() {
   return (
     <header className="fixed inset-x-0 top-0 z-40 flex justify-center px-4 pt-4">
       <nav
-        className={`flex w-full max-w-5xl items-center justify-between rounded-2xl border px-3 py-2 shadow-sm backdrop-blur-xl ${
+        className={`flex w-full max-w-5xl items-center justify-between gap-2 rounded-2xl border px-2 py-2 shadow-sm backdrop-blur-xl sm:px-3 ${
           onCompose ? "border-white/50 bg-white/70" : "border-cloud bg-white/90"
         }`}
       >
-        <Link href="/compose" className="flex items-center gap-2 px-2">
+        <Link href="/compose" className="flex shrink-0 items-center gap-2 px-1.5 sm:px-2" aria-label="Popsicle">
           <Image src="/cold-emailer-logo.png" alt="" width={34} height={31} priority />
-          <span className="text-[17px] font-bold tracking-tight text-ink">Popsicle</span>
+          <span className="hidden text-[17px] font-bold tracking-tight text-ink sm:inline">Popsicle</span>
         </Link>
-        <div className="flex items-center gap-1">
+        <div className="flex min-w-0 items-center gap-0.5 sm:gap-1">
           <CreditsPill />
-          <ul className="flex items-center gap-1">
+          <ul className="flex items-center gap-0.5 sm:gap-1">
             {TABS.map(({ href, label, icon: Icon }) => {
               const active = pathname.startsWith(href);
               return (
                 <li key={href}>
                   <Link
                     href={href}
-                    className={`flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition-colors ${
+                    aria-label={label}
+                    title={label}
+                    className={`flex items-center gap-2 rounded-xl px-2.5 py-2 text-sm font-medium whitespace-nowrap transition-colors sm:px-3 ${
                       active ? "bg-ink text-white" : "text-ink/70 hover:bg-cloud hover:text-ink"
                     }`}
                   >
                     <Icon className="size-4" />
-                    <span className="hidden sm:inline">{label}</span>
+                    <span className="hidden lg:inline">{label}</span>
                   </Link>
                 </li>
               );

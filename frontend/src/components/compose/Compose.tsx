@@ -241,18 +241,18 @@ export default function Compose() {
       )}
 
       <div className="mx-auto max-w-3xl rounded-[28px] border border-white/60 bg-white/70 p-2 shadow-[0_40px_100px_-30px_rgba(43,45,66,0.55)] backdrop-blur-2xl">
-        <div className="rounded-[22px] bg-white/95 px-8 pt-7 pb-6 shadow-sm">
+        <div className="rounded-[22px] bg-white/95 px-5 pt-6 pb-5 shadow-sm sm:px-8 sm:pt-7 sm:pb-6">
           {/* Header */}
-          <div className="flex items-center justify-between">
-            <h1 className="text-lg font-semibold text-ink">New email</h1>
+          <div className="flex items-center justify-between gap-3">
+            <h1 className="shrink-0 text-lg font-semibold text-ink">New email</h1>
             {gmail?.connected ? (
               <Tooltip label="Sending from this account · click to reconnect">
                 <a
                   href={`${API_URL}/api/gmail/connect`}
-                  className="flex items-center gap-2 rounded-full bg-cloud px-3 py-1 text-xs text-ink hover:bg-steel/20"
+                  className="flex min-w-0 items-center gap-2 rounded-full bg-cloud px-3 py-1 text-xs text-ink hover:bg-steel/20"
                 >
-                  <span className="size-1.5 rounded-full bg-emerald-500" />
-                  {gmail.email}
+                  <span className="size-1.5 shrink-0 rounded-full bg-emerald-500" />
+                  <span className="max-w-40 truncate sm:max-w-none">{gmail.email}</span>
                 </a>
               </Tooltip>
             ) : gmail?.credentials_file_present ? (
@@ -285,43 +285,46 @@ export default function Compose() {
           </div>
 
           {/* To */}
-          <div className="flex items-center gap-4 border-b border-cloud py-3">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-3 border-b border-cloud py-3">
             <span className="w-16 text-sm text-steel">To</span>
             <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
               {recipients.length === 0 && <span className="text-[15px] text-steel/60">Add recipients below</span>}
               {recipients.slice(0, 3).map((r, i) => (
                 <span
                   key={i}
-                  className={`flex items-center gap-2 rounded-full border py-1 pr-3 pl-1 text-sm shadow-sm ${
+                  className={`flex max-w-full min-w-0 items-center gap-2 rounded-full border py-1 pr-3 pl-1 text-sm shadow-sm ${
                     r.error ? "border-crimson/30 bg-crimson/5 text-crimson" : "border-cloud bg-white text-ink"
                   }`}
                 >
                   <Avatar name={r.values.full_name || r.values.name || r.values.email || "?"} size={24} />
-                  {r.values.email || "missing email"}
+                  <span className="truncate">{r.values.email || "missing email"}</span>
                 </span>
               ))}
               {recipients.length > 3 && (
                 <span className="rounded-full bg-cloud px-3 py-1.5 text-sm font-medium text-ink">+{recipients.length - 3} more</span>
               )}
             </div>
-            <button
-              onClick={() => setPanelOpen(!panelOpen)}
-              className={`flex shrink-0 items-center gap-1.5 rounded-xl px-3 py-1.5 text-sm font-medium transition-colors ${
-                panelOpen ? "bg-ink text-white" : "bg-cloud text-ink hover:bg-steel/20"
-              }`}
-            >
-              <Users className="size-4" />
-              Recipients
-              {rowErrors > 0 && <span className="size-1.5 rounded-full bg-scarlet" />}
-              <ChevronDown className={`size-4 transition-transform ${panelOpen ? "rotate-180" : ""}`} />
-            </button>
-            <button
-              onClick={() => setFindingPeople(true)}
-              className="flex shrink-0 items-center gap-1.5 rounded-xl bg-crimson/10 px-3 py-1.5 text-sm font-medium text-crimson transition-colors hover:bg-crimson/15"
-            >
-              <UserSearch className="size-4" />
-              Find people
-            </button>
+            {/* On phones these drop to their own row under the recipients */}
+            <div className="flex w-full gap-2 sm:w-auto">
+              <button
+                onClick={() => setPanelOpen(!panelOpen)}
+                className={`flex shrink-0 items-center gap-1.5 rounded-xl px-3 py-1.5 text-sm font-medium transition-colors ${
+                  panelOpen ? "bg-ink text-white" : "bg-cloud text-ink hover:bg-steel/20"
+                }`}
+              >
+                <Users className="size-4" />
+                Recipients
+                {rowErrors > 0 && <span className="size-1.5 rounded-full bg-scarlet" />}
+                <ChevronDown className={`size-4 transition-transform ${panelOpen ? "rotate-180" : ""}`} />
+              </button>
+              <button
+                onClick={() => setFindingPeople(true)}
+                className="flex shrink-0 items-center gap-1.5 rounded-xl bg-crimson/10 px-3 py-1.5 text-sm font-medium text-crimson transition-colors hover:bg-crimson/15"
+              >
+                <UserSearch className="size-4" />
+                Find people
+              </button>
+            </div>
           </div>
 
           {panelOpen && (

@@ -199,7 +199,7 @@ export default function RecipientsTable({ variables, onVariablesChange, rows, on
         >
           <Plus className="size-4" /> Add recipient
         </button>
-        <span className="text-xs text-steel">Enter moves to the next row · paste from a spreadsheet to fill many</span>
+        <span className="hidden text-xs text-steel sm:inline">Enter moves to the next row · paste from a spreadsheet to fill many</span>
       </div>
     </div>
   );

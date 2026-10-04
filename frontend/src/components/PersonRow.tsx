@@ -50,7 +50,7 @@ export default function PersonRow({
             </a>
           )}
           {p.already_emailed_at && (
-            <span className="rounded-full bg-cloud px-2 py-0.5 text-[11px] font-medium text-steel">
+            <span className="shrink-0 rounded-full bg-cloud px-2 py-0.5 text-[11px] font-medium whitespace-nowrap text-steel">
               emailed {formatDate(p.already_emailed_at)}
             </span>
           )}
@@ -58,8 +58,12 @@ export default function PersonRow({
         <span className="block truncate text-xs text-steel">
           {[p.position, p.seniority && `${p.seniority} level`].filter(Boolean).join(" · ") || "No title listed"}
         </span>
+        <span className="mt-0.5 flex min-w-0 items-center gap-2 text-xs text-ink sm:hidden">
+          <span className="truncate">{p.email}</span>
+          <ConfidencePill value={p.confidence} />
+        </span>
       </span>
-      <span className="flex shrink-0 items-center gap-2 text-sm text-ink">
+      <span className="hidden shrink-0 items-center gap-2 text-sm text-ink sm:flex">
         {p.email}
         <ConfidencePill value={p.confidence} />
       </span>

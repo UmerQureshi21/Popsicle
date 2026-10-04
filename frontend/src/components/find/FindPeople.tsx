@@ -262,13 +262,13 @@ export default function FindPeople() {
                   {r.search?.cached && (
                     <button
                       onClick={() => fetchCompany(r.query, 0, true)}
-                      className="rounded-full bg-cloud px-2.5 py-1 text-xs text-steel hover:bg-steel/20"
+                      className="rounded-full bg-cloud px-2.5 py-1 text-xs whitespace-nowrap text-steel hover:bg-steel/20"
                       title="Saved earlier, so no credits were used. Click to search Hunter again (Hunter doesn’t charge for repeating a search in the same month)."
                     >
                       saved results · refresh
                     </button>
                   )}
-                  <Button variant="primary" disabled={!r.selected.length} onClick={() => emailThese(r)}>
+                  <Button variant="primary" className="whitespace-nowrap" disabled={!r.selected.length} onClick={() => emailThese(r)}>
                     Email {r.selected.length} {r.selected.length === 1 ? "person" : "people"}
                     <ArrowRight className="size-4" />
                   </Button>

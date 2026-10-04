@@ -69,7 +69,7 @@ export default function PreviewModal({ draft, attachments, gmail, onClose, onSen
       }
     >
       {gmail && !gmail.connected && (
-        <div className="flex items-center justify-between gap-3 border-b border-crimson/15 bg-crimson/5 px-6 py-3 text-sm text-crimson">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-crimson/15 bg-crimson/5 px-4 py-3 text-sm text-crimson sm:px-6">
           <span className="flex items-center gap-2">
             <AlertTriangle className="size-4" />
             {gmail.credentials_file_present
@@ -83,15 +83,15 @@ export default function PreviewModal({ draft, attachments, gmail, onClose, onSen
           )}
         </div>
       )}
-      {error && <div className="border-b border-crimson/15 bg-crimson/5 px-6 py-3 text-sm text-crimson">{error}</div>}
+      {error && <div className="border-b border-crimson/15 bg-crimson/5 px-4 py-3 text-sm text-crimson sm:px-6">{error}</div>}
 
       {!preview ? (
         <div className="grid h-80 place-items-center text-steel">
           <Loader2 className="size-6 animate-spin" />
         </div>
       ) : (
-        <div className="grid min-h-[28rem] grid-cols-[260px_1fr]">
-          <ul className="max-h-[60vh] overflow-y-auto border-r border-cloud p-2">
+        <div className="grid min-h-[28rem] md:grid-cols-[260px_1fr]">
+          <ul className="hidden max-h-[60vh] overflow-y-auto border-r border-cloud p-2 md:block">
             {preview.items.map((it, i) => (
               <li key={i}>
                 <button
@@ -115,12 +115,16 @@ export default function PreviewModal({ draft, attachments, gmail, onClose, onSen
 
           {item && (
             <div className="flex min-w-0 flex-col">
-              <div className="flex items-center justify-between border-b border-cloud px-6 py-3 text-sm">
+              <div className="flex items-center justify-between gap-3 border-b border-cloud px-4 py-3 text-sm sm:px-6">
                 <div className="min-w-0">
-                  <span className="text-steel">To </span>
-                  <span className="font-medium text-ink">{item.to_email}</span>
+                  {/* On phones the recipient list is hidden, so name who this one is for */}
+                  {item.values.full_name && <p className="truncate font-semibold text-ink md:hidden">{item.values.full_name}</p>}
+                  <p className="truncate">
+                    <span className="text-steel">To </span>
+                    <span className="font-medium text-ink">{item.to_email}</span>
+                  </p>
                 </div>
-                <div className="flex items-center gap-1 text-steel">
+                <div className="flex shrink-0 items-center gap-1 text-steel">
                   <span className="mr-1 text-xs">
                     {selected + 1} / {preview.items.length}
                   </span>
@@ -143,14 +147,14 @@ export default function PreviewModal({ draft, attachments, gmail, onClose, onSen
                 </div>
               </div>
               {item.status === "invalid" && (
-                <div className="mx-6 mt-4 rounded-xl bg-crimson/5 px-4 py-2.5 text-sm text-crimson">{item.issues.join(" · ")}</div>
+                <div className="mx-4 mt-4 rounded-xl bg-crimson/5 px-4 py-2.5 text-sm text-crimson sm:mx-6">{item.issues.join(" · ")}</div>
               )}
               {item.status === "already_sent" && (
-                <div className="mx-6 mt-4 rounded-xl bg-cloud px-4 py-2.5 text-sm text-ink/80">
+                <div className="mx-4 mt-4 rounded-xl bg-cloud px-4 py-2.5 text-sm text-ink/80 sm:mx-6">
                   You already emailed this person on {formatDate(item.last_sent_at)}. They’ll be skipped.
                 </div>
               )}
-              <div className="flex-1 overflow-y-auto px-6 py-5">
+              <div className="flex-1 overflow-y-auto px-4 py-5 sm:px-6">
                 <h3 className="mb-4 text-xl font-semibold text-ink">{item.subject}</h3>
                 <div className="text-[15px] leading-relaxed whitespace-pre-wrap text-ink/90">{item.body}</div>
                 {attachments.length > 0 && (
