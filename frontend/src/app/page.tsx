@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight, Mail, ShieldCheck, Variable } from "lucide-react";
+import { Mail, ShieldCheck, Variable } from "lucide-react";
 import Reveal from "@/components/landing/Reveal";
 import HowItWorks from "@/components/landing/HowItWorks";
 import TemplateDemo from "@/components/landing/TemplateDemo";
@@ -51,10 +51,9 @@ function PrimaryButton({ children }: { children: React.ReactNode }) {
   return (
     <Link
       href="/compose"
-      className="group inline-flex items-center gap-2 rounded-2xl bg-crimson px-7 py-4 text-base font-semibold text-white shadow-[0_18px_40px_-12px_rgba(217,4,41,0.6)] transition-all duration-300 hover:-translate-y-0.5 hover:bg-scarlet hover:shadow-[0_24px_50px_-12px_rgba(217,4,41,0.7)]"
+      className="inline-flex items-center rounded-2xl bg-crimson px-7 py-4 text-base font-semibold text-white shadow-[0_18px_40px_-12px_rgba(217,4,41,0.6)] transition-all duration-300 hover:-translate-y-0.5 hover:bg-scarlet hover:shadow-[0_24px_50px_-12px_rgba(217,4,41,0.7)]"
     >
       {children}
-      <ArrowRight className="size-4 transition-transform duration-300 group-hover:translate-x-1" />
     </Link>
   );
 }
@@ -152,12 +151,6 @@ export default function LandingPage() {
 
           <div className="animate-fade-in mt-10 flex flex-wrap items-center justify-center gap-3" style={{ animationDelay: "650ms" }}>
             <PrimaryButton>Get started</PrimaryButton>
-            <a
-              href="#how"
-              className="rounded-2xl px-6 py-4 text-base font-semibold text-ink transition-colors duration-300 hover:bg-cloud"
-            >
-              See how it works
-            </a>
           </div>
 
           <div className="animate-fade-in mt-8" style={{ animationDelay: "800ms" }}>
