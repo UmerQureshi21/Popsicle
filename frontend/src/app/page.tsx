@@ -4,7 +4,12 @@ import { ArrowRight, Mail, ShieldCheck, Variable } from "lucide-react";
 import Reveal from "@/components/landing/Reveal";
 import TemplateDemo from "@/components/landing/TemplateDemo";
 
-const FEATURES = [
+const FEATURES: { icon?: typeof Mail; image?: string; title: string; text: string }[] = [
+  {
+    image: "/hunter-logo.png",
+    title: "Find the right people",
+    text: "Search any company by job title and location. People and their emails come from Hunter’s database.",
+  },
   {
     icon: Variable,
     title: "Variables, not copy-paste",
@@ -21,6 +26,23 @@ const FEATURES = [
     text: "Emails go out from your own account, spaced out like a person would send them.",
   },
 ];
+
+/** Popsicle's people and email data comes from Hunter.io. */
+function PoweredByHunter() {
+  return (
+    <a
+      href="https://hunter.io"
+      target="_blank"
+      rel="noreferrer"
+      className="inline-flex items-center gap-2.5 rounded-full border border-cloud bg-white/80 py-1.5 pr-4 pl-1.5 text-sm text-ink/70 shadow-sm backdrop-blur transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md"
+    >
+      <Image src="/hunter-logo.png" alt="" width={24} height={24} className="size-6" />
+      <span>
+        Powered by <span className="font-semibold text-ink">Hunter</span>
+      </span>
+    </a>
+  );
+}
 
 const POP_SHADOW = "drop-shadow(0 40px 45px rgba(43, 45, 66, 0.28))";
 
@@ -122,6 +144,10 @@ export default function LandingPage() {
               See how it works
             </a>
           </div>
+
+          <div className="animate-fade-in mt-8" style={{ animationDelay: "800ms" }}>
+            <PoweredByHunter />
+          </div>
         </div>
       </section>
 
@@ -138,14 +164,20 @@ export default function LandingPage() {
 
       {/* Features */}
       <section className="mx-auto max-w-6xl px-6 pb-28">
-        <div className="grid gap-5 md:grid-cols-3">
-          {FEATURES.map(({ icon: Icon, title, text }, n) => (
+        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+          {FEATURES.map(({ icon: Icon, image, title, text }, n) => (
             <Reveal key={title} delay={n * 120}>
               <div className="h-full rounded-3xl border border-cloud bg-white p-7 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_30px_60px_-30px_rgba(43,45,66,0.4)]">
-                <span className="grid size-11 place-items-center rounded-2xl bg-crimson/10 text-crimson">
-                  <Icon className="size-5" />
-                </span>
-                <h3 className="mt-5 text-lg font-semibold text-ink">{title}</h3>
+                {image ? (
+                  <Image src={image} alt="" width={44} height={44} className="size-11" />
+                ) : (
+                  Icon && (
+                    <span className="grid size-11 place-items-center rounded-2xl bg-crimson/10 text-crimson">
+                      <Icon className="size-5" />
+                    </span>
+                  )
+                )}
+                <h3 className="mt-5 text-lg font-semibold text-balance text-ink">{title}</h3>
                 <p className="mt-2 leading-relaxed text-pretty text-steel">{text}</p>
               </div>
             </Reveal>
@@ -182,7 +214,14 @@ export default function LandingPage() {
         </Reveal>
       </section>
 
-      <footer className="border-t border-cloud py-8 text-center text-sm text-steel">© {new Date().getFullYear()} Popsicle</footer>
+      <footer className="border-t border-cloud py-8 text-center text-sm text-steel">
+        © {new Date().getFullYear()} Popsicle ·{" "}
+        <a href="https://hunter.io" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 align-middle hover:text-ink">
+          Powered by
+          <Image src="/hunter-logo.png" alt="" width={16} height={16} className="size-4" />
+          Hunter
+        </a>
+      </footer>
     </main>
   );
 }
