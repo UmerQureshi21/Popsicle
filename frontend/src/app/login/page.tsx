@@ -19,20 +19,27 @@ function nextPath(): string {
 export default function LoginPage() {
   const mounted = useSyncExternalStore(subscribe, () => true, () => false);
   return (
-    <main className="relative grid min-h-screen place-items-center overflow-hidden bg-cloud px-4 py-12">
-      <div aria-hidden className="pointer-events-none absolute inset-0 hidden items-center justify-center gap-10 lg:flex">
-        <Image src="/left-pop.png" alt="" width={500} height={500} priority className="animate-float h-auto w-64 -rotate-12 opacity-90" />
-        <div className="w-[28rem] shrink-0" />
-        <Image
-          src="/right-pop.png"
-          alt=""
-          width={500}
-          height={500}
-          priority
-          className="animate-float h-auto w-64 rotate-12 opacity-90 [animation-delay:-3s]"
-        />
-      </div>
-      {mounted && <LoginCard />}
+    <main className="grid min-h-screen bg-white lg:grid-cols-2">
+      {/* Left half: the form */}
+      <section className="flex items-center justify-center px-6 py-12 sm:px-10">{mounted && <LoginCard />}</section>
+
+      {/* Right half: just the popsicle (hidden on phones so the form gets the screen) */}
+      <section aria-hidden className="hidden p-4 lg:block">
+        <div className="relative grid h-full place-items-center overflow-hidden rounded-[2rem] bg-gradient-to-br from-[#d6ebff] via-[#eaf4ff] to-cloud">
+          <div className="animate-glow absolute size-[60%] rounded-full bg-[#5aa9ff]/30 blur-3xl" />
+          <div className="animate-pop-in relative w-[min(26rem,62%)]" style={{ "--r": "-14deg", animationDelay: "200ms" } as React.CSSProperties}>
+            <Image
+              src="/left-pop.png"
+              alt=""
+              width={500}
+              height={500}
+              priority
+              className="animate-float h-auto w-full"
+              style={{ filter: "drop-shadow(0 50px 60px rgba(43, 45, 66, 0.3))" }}
+            />
+          </div>
+        </div>
+      </section>
     </main>
   );
 }
@@ -79,14 +86,14 @@ function LoginCard() {
     "mt-1.5 w-full rounded-xl border border-steel/30 bg-white px-3.5 py-3 text-sm text-ink outline-none transition placeholder:text-steel/60 focus:border-scarlet focus:ring-4 focus:ring-scarlet/10";
 
   return (
-    <div className="animate-fade-up relative w-full max-w-md">
-      <Link href="/" className="mb-8 flex items-center justify-center gap-3">
-        <Image src="/cold-emailer-logo.png" alt="" width={48} height={43} priority />
-        <span className="text-3xl font-extrabold tracking-tight text-ink">Popsicle</span>
+    <div className="animate-fade-up w-full max-w-sm">
+      <Link href="/" className="mb-10 inline-flex items-center gap-2.5">
+        <Image src="/cold-emailer-logo.png" alt="" width={40} height={36} priority />
+        <span className="text-2xl font-extrabold tracking-tight text-ink">Popsicle</span>
       </Link>
 
-      <div className="rounded-[28px] border border-white/60 bg-white/70 p-2 shadow-[0_40px_100px_-30px_rgba(43,45,66,0.45)] backdrop-blur-2xl">
-        <div className="rounded-[22px] bg-white px-6 pt-6 pb-7 sm:px-8">
+      <div>
+        <div>
           <div className="grid grid-cols-2 rounded-xl bg-cloud p-1 text-sm font-medium" role="tablist">
             {(["login", "signup"] as const).map((m) => (
               <button
@@ -101,7 +108,7 @@ function LoginCard() {
             ))}
           </div>
 
-          <h1 className="mt-6 text-xl font-semibold text-ink">{mode === "login" ? "Welcome back" : "Set up your account"}</h1>
+          <h1 className="mt-8 text-3xl font-bold tracking-tight text-ink">{mode === "login" ? "Welcome back" : "Set up your account"}</h1>
           <p className="mt-1 text-sm text-steel">
             {mode === "login"
               ? "Log in to write and send your emails."
@@ -172,14 +179,14 @@ function LoginCard() {
             </button>
           </form>
 
-          <p className="mt-6 flex items-center justify-center gap-1.5 text-xs text-steel">
+          <p className="mt-6 flex items-center gap-1.5 text-xs text-steel">
             <Lock className="size-3.5" /> Accounts are by invitation only
           </p>
         </div>
       </div>
 
       {me && !me.auth_required && (
-        <p className="mt-5 text-center text-sm text-steel">
+        <p className="mt-8 text-sm text-steel">
           Running locally, so login is optional.{" "}
           <Link href="/compose" className="font-medium text-ink underline-offset-2 hover:underline">
             Continue without logging in

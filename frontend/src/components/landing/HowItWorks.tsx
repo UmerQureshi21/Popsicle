@@ -6,7 +6,7 @@ const STEPS = [
     icon: Building2,
     title: "Pick your companies",
     text: "Type a company name and pick it from the suggestions, so you always get the right one.",
-    example: "Harvey → harvey.ai",
+    example: "Meta → meta.com",
   },
   {
     icon: UserSearch,
