@@ -80,9 +80,10 @@ Open the **Find people** tab:
 
 1. **Companies:** list them one per line, by name or domain (`stripe.com` is the most accurate).
 2. **Job title:** defaults to `software engineer`, at any seniority. Separate several titles with commas.
-3. **People per company:** choose how many to fetch, then click **Search**.
-4. **Pick people:** results appear per company. Each person shows their title, Hunter's confidence in the email, and whether you've already emailed them; people already emailed start unticked.
-5. **Email them:** click **Email N people** on a company. Compose opens with those people as recipients, the company filled in, and a `role` column from their job titles.
+3. **Location:** defaults to **Greater Toronto Area**: people based in Toronto or the surrounding Peel, York, Halton and Durham cities. You can also choose anywhere in Canada, or anywhere. This filters on where each person lives and works, not the company's HQ.
+4. **People per company:** choose how many to fetch, then click **Search**.
+5. **Pick people:** results appear per company. Each person shows their title, Hunter's confidence in the email, and whether you've already emailed them; people already emailed start unticked.
+6. **Email them:** click **Email N people** on a company. Compose opens with those people as recipients, the company filled in, and a `role` column from their job titles.
 
 There's also a quicker **Find people** button inside Compose that searches one company and adds people to the current batch. Its **Look them up** section finds a single person's email from their name or LinkedIn URL.
 
