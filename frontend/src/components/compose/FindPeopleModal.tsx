@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ChevronDown, Loader2, Search, UserPlus } from "lucide-react";
 import { api, type EmailFinderResult, type FoundPerson, type HunterStatus, type PeopleSearch } from "@/lib/api";
 import { formatDate } from "@/lib/format";
+import { DEFAULT_LOCATION, LOCATIONS, locationById, type LocationId } from "@/lib/locations";
 import { Button, Modal } from "@/components/ui";
 import PersonRow from "@/components/PersonRow";
 
@@ -43,6 +44,7 @@ export default function FindPeopleModal({ initialQuery, onClose, onAdd }: Props)
   const [department, setDepartment] = useState("");
   const [seniority, setSeniority] = useState("");
   const [jobTitle, setJobTitle] = useState("");
+  const [location, setLocation] = useState<LocationId>(DEFAULT_LOCATION);
   const [limit, setLimit] = useState(10);
 
   const [result, setResult] = useState<PeopleSearch | null>(null);
@@ -86,6 +88,7 @@ export default function FindPeopleModal({ initialQuery, onClose, onAdd }: Props)
         department: department || null,
         seniority: seniority || null,
         job_titles: jobTitle.trim() || null,
+        location: locationById(location).filters,
         refresh,
       });
       setResult(res);
@@ -227,6 +230,18 @@ export default function FindPeopleModal({ initialQuery, onClose, onAdd }: Props)
               placeholder="Job title, e.g. software engineer"
               className="w-56 rounded-xl border border-steel/30 bg-white px-3 py-2.5 text-sm outline-none placeholder:text-steel focus:border-scarlet"
             />
+            <select
+              aria-label="Location"
+              value={location}
+              onChange={(e) => setLocation(e.target.value as LocationId)}
+              className="rounded-xl border border-steel/30 bg-white px-3 py-2.5 text-sm text-ink outline-none focus:border-scarlet"
+            >
+              {LOCATIONS.map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.label}
+                </option>
+              ))}
+            </select>
             {(
               [
                 [department, setDepartment, DEPARTMENTS, "Department"],

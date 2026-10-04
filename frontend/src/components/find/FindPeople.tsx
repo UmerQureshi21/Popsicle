@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { ArrowRight, Building2, Loader2, Search, UserSearch } from "lucide-react";
 import { api, type FoundPerson, type HunterStatus, type PeopleSearch } from "@/lib/api";
 import { formatDate } from "@/lib/format";
+import { DEFAULT_LOCATION, LOCATIONS, locationById, type LocationId } from "@/lib/locations";
 import { saveHandoff } from "@/lib/people";
 import { Button, EmptyState } from "@/components/ui";
 import PersonRow from "@/components/PersonRow";
@@ -16,13 +17,26 @@ type CompanyResult = {
   search?: PeopleSearch; // the latest page fetched
   people: FoundPerson[];
   selected: string[]; // emails
+  filterLabel?: string; // e.g. “software engineer” in the GTA, as searched
 };
 
-type Saved = { companiesText: string; jobTitle: string; perCompany: number; results: CompanyResult[] };
+type Saved = {
+  companiesText: string;
+  jobTitle: string;
+  location: LocationId;
+  perCompany: number;
+  results: CompanyResult[];
+};
 
 const STORAGE_KEY = "popsicle:find-people:v1";
 const PER_COMPANY = [5, 10, 25];
-const DEFAULTS: Saved = { companiesText: "", jobTitle: "software engineer", perCompany: 10, results: [] };
+const DEFAULTS: Saved = {
+  companiesText: "",
+  jobTitle: "software engineer",
+  location: DEFAULT_LOCATION,
+  perCompany: 10,
+  results: [],
+};
 
 function load(): Saved {
   try {
@@ -52,6 +66,7 @@ export default function FindPeople() {
   const [initial] = useState(load);
   const [companiesText, setCompaniesText] = useState(initial.companiesText);
   const [jobTitle, setJobTitle] = useState(initial.jobTitle);
+  const [location, setLocation] = useState<LocationId>(initial.location);
   const [perCompany, setPerCompany] = useState(initial.perCompany);
   const [results, setResults] = useState<CompanyResult[]>(initial.results);
   const [status, setStatus] = useState<HunterStatus | null>(null);
@@ -67,9 +82,9 @@ export default function FindPeople() {
 
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ companiesText, jobTitle, perCompany, results }));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ companiesText, jobTitle, location, perCompany, results }));
     } catch {}
-  }, [companiesText, jobTitle, perCompany, results]);
+  }, [companiesText, jobTitle, location, perCompany, results]);
 
   const companies = parseCompanies(companiesText);
   const update = (query: string, patch: Partial<CompanyResult> | ((r: CompanyResult) => Partial<CompanyResult>)) =>
@@ -83,6 +98,7 @@ export default function FindPeople() {
         limit: perCompany,
         offset,
         job_titles: jobTitle.trim() || null,
+        location: locationById(location).filters,
         refresh,
       });
       update(query, (r) => {
@@ -94,6 +110,7 @@ export default function FindPeople() {
         return {
           state: "done",
           search: res,
+          filterLabel: [jobTitle.trim() && `matching “${jobTitle.trim()}”`, locationById(location).short].filter(Boolean).join(" "),
           people: [...base, ...fresh],
           selected: offset ? [...r.selected, ...autoSelect] : autoSelect,
         };
@@ -179,6 +196,21 @@ export default function FindPeople() {
               <span className="mt-1 block text-xs text-steel">Any seniority. Separate several titles with commas.</span>
             </label>
             <label className="block">
+              <span className="text-sm font-semibold text-ink">Location</span>
+              <select
+                value={location}
+                onChange={(e) => setLocation(e.target.value as LocationId)}
+                className="mt-2 w-full rounded-xl border border-steel/25 bg-white px-3 py-2.5 text-sm text-ink outline-none focus:border-scarlet"
+              >
+                {LOCATIONS.map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {l.label}
+                  </option>
+                ))}
+              </select>
+              <span className="mt-1 block text-xs text-steel">Where each person is based, not the company’s HQ.</span>
+            </label>
+            <label className="block">
               <span className="text-sm font-semibold text-ink">People per company</span>
               <select
                 value={perCompany}
@@ -231,7 +263,7 @@ export default function FindPeople() {
                     {r.search?.domain ?? (r.state === "loading" ? "Searching…" : r.query)}
                     {r.state === "done" && (
                       <>
-                        {" "}· {r.people.length} of {total} {jobTitle.trim() ? `matching “${jobTitle.trim()}”` : "people"}
+                        {" "}· {r.people.length} of {total} {r.filterLabel || "people"}
                       </>
                     )}
                   </p>
@@ -264,8 +296,8 @@ export default function FindPeople() {
             {r.state === "error" && <p className="px-5 py-5 text-sm text-crimson">{r.error}</p>}
             {r.state === "done" && r.people.length === 0 && (
               <p className="px-5 py-8 text-sm text-steel">
-                Hunter has no one matching {jobTitle.trim() ? `“${jobTitle.trim()}”` : "this search"} here. Try the company’s
-                domain, or a broader title like “engineer”.
+                Hunter has no one {r.filterLabel || "for this search"} at this company. Try the company’s domain, a
+                broader title like “engineer”, or a wider location.
               </p>
             )}
 
