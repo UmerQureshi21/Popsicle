@@ -3,10 +3,11 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Building2, Mail, Send, Users } from "lucide-react";
+import { Building2, Mail, Send, UserSearch, Users } from "lucide-react";
 
 const TABS = [
   { href: "/compose", label: "Compose", icon: Mail },
+  { href: "/find", label: "Find people", icon: UserSearch },
   { href: "/sent", label: "Sent", icon: Send },
   { href: "/contacts", label: "Contacts", icon: Users },
   { href: "/companies", label: "Companies", icon: Building2 },

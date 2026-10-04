@@ -27,7 +27,7 @@ import {
   type Template,
 } from "@/lib/api";
 import { formatBytes } from "@/lib/format";
-import { peopleToRows } from "@/lib/people";
+import { clearHandoff, peopleToRows, readHandoff } from "@/lib/people";
 import { derivedVariables, parseTuples, placeholdersIn, validateRows } from "@/lib/tuples";
 import { Avatar, Button, Modal, Popover, Tooltip } from "@/components/ui";
 import CampaignProgress from "@/components/CampaignProgress";
@@ -82,6 +82,19 @@ function loadDraft(): Draft {
   return DEFAULT_DRAFT;
 }
 
+/** The saved draft, with people sent over from the Find people page loaded as a fresh batch. */
+function loadInitial(): { draft: Draft; notice: string | null } {
+  const draft = loadDraft();
+  const handoff = readHandoff();
+  if (!handoff?.people.length) return { draft, notice: readGmailNotice() };
+  const { variables, rows } = peopleToRows(handoff.people, draft.variables);
+  const n = handoff.people.length;
+  return {
+    draft: { ...draft, variables, rows, company: handoff.company ?? draft.company },
+    notice: `Loaded ${n} ${n === 1 ? "person" : "people"}${handoff.company ? ` from ${handoff.company}` : ""}. Check the email below, then send.`,
+  };
+}
+
 function readGmailNotice(): string | null {
   const params = new URLSearchParams(window.location.search);
   if (params.get("gmail") === "connected") return "Gmail connected. You’re ready to send.";
@@ -92,14 +105,15 @@ function readGmailNotice(): string | null {
 }
 
 export default function Compose() {
-  const [draft, setDraft] = useState<Draft>(loadDraft);
+  const [initial] = useState(loadInitial);
+  const [draft, setDraft] = useState<Draft>(initial.draft);
   const set = (patch: Partial<Draft>) => setDraft((d) => ({ ...d, ...patch }));
   const { company, variables, rows, subject, body, attachments, delaySeconds, skipAlreadySent, templateId } = draft;
 
   const [panelOpen, setPanelOpen] = useState(true);
   const [menu, setMenu] = useState<"templates" | "delay" | "skip" | null>(null);
   const [gmail, setGmail] = useState<GmailStatus | null>(null);
-  const [notice, setNotice] = useState<string | null>(readGmailNotice);
+  const [notice, setNotice] = useState<string | null>(initial.notice);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [uploading, setUploading] = useState(false);
   const [reviewing, setReviewing] = useState<CampaignDraft | null>(null);
@@ -118,6 +132,7 @@ export default function Compose() {
   }, [draft]);
 
   useEffect(() => {
+    clearHandoff();
     if (window.location.search) window.history.replaceState(null, "", window.location.pathname);
     api.get<GmailStatus>("/api/gmail/status").then(setGmail, () => setGmail(null));
     api.get<Company[]>("/api/companies").then(setCompanies, () => {});
