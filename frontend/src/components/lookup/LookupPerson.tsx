@@ -55,7 +55,9 @@ export default function LookupPerson() {
     } catch {}
   }, [lookups]);
 
-  const canSearch = !!company.trim() && !!(name.trim() || linkedin.trim()) && !busy;
+  // A LinkedIn profile is enough on its own; a name also needs the company.
+  const hasLinkedin = /linkedin\.com\/in\/[^/?#\s]+/i.test(linkedin);
+  const canSearch = !busy && (hasLinkedin || (!!name.trim() && !!company.trim()));
 
   const lookUp = async () => {
     if (!canSearch) return;
@@ -63,7 +65,7 @@ export default function LookupPerson() {
     setError(null);
     try {
       const result = await api.post<EmailFinderResult>("/api/people-search/person", {
-        company: company.trim(),
+        company: company.trim() || null,
         full_name: name.trim() || null,
         linkedin_url: linkedin.trim() || null,
       });
@@ -91,7 +93,7 @@ export default function LookupPerson() {
 
   const toCompose = (l: Lookup, mode: "replace" | "append") => {
     if (!l.result.person) return;
-    saveHandoff({ company: l.result.company ?? l.result.domain ?? l.company, people: [l.result.person], mode });
+    saveHandoff({ company: l.result.company || l.result.domain || l.company || null, people: [l.result.person], mode });
     router.push("/compose");
   };
 
@@ -134,6 +136,7 @@ export default function LookupPerson() {
           </div>
           <div>
             <span className="text-sm font-semibold text-ink">Company</span>
+            {hasLinkedin && <span className="ml-2 text-xs text-steel">optional with a LinkedIn profile</span>}
             <CompanyAutocomplete
               ariaLabel="Company"
               value={company}
@@ -226,8 +229,10 @@ export default function LookupPerson() {
                       </>
                     ) : (
                       <p className="mt-3 text-sm leading-relaxed text-ink/80">
-                        Hunter couldn’t find an email for them at {l.result.domain || l.company}. No credit was used. Try the
-                        company’s exact website domain, or their LinkedIn profile instead of their name.
+                        Hunter couldn’t find an email for them
+                        {l.result.domain || l.company ? ` at ${l.result.domain || l.company}` : " from that LinkedIn profile"}. No
+                        credit was used. Try adding the company’s exact website domain, or their LinkedIn profile instead of
+                        their name.
                       </p>
                     )}
                   </div>
