@@ -63,3 +63,83 @@ test("write an email, review it and send it", async ({ page }) => {
   await page.reload();
   await expect(page.getByRole("textbox", { name: "Subject" })).toHaveValue("Saved subject");
 });
+
+test("verify addresses and see the daily limit before sending", async ({ page }) => {
+  const people = [
+    { full_name: "Jane Doe", email: "jane@stripe.com" },
+    { full_name: "Gone Person", email: "gone@stripe.com" },
+    { full_name: "Sam Lee", email: "sam@stripe.com" },
+  ];
+  let verified = false;
+  const verdict = (email: string, status: string) => ({ email, status, score: 90, checked_at: "2026-10-05T12:00:00Z", cached: !verified });
+  const quota = { daily_limit: 40, min_delay_seconds: 20, sent_last_24h: 39, remaining: 1, next_slot_at: "2026-10-06T12:00:00Z", oldest_sent_at: "2026-10-05T15:00:00Z" };
+  const api = await new FakeApi({
+    "GET /api/people-search/status": {
+      configured: true, plan_name: "Free", credits_used: 10, credits_total: 50, credits_remaining: 40,
+      verifications_total: 100, verifications_remaining: 94, reset_date: "2026-11-02", error: null,
+    },
+    "POST /api/campaigns/preview": () => {
+      const items = people.map((values, index) => {
+        const gone = values.email.startsWith("gone");
+        return {
+          index, to_email: values.email, subject: "Quick question about Stripe", body: `Hi ${values.full_name.split(" ")[0]}`,
+          values, issues: [], last_sent_at: null,
+          status: verified && gone ? "undeliverable" : "ready",
+          verification: verified ? verdict(values.email, gone ? "invalid" : "valid") : null,
+        };
+      });
+      const ready = items.filter((i) => i.status === "ready").length;
+      return {
+        items, ready, already_sent: 0, invalid: 0, undeliverable: verified ? 1 : 0, quota,
+        sends_now: Math.min(ready, quota.remaining), sends_later: Math.max(0, ready - quota.remaining), later_from: "2026-10-06T15:00:00Z",
+      };
+    },
+    "POST /api/people-search/verify": () => {
+      verified = true;
+      return { results: people.map((p) => verdict(p.email, p.email.startsWith("gone") ? "invalid" : "valid")) };
+    },
+    "POST /api/campaigns": campaign("waiting", "pending"),
+    "GET /api/campaigns/7": campaign("waiting", "pending"),
+  }).install(page);
+
+  await page.goto("/compose");
+  await page.getByPlaceholder("e.g. Stripe").fill("Stripe");
+  for (const [i, p] of people.entries()) {
+    await page.getByRole("textbox", { name: `Row ${i + 1} full_name` }).fill(p.full_name);
+    await page.getByRole("textbox", { name: `Row ${i + 1} email` }).fill(p.email);
+    if (i < people.length - 1) await page.getByRole("button", { name: "Add recipient" }).click();
+  }
+  await page.getByRole("button", { name: "Send", exact: true }).click();
+
+  const review = page.getByRole("dialog");
+  await expect(review.getByText(/Check 3 addresses exist before sending/)).toContainText("Uses 3 of your 94 Hunter verifications left this month.");
+  await expect(review.getByText(/Your daily limit is 40 emails \(1 left right now\)\./)).toBeVisible();
+  await review.getByRole("button", { name: "Verify 3" }).click();
+
+  await expect(review.getByText(/Addresses checked:/)).toContainText("2 verified · 1 doesn’t exist");
+  await expect(review.getByText("1 doesn't exist (skipped)")).toBeVisible();
+  await expect(review.getByText(/1 will send now; the other 1 will wait and go out automatically/)).toBeVisible();
+  expect(api.called("POST /api/people-search/verify")[0].body).toEqual({ emails: people.map((p) => p.email) });
+
+  await review.getByRole("button", { name: /Send 2 emails/ }).click();
+  await expect(page.getByText("waiting for daily limit")).toBeVisible();
+  expect(api.called("POST /api/campaigns")).toHaveLength(1);
+});
+
+test("see and change the daily limit on the Sent page", async ({ page }) => {
+  const quota = { daily_limit: 40, min_delay_seconds: 20, sent_last_24h: 6, remaining: 34, next_slot_at: "2026-10-06T12:00:00Z", oldest_sent_at: null };
+  const api = await new FakeApi({
+    "GET /api/stats": { sent_total: 6, sent_last_7_days: 6, companies: 1, contacts: 6, failed_total: 0 },
+    "GET /api/campaigns": [],
+    "GET /api/sending/quota": quota,
+    "PUT /api/sending/settings": (body) => ({ ...quota, ...(body as object), remaining: 24 }),
+  }).install(page);
+
+  await page.goto("/sent");
+  await expect(page.getByText("6 of 40 sent in the last 24 hours")).toBeVisible();
+  await page.getByRole("button", { name: "Edit limits" }).click();
+  await page.getByRole("spinbutton", { name: "Emails per 24 hours" }).fill("30");
+  await page.getByRole("button", { name: "Save" }).click();
+  await expect(page.getByText("6 of 30 sent in the last 24 hours")).toBeVisible();
+  expect(api.called("PUT /api/sending/settings")[0].body).toEqual({ daily_limit: 30, min_delay_seconds: 20 });
+});

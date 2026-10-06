@@ -1,11 +1,11 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
-import type { CampaignDraft, GmailStatus, Preview, PreviewItem } from "@/lib/api";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { CampaignDraft, GmailStatus, Preview, PreviewItem, Verification } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
-import { campaign, quota } from "@/test/fixtures";
+import { campaign, hunterStatus, quota } from "@/test/fixtures";
 import { api, apiError } from "@/test/server";
-import PreviewModal from "./PreviewModal";
+import PreviewModal, { VerificationBadge } from "./PreviewModal";
 
 const DRAFT: CampaignDraft = {
   company: "Stripe",
@@ -39,6 +39,7 @@ const preview = (items: PreviewItem[], overrides: Partial<Preview> = {}): Previe
     ready,
     already_sent: items.filter((i) => i.status === "already_sent").length,
     invalid: items.filter((i) => i.status === "invalid").length,
+    undeliverable: items.filter((i) => i.status === "undeliverable").length,
     quota: quota(),
     sends_now: ready,
     sends_later: 0,
@@ -56,6 +57,11 @@ function setup(items: PreviewItem[], gmail: GmailStatus | null = CONNECTED, atta
 }
 
 describe("PreviewModal", () => {
+  // The review screen reads Hunter's status for the verifications left.
+  beforeEach(() => {
+    api("get", "/api/people-search/status", hunterStatus({ verifications_total: 100, verifications_remaining: 94 }));
+  });
+
   it("renders each email and sends them", async () => {
     const sent = campaign();
     const create = api("post", "/api/campaigns", sent, 201);
@@ -155,5 +161,95 @@ describe("PreviewModal", () => {
     const { onClose, user } = setup([item()]);
     await user.click(screen.getByRole("button", { name: "Back to editing" }));
     expect(onClose).toHaveBeenCalled();
+  });
+});
+
+
+describe("PreviewModal: checking addresses exist", () => {
+  const ok = (overrides: Partial<PreviewItem> = {}) => item(overrides);
+  const verdict = (email: string, status: Verification["status"]): Verification => ({
+    email, status, score: 90, checked_at: "2026-10-05T12:00:00Z", cached: true,
+  });
+
+  function open(status = hunterStatus({ verifications_total: 100, verifications_remaining: 94 })) {
+    api("get", "/api/people-search/status", status);
+    render(<PreviewModal draft={DRAFT} attachments={[]} gmail={CONNECTED} onClose={() => {}} onSent={() => {}} />);
+    return userEvent.setup();
+  }
+
+  it("offers to verify unchecked addresses, then shows each verdict", async () => {
+    const jane = ok();
+    const gone = ok({ index: 1, to_email: "gone@stripe.com", values: { full_name: "Gone Person", email: "gone@stripe.com" } });
+    let verified = false;
+    api("post", "/api/campaigns/preview", () =>
+      verified
+        ? preview([
+            { ...jane, verification: verdict("jane@stripe.com", "valid") },
+            { ...gone, status: "undeliverable", verification: verdict("gone@stripe.com", "invalid") },
+          ])
+        : preview([jane, gone]),
+    );
+    const checks = api("post", "/api/people-search/verify", () => {
+      verified = true;
+      return { results: [verdict("jane@stripe.com", "valid"), verdict("gone@stripe.com", "invalid")] };
+    });
+    const user = open();
+
+    expect(await screen.findByText(/Check 2 addresses exist before sending/)).toHaveTextContent(
+      "Uses 2 of your 94 Hunter verifications left this month.",
+    );
+    await user.click(screen.getByRole("button", { name: "Verify 2" }));
+
+    expect(await screen.findByText(/Addresses checked:/)).toHaveTextContent("Addresses checked: 1 verified · 1 doesn’t exist");
+    expect(checks[0].body).toEqual({ emails: ["jane@stripe.com", "gone@stripe.com"] });
+    expect(screen.getByText("verified")).toHaveAttribute("title", "Hunter confirmed this address exists.");
+    expect(screen.getByText("doesn't exist", { selector: "span.inline-flex" })).toBeInTheDocument();
+    expect(screen.getByText(/1 doesn't exist \(skipped\)/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Verify/ })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /^Gone Person/ }));
+    expect(screen.getByText(/Hunter says this address doesn’t exist \(checked Oct 5\)/)).toBeInTheDocument();
+  });
+
+  it("explains risky verdicts but still sends them", async () => {
+    api("post", "/api/campaigns/preview", preview([ok({ verification: verdict("jane@stripe.com", "accept_all") })]));
+    open();
+    expect(await screen.findByText(/Addresses checked:/)).toHaveTextContent("Addresses checked: 0 verified · 1 risky");
+    expect(screen.getByText("risky")).toHaveAttribute("title", expect.stringContaining("accepts every address"));
+    expect(screen.getByText(/accepts every address.*It’ll still be sent\./)).toBeInTheDocument();
+  });
+
+  it("says when Hunter is still checking some addresses", async () => {
+    api("post", "/api/campaigns/preview", preview([ok()]));
+    api("post", "/api/people-search/verify", { results: [{ email: "jane@stripe.com", status: "pending", score: null, checked_at: null, cached: false }] });
+    const user = open();
+    await user.click(await screen.findByRole("button", { name: "Verify 1" }));
+    expect(await screen.findByText("Hunter is still checking 1 address. Try again in a minute.")).toBeInTheDocument();
+  });
+
+  it("shows why verifying failed", async () => {
+    api("post", "/api/campaigns/preview", preview([ok()]));
+    apiError("post", "/api/people-search/verify", 429, "You've used all your Hunter credits for this month.");
+    const user = open();
+    await user.click(await screen.findByRole("button", { name: "Verify 1" }));
+    expect(await screen.findByText("You've used all your Hunter credits for this month.")).toBeInTheDocument();
+  });
+
+  it("without Hunter set up, there's nothing to verify with", async () => {
+    api("post", "/api/campaigns/preview", preview([ok()]));
+    open(hunterStatus({ configured: false }));
+    expect(await screen.findByText("Hi Jane")).toBeInTheDocument();
+    expect(screen.queryByText(/Check 1 address exist/)).not.toBeInTheDocument();
+  });
+
+  it("doesn't mention the allowance when Hunter doesn't report it", async () => {
+    api("post", "/api/campaigns/preview", preview([ok()]));
+    open(hunterStatus());
+    expect(await screen.findByText(/Check 1 address exist before sending/)).not.toHaveTextContent("verifications left");
+  });
+
+  it("an unexpected verdict is treated as risky", () => {
+    render(<VerificationBadge verification={{ ...verdict("a@x.com", "valid"), status: "weird" as Verification["status"] }} />);
+    expect(screen.getByText("risky")).toBeInTheDocument();
   });
 });

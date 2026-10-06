@@ -61,9 +61,20 @@ export type PreviewItem = {
   subject: string;
   body: string;
   values: Record<string, string>;
-  status: "ready" | "already_sent" | "invalid";
+  // undeliverable: Hunter says the address doesn't exist, so it's skipped
+  status: "ready" | "already_sent" | "invalid" | "undeliverable";
   issues: string[];
   last_sent_at: string | null;
+  verification?: Verification | null; // Hunter's saved verdict from the last 30 days
+};
+
+/** Hunter's verdict on whether an address exists. "pending" means Hunter was still checking. */
+export type Verification = {
+  email: string;
+  status: "valid" | "invalid" | "accept_all" | "webmail" | "disposable" | "unknown" | "pending";
+  score: number | null;
+  checked_at: string | null;
+  cached: boolean;
 };
 
 export type SendingQuota = {
@@ -80,6 +91,7 @@ export type Preview = {
   ready: number;
   already_sent: number;
   invalid: number;
+  undeliverable: number;
   quota: SendingQuota;
   sends_now: number; // fit under the daily limit right away
   sends_later: number; // wait until the limit resets, then go out automatically
@@ -185,6 +197,8 @@ export type HunterStatus = {
   credits_used: number | null;
   credits_total: number | null; // the monthly allowance
   credits_remaining: number | null;
+  verifications_total?: number | null; // monthly email verifications, counted separately
+  verifications_remaining?: number | null;
   reset_date: string | null;
   error: string | null;
 };

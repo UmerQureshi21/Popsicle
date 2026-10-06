@@ -1,10 +1,45 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlertTriangle, ChevronLeft, ChevronRight, Clock, Loader2, Paperclip, Send } from "lucide-react";
-import { API_URL, api, type Attachment, type CampaignDetail, type CampaignDraft, type GmailStatus, type Preview } from "@/lib/api";
+import { AlertTriangle, ChevronLeft, ChevronRight, Clock, Loader2, MailCheck, Paperclip, Send } from "lucide-react";
+import {
+  API_URL,
+  api,
+  type Attachment,
+  type CampaignDetail,
+  type CampaignDraft,
+  type GmailStatus,
+  type Preview,
+  type Verification,
+} from "@/lib/api";
+import { creditsChanged, useHunterStatus } from "@/lib/credits";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { Avatar, Button, Modal, StatusBadge } from "@/components/ui";
+
+// What each Hunter verdict means for the person reading the review screen.
+const VERDICTS: Record<Verification["status"], { label: string; tone: string; why: string }> = {
+  valid: { label: "verified", tone: "bg-emerald-50 text-emerald-700", why: "Hunter confirmed this address exists." },
+  invalid: { label: "doesn't exist", tone: "bg-crimson/10 text-crimson", why: "Hunter says this address doesn't exist." },
+  accept_all: {
+    label: "risky",
+    tone: "bg-cloud text-ink/70",
+    why: "The company's mail server accepts every address, so Hunter can't confirm this one.",
+  },
+  webmail: { label: "risky", tone: "bg-cloud text-ink/70", why: "A personal webmail address, so Hunter can't confirm it." },
+  disposable: { label: "risky", tone: "bg-cloud text-ink/70", why: "A throwaway address that may not be read." },
+  unknown: { label: "risky", tone: "bg-cloud text-ink/70", why: "Hunter couldn't confirm whether this address exists." },
+  pending: { label: "checking", tone: "bg-cloud text-steel", why: "Hunter is still checking this address." },
+};
+
+export function VerificationBadge({ verification }: { verification?: Verification | null }) {
+  if (!verification) return null;
+  const v = VERDICTS[verification.status] ?? VERDICTS.unknown;
+  return (
+    <span title={v.why} className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${v.tone}`}>
+      {v.label}
+    </span>
+  );
+}
 
 type Props = {
   draft: CampaignDraft;
@@ -19,10 +54,36 @@ export default function PreviewModal({ draft, attachments, gmail, onClose, onSen
   const [selected, setSelected] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
+  const [version, setVersion] = useState(0); // bumped to re-render the preview after verifying
+  const [verifying, setVerifying] = useState(false);
+  const [verifyNote, setVerifyNote] = useState<string | null>(null);
+  const hunter = useHunterStatus();
 
   useEffect(() => {
     api.post<Preview>("/api/campaigns/preview", draft).then(setPreview, (e) => setError(e.message));
-  }, [draft]);
+  }, [draft, version]);
+
+  // Ready recipients Hunter hasn't checked in the last 30 days.
+  const unchecked = preview?.items.filter((it) => it.status === "ready" && !it.verification).map((it) => it.to_email) ?? [];
+  const checked = preview?.items.filter((it) => it.verification) ?? [];
+  const verified = checked.filter((it) => it.verification!.status === "valid").length;
+  const risky = checked.filter((it) => !["valid", "invalid"].includes(it.verification!.status)).length;
+
+  const verify = async () => {
+    setVerifying(true);
+    setVerifyNote(null);
+    try {
+      const res = await api.post<{ results: Verification[] }>("/api/people-search/verify", { emails: unchecked.slice(0, 100) });
+      const pending = res.results.filter((r) => r.status === "pending").length;
+      if (pending) setVerifyNote(`Hunter is still checking ${pending} address${pending === 1 ? "" : "es"}. Try again in a minute.`);
+      setVersion((v) => v + 1);
+    } catch (e) {
+      setVerifyNote((e as Error).message);
+    } finally {
+      setVerifying(false);
+      creditsChanged();
+    }
+  };
 
   const item = preview?.items[selected];
   const canSend = !!preview && preview.ready > 0 && preview.invalid === 0 && !!gmail?.connected && !sending;
@@ -51,6 +112,12 @@ export default function PreviewModal({ draft, attachments, gmail, onClose, onSen
               <>
                 <span className="font-semibold text-ink">{preview.ready}</span> ready
                 {preview.already_sent > 0 && <> · {preview.already_sent} already emailed (skipped)</>}
+                {preview.undeliverable > 0 && (
+                  <span className="text-crimson">
+                    {" "}
+                    · {preview.undeliverable} {preview.undeliverable === 1 ? "doesn't" : "don't"} exist (skipped)
+                  </span>
+                )}
                 {preview.invalid > 0 && <span className="text-crimson"> · {preview.invalid} need fixing</span>}
                 <> · ~{Math.round(draft.delay_seconds)}s between emails</>
               </>
@@ -96,6 +163,47 @@ export default function PreviewModal({ draft, attachments, gmail, onClose, onSen
         </div>
       )}
 
+      {preview && hunter?.configured && (unchecked.length > 0 || checked.length > 0) && (
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-cloud px-4 py-3 text-sm sm:px-6">
+          <span className="flex min-w-0 items-start gap-2 text-ink">
+            <MailCheck className="mt-0.5 size-4 shrink-0 text-steel" />
+            <span>
+              {unchecked.length > 0 ? (
+                <>
+                  Check {unchecked.length} address{unchecked.length === 1 ? "" : "es"} exist before sending, so bounces
+                  don’t hurt your Gmail.
+                  {hunter.verifications_remaining != null && (
+                    <span className="text-steel">
+                      {" "}
+                      Uses {Math.min(unchecked.length, 100)} of your {hunter.verifications_remaining} Hunter verifications
+                      left this month.
+                    </span>
+                  )}
+                </>
+              ) : (
+                <>
+                  Addresses checked: {verified} verified
+                  {risky > 0 && <> · {risky} risky</>}
+                  {preview.undeliverable > 0 && (
+                    <span className="text-crimson">
+                      {" "}
+                      · {preview.undeliverable} {preview.undeliverable === 1 ? "doesn’t" : "don’t"} exist
+                    </span>
+                  )}
+                </>
+              )}
+              {verifyNote && <span className="mt-1 block text-crimson">{verifyNote}</span>}
+            </span>
+          </span>
+          {unchecked.length > 0 && (
+            <Button className="px-3 py-1.5" onClick={verify} disabled={verifying}>
+              {verifying && <Loader2 className="size-4 animate-spin" />}
+              Verify {Math.min(unchecked.length, 100)}
+            </Button>
+          )}
+        </div>
+      )}
+
       {!preview ? (
         <div className="grid h-80 place-items-center text-steel">
           <Loader2 className="size-6 animate-spin" />
@@ -118,7 +226,7 @@ export default function PreviewModal({ draft, attachments, gmail, onClose, onSen
                     </span>
                     <span className="block truncate text-xs text-steel">{it.to_email}</span>
                   </span>
-                  {it.status !== "ready" && <StatusBadge status={it.status} />}
+                  {it.status !== "ready" ? <StatusBadge status={it.status} /> : <VerificationBadge verification={it.verification} />}
                 </button>
               </li>
             ))}
@@ -159,6 +267,17 @@ export default function PreviewModal({ draft, attachments, gmail, onClose, onSen
               </div>
               {item.status === "invalid" && (
                 <div className="mx-4 mt-4 rounded-xl bg-crimson/5 px-4 py-2.5 text-sm text-crimson sm:mx-6">{item.issues.join(" · ")}</div>
+              )}
+              {item.status === "undeliverable" && (
+                <div className="mx-4 mt-4 rounded-xl bg-crimson/5 px-4 py-2.5 text-sm text-crimson sm:mx-6">
+                  Hunter says this address doesn’t exist (checked {formatDate(item.verification?.checked_at)}). It’ll be
+                  skipped, so it doesn’t bounce.
+                </div>
+              )}
+              {item.status === "ready" && item.verification && item.verification.status !== "valid" && (
+                <div className="mx-4 mt-4 rounded-xl bg-cloud px-4 py-2.5 text-sm text-ink/80 sm:mx-6">
+                  {VERDICTS[item.verification.status]?.why ?? VERDICTS.unknown.why} It’ll still be sent.
+                </div>
               )}
               {item.status === "already_sent" && (
                 <div className="mx-4 mt-4 rounded-xl bg-cloud px-4 py-2.5 text-sm text-ink/80 sm:mx-6">

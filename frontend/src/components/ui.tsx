@@ -148,6 +148,7 @@ const STATUS_STYLES: Record<string, string> = {
   ready: "bg-emerald-50 text-emerald-700 ring-emerald-200",
   failed: "bg-crimson/10 text-crimson ring-crimson/25",
   invalid: "bg-crimson/10 text-crimson ring-crimson/25",
+  undeliverable: "bg-crimson/10 text-crimson ring-crimson/25",
   interrupted: "bg-crimson/10 text-crimson ring-crimson/25",
   sending: "bg-ink text-white ring-ink",
   queued: "bg-cloud text-ink ring-steel/30",
@@ -157,9 +158,17 @@ const STATUS_STYLES: Record<string, string> = {
   cancelled: "bg-white text-steel ring-steel/30",
 };
 
-const STATUS_LABELS: Record<string, string> = { already_sent: "already emailed", waiting: "waiting for daily limit" };
+const STATUS_LABELS: Record<string, string> = {
+  already_sent: "already emailed",
+  waiting: "waiting for daily limit",
+  undeliverable: "doesn't exist",
+};
 
-export function StatusBadge({ status }: { status: EmailStatus | CampaignStatus | "ready" | "invalid" | "already_sent" }) {
+export function StatusBadge({
+  status,
+}: {
+  status: EmailStatus | CampaignStatus | "ready" | "invalid" | "already_sent" | "undeliverable";
+}) {
   return (
     <span
       className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${
