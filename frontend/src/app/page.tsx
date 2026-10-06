@@ -1,28 +1,34 @@
 import Image from "next/image";
 import Link from "next/link";
-import { Mail, ShieldCheck, Variable } from "lucide-react";
 import Reveal from "@/components/landing/Reveal";
 import HowItWorks from "@/components/landing/HowItWorks";
 import TemplateDemo from "@/components/landing/TemplateDemo";
 
-const FEATURES: { icon?: typeof Mail; image?: string; title: string; text: string }[] = [
+const Chip = ({ children }: { children: string }) => <span className="placeholder-chip">{`{{${children}}}`}</span>;
+
+const FEATURES: { image: string; title: string; text: React.ReactNode }[] = [
   {
     image: "/hunter-logo.png",
     title: "Find the right people",
     text: "Search any company by job title and location. People and their emails come from Hunter’s database.",
   },
   {
-    icon: Variable,
-    title: "Variables, not copy-paste",
-    text: "Add a column for anything (name, role, team) and drop it into your email with one click.",
+    image: "/curly-brace.png",
+    title: "Introduce variables",
+    text: (
+      <>
+        With different values per email. Drop in <Chip>first_name</Chip>, <Chip>company</Chip> or any detail you like, and
+        every person gets a version that reads like you wrote it just for them.
+      </>
+    ),
   },
   {
-    icon: ShieldCheck,
+    image: "/checkmark.png",
     title: "Never email twice",
     text: "Popsicle remembers everyone you’ve contacted and skips them automatically.",
   },
   {
-    icon: Mail,
+    image: "/gmail-con.png",
     title: "Sent from your Gmail",
     text: "Emails go out from your own account, spaced out like a person would send them.",
   },
@@ -185,18 +191,10 @@ export default function LandingPage() {
       {/* Features */}
       <section className="mx-auto max-w-5xl px-6 pb-28">
         <div className="grid gap-6 sm:grid-cols-2">
-          {FEATURES.map(({ icon: Icon, image, title, text }, n) => (
+          {FEATURES.map(({ image, title, text }, n) => (
             <Reveal key={title} delay={n * 120}>
               <div className="h-full rounded-[2rem] border border-cloud bg-white p-8 shadow-sm transition-all duration-300 sm:p-10 hover:-translate-y-1 hover:shadow-[0_30px_60px_-30px_rgba(43,45,66,0.4)]">
-                {image ? (
-                  <Image src={image} alt="" width={64} height={64} className="size-16" />
-                ) : (
-                  Icon && (
-                    <span className="grid size-16 place-items-center rounded-2xl bg-crimson/10 text-crimson">
-                      <Icon className="size-7" />
-                    </span>
-                  )
-                )}
+                <Image src={image} alt="" width={64} height={64} className="size-16 object-contain" />
                 <h3 className="mt-7 text-2xl font-semibold tracking-tight text-balance text-ink">{title}</h3>
                 <p className="mt-3 text-lg leading-relaxed text-pretty text-steel">{text}</p>
               </div>
