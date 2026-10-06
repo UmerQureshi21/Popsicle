@@ -1,4 +1,5 @@
-pytest
-pytest-cov
-responses
-freezegun
+pytest==9.1.1
+pytest-cov==7.1.0
+responses==0.26.3
+freezegun==1.5.5
+httpx==0.28.1  # FastAPI's TestClient
