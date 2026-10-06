@@ -8,12 +8,15 @@ export default function Reveal({
   delay = 0,
   className = "",
   as: Tag = "div",
+  direction,
 }: {
   children: ReactNode;
   delay?: number;
   className?: string;
   /** Render as a list item when used inside <ol>/<ul>. */
   as?: "div" | "li";
+  /** Slide direction: "left" or "right". Defaults to fade-up. */
+  direction?: "left" | "right";
 }) {
   const ref = useRef<HTMLElement>(null);
   const [visible, setVisible] = useState(false);
@@ -37,7 +40,7 @@ export default function Reveal({
   return (
     <Tag
       ref={ref as React.RefObject<HTMLDivElement & HTMLLIElement>}
-      className={`reveal ${visible ? "is-visible" : ""} ${className}`}
+      className={`${direction ? `reveal-${direction}` : "reveal"} ${visible ? "is-visible" : ""} ${className}`}
       style={{ transitionDelay: `${delay}ms` }}
     >
       {children}
