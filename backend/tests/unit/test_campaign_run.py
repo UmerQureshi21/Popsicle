@@ -409,3 +409,31 @@ class TestWake:
         campaigns._running.add(c.id)
         campaigns.send_now(db, c)
         assert c.id in campaigns._wake_requested
+
+
+class TestCompanyStatus:
+    def test_first_send_marks_the_company_emailed(self, db, outbox):
+        stripe = f.company(db, name="Stripe")
+        c = f.campaign(db, [("a@x.com", P)], company=stripe)
+        campaigns._run(c.id)
+        db.refresh(stripe)
+        assert stripe.status == "emailed"
+
+    def test_a_status_you_set_is_kept(self, db, outbox):
+        stripe = f.company(db, name="Stripe", status="replied")
+        c = f.campaign(db, [("a@x.com", P)], company=stripe)
+        campaigns._run(c.id)
+        db.refresh(stripe)
+        assert stripe.status == "replied"
+
+    def test_nothing_sent_leaves_it_not_started(self, db, outbox):
+        stripe = f.company(db, name="Stripe")
+        c = f.campaign(db, [("bad@x.com", P)], company=stripe)
+
+        def fail(to):
+            raise ValueError("Invalid To header")
+
+        outbox.on_send = fail
+        campaigns._run(c.id)
+        db.refresh(stripe)
+        assert stripe.status == "not_started"

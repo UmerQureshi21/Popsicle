@@ -45,6 +45,15 @@ class CampaignStatus(StrEnum):
     SCHEDULED = "scheduled"  # set to start at a chosen time
 
 
+class CompanyStatus(StrEnum):
+    """Where a target company is in the outreach."""
+
+    NOT_STARTED = "not_started"
+    EMAILED = "emailed"  # set automatically when the first email to it is sent
+    REPLIED = "replied"
+    NOT_INTERESTED = "not_interested"  # not a fit, or they said no
+
+
 class EmailStatus(StrEnum):
     PENDING = "pending"
     SENT = "sent"
@@ -66,6 +75,9 @@ class Company(Base):
     domain: Mapped[str | None] = mapped_column(String(200))
     linkedin_url: Mapped[str | None] = mapped_column(String(500))
     notes: Mapped[str | None] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(
+        String(20), default=CompanyStatus.NOT_STARTED, server_default=CompanyStatus.NOT_STARTED.value
+    )
     created_at: Mapped[datetime] = _created_at()
 
     contacts: Mapped[list["Contact"]] = relationship(back_populates="company")

@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from . import gmail, sending, verification
 from .db import SessionLocal
-from .models import Attachment, Campaign, CampaignStatus, Company, Contact, Email, EmailStatus
+from .models import Attachment, Campaign, CampaignStatus, Company, CompanyStatus, Contact, Email, EmailStatus
 from .rendering import EMAIL, enrich, render
 from .schemas import CampaignDraft, PreviewItem, PreviewOut, SendingQuota, Verification
 
@@ -313,6 +313,8 @@ def _run(campaign_id: int) -> None:
                     email.gmail_message_id = res.get("id")
                     email.gmail_thread_id = res.get("threadId")
                     email.error = None
+                    if campaign.company is not None and campaign.company.status == CompanyStatus.NOT_STARTED:
+                        campaign.company.status = CompanyStatus.EMAILED
                 except Exception as e:
                     if gmail.is_auth_error(e):
                         # Every remaining send would fail the same way; pause so it can resume after reconnecting.

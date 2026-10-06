@@ -9,7 +9,20 @@ from sqlalchemy.engine import Engine
 # (table, column, SQL type and default)
 COLUMNS = [
     ("campaigns", "scheduled_for", "TIMESTAMPTZ"),  # scheduled sending
+    ("companies", "status", "VARCHAR(20) NOT NULL DEFAULT 'not_started'"),  # target company list
 ]
+
+# Run once, right after a column is added, to give existing rows a sensible value.
+BACKFILL = {
+    # Companies already emailed before statuses existed start as "emailed".
+    "companies.status": """
+        UPDATE companies SET status = 'emailed'
+        WHERE id IN (
+            SELECT ct.company_id FROM contacts ct JOIN emails e ON e.contact_id = ct.id
+            WHERE e.status = 'sent' AND ct.company_id IS NOT NULL
+        )
+    """,
+}
 
 
 def run(engine: Engine) -> list[str]:
@@ -22,4 +35,6 @@ def run(engine: Engine) -> list[str]:
             if column not in existing[table]:
                 conn.execute(text(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {column} {sql_type}"))
                 added.append(f"{table}.{column}")
+                if f"{table}.{column}" in BACKFILL:
+                    conn.execute(text(BACKFILL[f"{table}.{column}"]))
     return added
