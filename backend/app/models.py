@@ -42,6 +42,7 @@ class CampaignStatus(StrEnum):
     CANCELLED = "cancelled"
     INTERRUPTED = "interrupted"  # server stopped mid-send; can be resumed
     WAITING = "waiting"  # hit the daily send limit; carries on by itself when it resets
+    SCHEDULED = "scheduled"  # set to start at a chosen time
 
 
 class EmailStatus(StrEnum):
@@ -135,6 +136,7 @@ class Campaign(Base):
     delay_seconds: Mapped[float] = mapped_column(Float, default=30)
     status: Mapped[str] = mapped_column(String(20), default=CampaignStatus.QUEUED)
     error: Mapped[str | None] = mapped_column(Text)  # why it stopped, if it did
+    scheduled_for: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))  # don't start before this
     created_at: Mapped[datetime] = _created_at()
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

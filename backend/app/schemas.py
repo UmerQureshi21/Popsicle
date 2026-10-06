@@ -22,6 +22,7 @@ class CampaignDraft(BaseModel):
     template_id: int | None = None
     skip_already_sent: bool = True
     delay_seconds: float = Field(30, ge=0, le=600)
+    scheduled_for: datetime | None = None  # start sending at this time instead of now
 
     @field_validator("variables")
     @classmethod
@@ -129,6 +130,7 @@ class CampaignSummary(BaseModel):
     created_at: datetime
     started_at: datetime | None
     finished_at: datetime | None
+    scheduled_for: datetime | None = None
     counts: CampaignCounts
 
 

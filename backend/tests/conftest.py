@@ -55,6 +55,7 @@ def _clean_state():
     gmail._pending_flows.clear()
     campaigns._running.clear()
     campaigns._cancel_requested.clear()
+    campaigns._wake_requested.clear()
     yield
 
 
