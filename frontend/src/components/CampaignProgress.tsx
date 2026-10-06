@@ -6,7 +6,8 @@ import { API_URL, api, type CampaignDetail, type EmailStatus } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
 import { Button, StatusBadge } from "@/components/ui";
 
-const ACTIVE = new Set(["queued", "sending"]);
+// Waiting batches carry on by themselves when the daily limit resets, so they count as active.
+const ACTIVE = new Set(["queued", "sending", "waiting"]);
 
 export function isActive(c: { status: string }) {
   return ACTIVE.has(c.status);

@@ -89,6 +89,7 @@ def prepare(db: Session, draft: CampaignDraft) -> PreviewOut:
         quota=SendingQuota(**vars(q)),
         sends_now=min(ready, q.remaining),
         sends_later=max(0, ready - q.remaining),
+        later_from=q.later_from(min(ready, q.remaining)) if ready > q.remaining else None,
     )
 
 

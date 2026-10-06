@@ -66,12 +66,30 @@ export type PreviewItem = {
   last_sent_at: string | null;
 };
 
-export type Preview = { items: PreviewItem[]; ready: number; already_sent: number; invalid: number };
+export type SendingQuota = {
+  daily_limit: number;
+  min_delay_seconds: number;
+  sent_last_24h: number;
+  remaining: number;
+  next_slot_at: string;
+  oldest_sent_at?: string | null;
+};
+
+export type Preview = {
+  items: PreviewItem[];
+  ready: number;
+  already_sent: number;
+  invalid: number;
+  quota: SendingQuota;
+  sends_now: number; // fit under the daily limit right away
+  sends_later: number; // wait until the limit resets, then go out automatically
+  later_from?: string | null; // when the waiting ones can start
+};
 
 export type Attachment = { id: number; filename: string; content_type: string; size_bytes: number; created_at: string };
 
 export type EmailStatus = "pending" | "sent" | "failed" | "skipped" | "cancelled";
-export type CampaignStatus = "queued" | "sending" | "completed" | "cancelled" | "interrupted";
+export type CampaignStatus = "queued" | "sending" | "completed" | "cancelled" | "interrupted" | "waiting";
 
 export type EmailRow = {
   id: number;

@@ -7,6 +7,7 @@ import { formatDateTime, timeAgo } from "@/lib/format";
 import { Button, EmptyState, StatusBadge } from "@/components/ui";
 import CampaignProgress, { ProgressBar, isActive } from "@/components/CampaignProgress";
 import PageShell from "@/components/PageShell";
+import SendingSafety from "@/components/SendingSafety";
 
 function StatTile({ label, value, accent }: { label: string; value: number | string; accent?: boolean }) {
   return (
@@ -61,6 +62,9 @@ export default function SentPage() {
 
   return (
     <PageShell title="Sent" subtitle="Every batch you’ve sent, and what happened to each email.">
+      {/* Re-read the daily limit whenever the number of emails sent changes. */}
+      <SendingSafety refreshKey={stats?.sent_total ?? 0} />
+
       <div className="mb-8 grid grid-cols-2 gap-4 md:grid-cols-4">
         <StatTile label="Emails sent" value={stats?.sent_total ?? "–"} accent />
         <StatTile label="Last 7 days" value={stats?.sent_last_7_days ?? "–"} />

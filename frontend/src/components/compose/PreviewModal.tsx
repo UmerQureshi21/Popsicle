@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlertTriangle, ChevronLeft, ChevronRight, Loader2, Paperclip, Send } from "lucide-react";
+import { AlertTriangle, ChevronLeft, ChevronRight, Clock, Loader2, Paperclip, Send } from "lucide-react";
 import { API_URL, api, type Attachment, type CampaignDetail, type CampaignDraft, type GmailStatus, type Preview } from "@/lib/api";
-import { formatDate } from "@/lib/format";
+import { formatDate, formatDateTime } from "@/lib/format";
 import { Avatar, Button, Modal, StatusBadge } from "@/components/ui";
 
 type Props = {
@@ -84,6 +84,17 @@ export default function PreviewModal({ draft, attachments, gmail, onClose, onSen
         </div>
       )}
       {error && <div className="border-b border-crimson/15 bg-crimson/5 px-4 py-3 text-sm text-crimson sm:px-6">{error}</div>}
+      {preview && preview.sends_later > 0 && (
+        <div className="flex items-start gap-2 border-b border-cloud bg-cloud/60 px-4 py-3 text-sm text-ink sm:px-6">
+          <Clock className="mt-0.5 size-4 shrink-0 text-steel" />
+          <span>
+            Your daily limit is {preview.quota.daily_limit} emails ({preview.quota.remaining} left right now).{" "}
+            {preview.sends_now > 0 ? `${preview.sends_now} will send now; the other ` : "All "}
+            {preview.sends_later} will wait and go out automatically from about{" "}
+            {formatDateTime(preview.later_from ?? preview.quota.next_slot_at)}.
+          </span>
+        </div>
+      )}
 
       {!preview ? (
         <div className="grid h-80 place-items-center text-steel">

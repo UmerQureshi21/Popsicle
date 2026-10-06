@@ -68,6 +68,7 @@ class SendingQuota(BaseModel):
     sent_last_24h: int
     remaining: int
     next_slot_at: datetime
+    oldest_sent_at: datetime | None = None
 
 
 class SendingSettingsIn(BaseModel):
@@ -84,6 +85,7 @@ class PreviewOut(BaseModel):
     quota: SendingQuota
     sends_now: int  # how many of the ready emails fit under today's limit
     sends_later: int  # the rest wait until the limit resets
+    later_from: datetime | None = None  # when the waiting ones can start going out
 
 
 class AttachmentOut(ORM):

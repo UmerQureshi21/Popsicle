@@ -63,3 +63,29 @@ def test_remaining_never_goes_negative(db, limit, expected_remaining):
     set_limit(db, limit)
     f.sent_email(db, "a@x.com")
     assert sending.quota(db).remaining == expected_remaining
+
+
+def test_when_waiting_emails_can_start(db):
+    set_limit(db, 3)
+    now = sending.now()
+    first = now - timedelta(hours=5)
+    f.sent_email(db, "a@x.com", when=first)
+
+    q = sending.quota(db)  # 2 of 3 left
+    assert q.oldest_sent_at == first
+    assert q.later_from(2) == first + sending.WINDOW  # fill the limit now, then wait for the oldest to age out
+    assert q.later_from(0) == q.next_slot_at
+
+
+def test_later_from_with_nothing_sent_yet(db):
+    set_limit(db, 2)
+    q = sending.quota(db)
+    assert q.oldest_sent_at is None
+    assert abs((q.later_from(2) - (sending.now() + sending.WINDOW)).total_seconds()) < 5
+
+
+def test_later_from_when_the_limit_is_already_used_up(db):
+    set_limit(db, 1)
+    f.sent_email(db, "a@x.com")
+    q = sending.quota(db)
+    assert q.later_from(0) == q.next_slot_at

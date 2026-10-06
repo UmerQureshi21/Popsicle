@@ -1,9 +1,9 @@
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CampaignSummary, Company, Contact } from "@/lib/api";
 import { AuthProvider } from "@/lib/auth";
-import { campaign, email, hunterStatus } from "@/test/fixtures";
+import { campaign, email, hunterStatus, quota } from "@/test/fixtures";
 import { navigation } from "@/test/navigation";
 import { api, apiError, quietDefaults } from "@/test/server";
 import CompaniesPage from "./companies/page";
@@ -195,6 +195,19 @@ describe("Contacts page", () => {
 });
 
 describe("Sent page", () => {
+  // Every Sent page load asks for the daily-limit card; tests that care set their own answer.
+  beforeEach(() => {
+    api("get", "/api/sending/quota", quota());
+  });
+
+  it("shows the daily limit card", async () => {
+    api("get", "/api/stats", { sent_total: 6, sent_last_7_days: 6, companies: 1, contacts: 6, failed_total: 0 });
+    api("get", "/api/campaigns", []);
+    render(<SentPage />);
+    expect(await screen.findByText("6 of 40 sent in the last 24 hours")).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Sending safety" })).toBeInTheDocument();
+  });
+
   const summary = (overrides: Partial<CampaignSummary> = {}): CampaignSummary => {
     const { subject_template, body_template, variables, attachments, emails, ...rest } = campaign({ status: "completed", ...overrides });
     void [subject_template, body_template, variables, attachments, emails];

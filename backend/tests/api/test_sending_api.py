@@ -38,11 +38,15 @@ def test_preview_says_how_many_send_now_and_later(client, db):
     p = client.post("/api/campaigns/preview", json=draft(ROWS)).json()
     assert (p["ready"], p["sends_now"], p["sends_later"]) == (3, 1, 2)
     assert (p["quota"]["daily_limit"], p["quota"]["remaining"]) == (2, 1)
+    # The 2 that wait can start once the earlier send ages out of the 24-hour window.
+    earlier = sending.quota(db).oldest_sent_at
+    assert p["later_from"].startswith((earlier + sending.WINDOW).isoformat()[:19])
 
 
 def test_preview_with_plenty_of_room(client):
     p = client.post("/api/campaigns/preview", json=draft(ROWS)).json()
     assert (p["sends_now"], p["sends_later"]) == (3, 0)
+    assert p["later_from"] is None
 
 
 def test_a_waiting_batch_can_be_cancelled(client, db):

@@ -2,7 +2,8 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { CampaignDraft, GmailStatus, Preview, PreviewItem } from "@/lib/api";
-import { campaign } from "@/test/fixtures";
+import { formatDateTime } from "@/lib/format";
+import { campaign, quota } from "@/test/fixtures";
 import { api, apiError } from "@/test/server";
 import PreviewModal from "./PreviewModal";
 
@@ -31,12 +32,20 @@ const item = (overrides: Partial<PreviewItem> = {}): PreviewItem => ({
   ...overrides,
 });
 
-const preview = (items: PreviewItem[]): Preview => ({
-  items,
-  ready: items.filter((i) => i.status === "ready").length,
-  already_sent: items.filter((i) => i.status === "already_sent").length,
-  invalid: items.filter((i) => i.status === "invalid").length,
-});
+const preview = (items: PreviewItem[], overrides: Partial<Preview> = {}): Preview => {
+  const ready = items.filter((i) => i.status === "ready").length;
+  return {
+    items,
+    ready,
+    already_sent: items.filter((i) => i.status === "already_sent").length,
+    invalid: items.filter((i) => i.status === "invalid").length,
+    quota: quota(),
+    sends_now: ready,
+    sends_later: 0,
+    later_from: null,
+    ...overrides,
+  };
+};
 
 function setup(items: PreviewItem[], gmail: GmailStatus | null = CONNECTED, attachments = [] as React.ComponentProps<typeof PreviewModal>["attachments"]) {
   const calls = api("post", "/api/campaigns/preview", preview(items));
@@ -107,6 +116,33 @@ describe("PreviewModal", () => {
     expect(await screen.findByText("Everyone in this list has already been emailed.")).toBeInTheDocument();
     expect(onSent).not.toHaveBeenCalled();
     expect(screen.getByRole("button", { name: /Send 1 email/ })).toBeEnabled();
+  });
+
+  it("warns when some emails will wait for the daily limit", async () => {
+    const ready = [item(), item({ index: 1, to_email: "b@stripe.com" }), item({ index: 2, to_email: "c@stripe.com" })];
+    api("post", "/api/campaigns/preview", preview(ready, {
+      quota: quota({ daily_limit: 3, remaining: 1 }), sends_now: 1, sends_later: 2, later_from: "2026-10-06T15:00:00Z",
+    }));
+    render(<PreviewModal draft={DRAFT} attachments={[]} gmail={CONNECTED} onClose={() => {}} onSent={() => {}} />);
+    expect(await screen.findByText(/Your daily limit is 3 emails/)).toHaveTextContent(
+      `Your daily limit is 3 emails (1 left right now). 1 will send now; the other 2 will wait and go out automatically from about ${formatDateTime("2026-10-06T15:00:00Z")}.`,
+    );
+  });
+
+  it("says when every email has to wait", async () => {
+    api("post", "/api/campaigns/preview", preview([item()], {
+      quota: quota({ remaining: 0, next_slot_at: "2026-10-06T18:00:00Z" }), sends_now: 0, sends_later: 1,
+    }));
+    render(<PreviewModal draft={DRAFT} attachments={[]} gmail={CONNECTED} onClose={() => {}} onSent={() => {}} />);
+    expect(await screen.findByText(/Your daily limit is/)).toHaveTextContent(
+      `(0 left right now). All 1 will wait and go out automatically from about ${formatDateTime("2026-10-06T18:00:00Z")}.`,
+    );
+  });
+
+  it("doesn't mention the limit when everything sends now", async () => {
+    setup([item()]);
+    expect(await screen.findByText("Hi Jane")).toBeInTheDocument();
+    expect(screen.queryByText(/Your daily limit is/)).not.toBeInTheDocument();
   });
 
   it("shows a preview error", async () => {

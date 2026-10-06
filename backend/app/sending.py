@@ -39,6 +39,14 @@ class Quota:
     # When the next email may go out: now if there's room, else when the oldest send in the
     # window ages out far enough to get back under the limit.
     next_slot_at: datetime
+    oldest_sent_at: datetime | None  # the oldest send still counting toward the limit
+
+    def later_from(self, sends_now: int) -> datetime:
+        """When emails beyond the limit can start, if `sends_now` go out right away."""
+        if self.remaining <= 0:
+            return self.next_slot_at
+        # Sending up to the limit fills the window; room returns when its oldest send ages out.
+        return (self.oldest_sent_at or now()) + WINDOW if sends_now else self.next_slot_at
 
 
 def quota(db: Session) -> Quota:
@@ -60,4 +68,5 @@ def quota(db: Session) -> Quota:
         sent_last_24h=len(times),
         remaining=remaining,
         next_slot_at=next_slot,
+        oldest_sent_at=times[0] if times else None,
     )

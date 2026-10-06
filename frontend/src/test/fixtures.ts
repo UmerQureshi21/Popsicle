@@ -1,4 +1,4 @@
-import type { CampaignDetail, EmailRow, FoundPerson, HunterStatus, PeopleSearch, Template } from "@/lib/api";
+import type { CampaignDetail, EmailRow, FoundPerson, HunterStatus, PeopleSearch, SendingQuota, Template } from "@/lib/api";
 
 export function person(overrides: Partial<FoundPerson> = {}): FoundPerson {
   return {
@@ -94,6 +94,18 @@ export function template(overrides: Partial<Template> = {}): Template {
     variables: [],
     created_at: "2026-10-01T12:00:00Z",
     updated_at: "2026-10-01T12:00:00Z",
+    ...overrides,
+  };
+}
+
+export function quota(overrides: Partial<SendingQuota> = {}): SendingQuota {
+  return {
+    daily_limit: 40,
+    min_delay_seconds: 20,
+    sent_last_24h: 6,
+    remaining: 34,
+    next_slot_at: "2026-10-06T12:00:00Z",
+    oldest_sent_at: "2026-10-05T15:00:00Z",
     ...overrides,
   };
 }

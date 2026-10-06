@@ -143,6 +143,7 @@ export function Avatar({ name, size = 28 }: { name: string; size?: number }) {
 
 const STATUS_STYLES: Record<string, string> = {
   sent: "bg-emerald-50 text-emerald-700 ring-emerald-200",
+  waiting: "bg-ink/5 text-ink ring-ink/20",
   completed: "bg-emerald-50 text-emerald-700 ring-emerald-200",
   ready: "bg-emerald-50 text-emerald-700 ring-emerald-200",
   failed: "bg-crimson/10 text-crimson ring-crimson/25",
@@ -156,7 +157,7 @@ const STATUS_STYLES: Record<string, string> = {
   cancelled: "bg-white text-steel ring-steel/30",
 };
 
-const STATUS_LABELS: Record<string, string> = { already_sent: "already emailed" };
+const STATUS_LABELS: Record<string, string> = { already_sent: "already emailed", waiting: "waiting for daily limit" };
 
 export function StatusBadge({ status }: { status: EmailStatus | CampaignStatus | "ready" | "invalid" | "already_sent" }) {
   return (

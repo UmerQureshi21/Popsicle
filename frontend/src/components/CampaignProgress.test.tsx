@@ -51,6 +51,21 @@ describe("CampaignProgress", () => {
     expect(screen.getByText("sending")).toBeInTheDocument();
   });
 
+  it("a batch waiting for the daily limit says so and can be stopped", async () => {
+    const waiting = campaign({
+      status: "waiting",
+      error: "Paused at your daily limit of 40 emails. It carries on by itself when the limit resets.",
+      emails: [email({ status: "pending", to_email: "b@x.com" })],
+    });
+    const cancelled = campaign({ status: "cancelled", emails: [email({ status: "cancelled" })] });
+    api("post", "/api/campaigns/7/cancel", cancelled);
+    render(<CampaignProgress initial={waiting} />);
+    expect(screen.getByText("waiting for daily limit", { selector: "span.inline-flex" })).toBeInTheDocument();
+    expect(screen.getByText(/Paused at your daily limit of 40 emails/)).toBeInTheDocument();
+    await userEvent.setup().click(screen.getByRole("button", { name: /Stop sending/ }));
+    expect(await screen.findByText("cancelled", { selector: "span.inline-flex" })).toBeInTheDocument();
+  });
+
   it("stops sending", async () => {
     const cancelled = campaign({ status: "cancelled", emails: [email({ status: "cancelled" })] });
     const calls = api("post", "/api/campaigns/7/cancel", cancelled);
@@ -99,6 +114,7 @@ describe("CampaignProgress", () => {
 it("isActive", () => {
   expect(isActive({ status: "queued" })).toBe(true);
   expect(isActive({ status: "sending" })).toBe(true);
+  expect(isActive({ status: "waiting" })).toBe(true);
   expect(isActive({ status: "completed" })).toBe(false);
 });
 
