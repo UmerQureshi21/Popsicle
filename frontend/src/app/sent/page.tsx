@@ -93,7 +93,10 @@ export default function SentPage() {
                     <StatusBadge status={c.status} />
                   </div>
                   <p className="mt-0.5 text-sm text-steel">
-                    {c.counts.total} recipient{c.counts.total === 1 ? "" : "s"} · {formatDateTime(c.created_at)}
+                    {c.counts.total} recipient{c.counts.total === 1 ? "" : "s"} ·{" "}
+                    {c.status === "scheduled" && c.scheduled_for
+                      ? `sends ${formatDateTime(c.scheduled_for)}`
+                      : formatDateTime(c.created_at)}
                   </p>
                 </div>
                 <div className="hidden w-48 sm:block">

@@ -13,6 +13,7 @@ import FindPeoplePage from "./find/page";
 import LoginPage from "./login/page";
 import LookupPage from "./lookup/page";
 import SentPage from "./sent/page";
+import { formatDateTime } from "@/lib/format";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -231,6 +232,14 @@ describe("Sent page", () => {
     expect(screen.getByText(/· finished/)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /^Stripe/ }));
     expect(screen.queryByText("Template used")).not.toBeInTheDocument();
+  });
+
+  it("a scheduled batch says when it sends", async () => {
+    api("get", "/api/stats", { sent_total: 0, sent_last_7_days: 0, companies: 1, contacts: 1, failed_total: 0 });
+    api("get", "/api/campaigns", [summary({ status: "scheduled", scheduled_for: "2026-10-07T13:00:00Z" })]);
+    render(<SentPage />);
+    expect(await screen.findByText(`1 recipient · sends ${formatDateTime("2026-10-07T13:00:00Z")}`)).toBeInTheDocument();
+    expect(screen.getByText("scheduled", { selector: "span.inline-flex" })).toBeInTheDocument();
   });
 
   it("shows Loading… while a batch opens", async () => {

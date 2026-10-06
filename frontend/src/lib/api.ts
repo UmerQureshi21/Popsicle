@@ -53,6 +53,7 @@ export type CampaignDraft = {
   template_id?: number | null;
   skip_already_sent: boolean;
   delay_seconds: number;
+  scheduled_for?: string | null; // ISO time to start sending instead of now
 };
 
 export type PreviewItem = {
@@ -101,7 +102,7 @@ export type Preview = {
 export type Attachment = { id: number; filename: string; content_type: string; size_bytes: number; created_at: string };
 
 export type EmailStatus = "pending" | "sent" | "failed" | "skipped" | "cancelled";
-export type CampaignStatus = "queued" | "sending" | "completed" | "cancelled" | "interrupted" | "waiting";
+export type CampaignStatus = "queued" | "sending" | "completed" | "cancelled" | "interrupted" | "waiting" | "scheduled";
 
 export type EmailRow = {
   id: number;
@@ -129,6 +130,7 @@ export type CampaignSummary = {
   created_at: string;
   started_at: string | null;
   finished_at: string | null;
+  scheduled_for?: string | null;
   counts: Counts;
 };
 

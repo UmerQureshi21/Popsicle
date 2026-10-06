@@ -1,6 +1,7 @@
 import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { formatDateTime } from "@/lib/format";
 import { campaign, email } from "@/test/fixtures";
 import { api, apiError } from "@/test/server";
 import CampaignProgress, { ProgressBar, isActive } from "./CampaignProgress";
@@ -63,6 +64,32 @@ describe("CampaignProgress", () => {
     expect(screen.getByText("waiting for daily limit", { selector: "span.inline-flex" })).toBeInTheDocument();
     expect(screen.getByText(/Paused at your daily limit of 40 emails/)).toBeInTheDocument();
     await userEvent.setup().click(screen.getByRole("button", { name: /Stop sending/ }));
+    expect(await screen.findByText("cancelled", { selector: "span.inline-flex" })).toBeInTheDocument();
+  });
+
+  it("a scheduled batch shows when it sends and can be sent now", async () => {
+    const scheduled = campaign({
+      status: "scheduled",
+      scheduled_for: "2026-10-07T13:00:00Z",
+      emails: [email({ status: "pending", to_email: "b@x.com" })],
+    });
+    const calls = api("post", "/api/campaigns/7/send-now", sending());
+    render(<CampaignProgress initial={scheduled} />);
+    expect(screen.getByText("scheduled", { selector: "span.inline-flex" })).toBeInTheDocument();
+    expect(screen.getByText(/Scheduled for/)).toHaveTextContent(`Scheduled for ${formatDateTime("2026-10-07T13:00:00Z")}.`);
+    expect(screen.queryByText(/next:/)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Cancel/ })).toBeInTheDocument();
+
+    await userEvent.setup().click(screen.getByRole("button", { name: /Send now/ }));
+    expect(await screen.findByText("sending", { selector: "span.inline-flex" })).toBeInTheDocument();
+    expect(calls).toHaveLength(1);
+    expect(screen.queryByRole("button", { name: /Send now/ })).not.toBeInTheDocument();
+  });
+
+  it("a scheduled batch can be cancelled", async () => {
+    api("post", "/api/campaigns/7/cancel", campaign({ status: "cancelled", emails: [email({ status: "cancelled" })] }));
+    render(<CampaignProgress initial={campaign({ status: "scheduled", scheduled_for: "2026-10-07T13:00:00Z" })} />);
+    await userEvent.setup().click(screen.getByRole("button", { name: /Cancel/ }));
     expect(await screen.findByText("cancelled", { selector: "span.inline-flex" })).toBeInTheDocument();
   });
 

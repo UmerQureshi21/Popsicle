@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlertTriangle, ChevronLeft, ChevronRight, Clock, Loader2, MailCheck, Paperclip, Send } from "lucide-react";
+import { AlertTriangle, CalendarClock, ChevronLeft, ChevronRight, Clock, Loader2, MailCheck, Paperclip, Send } from "lucide-react";
 import {
   API_URL,
   api,
@@ -14,7 +14,8 @@ import {
 } from "@/lib/api";
 import { creditsChanged, useHunterStatus } from "@/lib/credits";
 import { formatDate, formatDateTime } from "@/lib/format";
-import { Avatar, Button, Modal, StatusBadge } from "@/components/ui";
+import { quickPicks, timezoneName, toLocalInput } from "@/lib/schedule";
+import { Avatar, Button, Modal, Popover, StatusBadge } from "@/components/ui";
 
 // What each Hunter verdict means for the person reading the review screen.
 const VERDICTS: Record<Verification["status"], { label: string; tone: string; why: string }> = {
@@ -88,16 +89,24 @@ export default function PreviewModal({ draft, attachments, gmail, onClose, onSen
   const item = preview?.items[selected];
   const canSend = !!preview && preview.ready > 0 && preview.invalid === 0 && !!gmail?.connected && !sending;
 
-  const send = async () => {
+  const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [customTime, setCustomTime] = useState(() => toLocalInput(quickPicks()[0].at));
+
+  /** Send now, or (with `at`) schedule the batch to start then. */
+  const send = async (at?: Date) => {
     setSending(true);
     setError(null);
+    setScheduleOpen(false);
     try {
-      onSent(await api.post<CampaignDetail>("/api/campaigns", draft));
+      onSent(await api.post<CampaignDetail>("/api/campaigns", at ? { ...draft, scheduled_for: at.toISOString() } : draft));
     } catch (e) {
       setError((e as Error).message);
       setSending(false);
     }
   };
+
+  const custom = customTime ? new Date(customTime) : null;
+  const customOk = !!custom && !Number.isNaN(custom.getTime()) && custom > new Date();
 
   return (
     <Modal
@@ -125,9 +134,46 @@ export default function PreviewModal({ draft, attachments, gmail, onClose, onSen
               "Rendering…"
             )}
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button onClick={onClose}>Back to editing</Button>
-            <Button variant="primary" onClick={send} disabled={!canSend}>
+            <div className="relative">
+              <Button onClick={() => setScheduleOpen(!scheduleOpen)} disabled={!canSend} aria-expanded={scheduleOpen}>
+                <CalendarClock className="size-4" /> Schedule
+              </Button>
+              <Popover open={scheduleOpen} onClose={() => setScheduleOpen(false)} className="right-0 bottom-full mb-2 w-80 p-3">
+                <p className="px-1 pb-2 text-sm font-semibold text-ink">Send later</p>
+                <p className="px-1 pb-3 text-xs text-steel">Morning emails get read and answered more. Times are in your timezone ({timezoneName()}).</p>
+                <ul className="space-y-1">
+                  {quickPicks().map((p) => (
+                    <li key={p.at.getTime()}>
+                      <button
+                        onClick={() => send(p.at)}
+                        className="w-full rounded-xl px-3 py-2 text-left text-sm text-ink hover:bg-cloud"
+                      >
+                        {p.label}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+                <div className="mt-3 border-t border-cloud pt-3">
+                  <label className="block px-1 text-xs font-medium text-ink">
+                    Pick a time
+                    <input
+                      type="datetime-local"
+                      value={customTime}
+                      min={toLocalInput(new Date())}
+                      onChange={(e) => setCustomTime(e.target.value)}
+                      className="mt-1 block w-full rounded-lg border border-steel/30 px-2.5 py-1.5 text-sm text-ink outline-none focus:border-scarlet"
+                    />
+                  </label>
+                  <Button variant="primary" className="mt-2 w-full" disabled={!customOk} onClick={() => custom && send(custom)}>
+                    Schedule {preview?.ready ?? ""} email{preview?.ready === 1 ? "" : "s"}
+                  </Button>
+                  {customTime && !customOk && <p className="mt-1.5 px-1 text-xs text-crimson">Pick a time in the future.</p>}
+                </div>
+              </Popover>
+            </div>
+            <Button variant="primary" onClick={() => send()} disabled={!canSend}>
               {sending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
               Send {preview?.ready ?? ""} email{preview?.ready === 1 ? "" : "s"}
             </Button>

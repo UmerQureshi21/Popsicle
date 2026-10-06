@@ -1,8 +1,9 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { CampaignDraft, GmailStatus, Preview, PreviewItem, Verification } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
+import { quickPicks, toLocalInput } from "@/lib/schedule";
 import { campaign, hunterStatus, quota } from "@/test/fixtures";
 import { api, apiError } from "@/test/server";
 import PreviewModal, { VerificationBadge } from "./PreviewModal";
@@ -164,6 +165,58 @@ describe("PreviewModal", () => {
   });
 });
 
+
+describe("PreviewModal: scheduling", () => {
+  beforeEach(() => {
+    api("get", "/api/people-search/status", hunterStatus());
+  });
+
+  it("schedules the batch for a quick pick like tomorrow morning", async () => {
+    const create = api("post", "/api/campaigns", campaign({ status: "scheduled" }), 201);
+    const { onSent, user } = setup([item()]);
+    await screen.findByRole("heading", { name: "Hi Jane" });
+    await user.click(screen.getByRole("button", { name: /Schedule$/ }));
+    expect(screen.getByText(/Times are in your timezone/)).toBeInTheDocument();
+
+    const first = quickPicks()[0];
+    await user.click(screen.getByRole("button", { name: first.label }));
+    await waitFor(() => expect(onSent).toHaveBeenCalled());
+    expect(create[0].body).toEqual({ ...DRAFT, scheduled_for: first.at.toISOString() });
+  });
+
+  it("schedules for a time you pick, but only in the future", async () => {
+    const create = api("post", "/api/campaigns", campaign({ status: "scheduled" }), 201);
+    const { onSent, user } = setup([item()]);
+    await screen.findByRole("heading", { name: "Hi Jane" });
+    await user.click(screen.getByRole("button", { name: /Schedule$/ }));
+    const input = screen.getByLabelText("Pick a time");
+    const confirm = screen.getByRole("button", { name: "Schedule 1 email" });
+
+    fireEvent.change(input, { target: { value: "2020-01-01T09:00" } });
+    expect(confirm).toBeDisabled();
+    expect(screen.getByText("Pick a time in the future.")).toBeInTheDocument();
+    fireEvent.change(input, { target: { value: "" } });
+    expect(confirm).toBeDisabled();
+    expect(screen.queryByText("Pick a time in the future.")).not.toBeInTheDocument();
+
+    const later = new Date(Date.now() + 3 * 86_400_000);
+    later.setSeconds(0, 0);
+    fireEvent.change(input, { target: { value: toLocalInput(later) } });
+    await user.click(confirm);
+    await waitFor(() => expect(onSent).toHaveBeenCalled());
+    expect(create[0].body).toEqual({ ...DRAFT, scheduled_for: later.toISOString() });
+  });
+
+  it("closes the schedule menu without scheduling", async () => {
+    const { user } = setup([item()]);
+    await screen.findByRole("heading", { name: "Hi Jane" });
+    const toggle = screen.getByRole("button", { name: /Schedule$/ });
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    await user.click(toggle);
+    expect(screen.queryByText(/Times are in your timezone/)).not.toBeInTheDocument();
+  });
+});
 
 describe("PreviewModal: checking addresses exist", () => {
   const ok = (overrides: Partial<PreviewItem> = {}) => item(overrides);
