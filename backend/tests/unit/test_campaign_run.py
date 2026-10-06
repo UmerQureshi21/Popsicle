@@ -33,6 +33,9 @@ def outbox(monkeypatch):
         return {"id": f"msg-{len(box)}", "threadId": f"thread-{len(box)}"}
 
     monkeypatch.setattr(gmail, "send", send)
+    # No real sleeping between sends (the account-wide minimum gap applies even with delay 0);
+    # tests that care about waits replace _wait themselves.
+    monkeypatch.setattr(campaigns, "_wait", lambda cid, seconds: True)
     return box
 
 
@@ -244,3 +247,91 @@ def test_mark_interrupted_on_startup(db):
     assert reload(queued.id)[0].status == CampaignStatus.INTERRUPTED
     assert reload(sending.id)[0].error == "Server restarted while sending. Resume to continue."
     assert reload(done.id)[0].status == CampaignStatus.COMPLETED
+
+
+# ---- Daily limit and pacing -----------------------------------------------------------
+
+
+def _limit(db, daily_limit, min_delay_seconds=0.0):
+    from app import sending
+
+    s = sending.get_settings(db)
+    s.daily_limit, s.min_delay_seconds = daily_limit, min_delay_seconds
+    db.commit()
+
+
+def test_waits_at_the_daily_limit_then_carries_on(db, outbox, monkeypatch):
+    from datetime import timedelta
+
+    _limit(db, 1)
+    f.sent_email(db, "earlier@x.com")  # the one allowed send is used up
+    c = f.campaign(db, [("a@x.com", P), ("b@x.com", P)])
+    seen = []
+
+    def fake_wait(cid, seconds):
+        # Record the status while waiting, then let time pass: everything sent so far ages out.
+        with SessionLocal() as s:
+            camp = s.get(Campaign, cid)
+            seen.append((camp.status, camp.error, round(seconds)))
+            s.execute(update(Email).where(Email.status == EmailStatus.SENT).values(sent_at=campaigns.now() - timedelta(days=2)))
+            s.commit()
+        return True
+
+    monkeypatch.setattr(campaigns, "_wait", fake_wait)
+    campaigns._run(c.id)
+
+    assert [m[0] for m in outbox] == ["a@x.com", "b@x.com"]
+    assert seen[0][0] == CampaignStatus.WAITING
+    assert "daily limit of 1" in seen[0][1]
+    assert 86_000 < seen[0][2] <= 86_400  # about a day: until the earlier send ages out
+    campaign, emails = reload(c.id)
+    assert campaign.status == CampaignStatus.COMPLETED and campaign.error is None
+    assert all(e.status == EmailStatus.SENT for e in emails)
+
+
+def test_cancelled_while_waiting_for_the_limit(db, outbox, monkeypatch):
+    _limit(db, 1)
+    f.sent_email(db, "earlier@x.com")
+    c = f.campaign(db, [("a@x.com", P)])
+
+    def cancel_while_waiting(cid, seconds):
+        with SessionLocal() as s:
+            campaigns.request_cancel(s, s.get(Campaign, cid))
+        return False
+
+    monkeypatch.setattr(campaigns, "_wait", cancel_while_waiting)
+    campaigns._run(c.id)
+
+    assert outbox == []
+    campaign, (email,) = reload(c.id)
+    assert campaign.status == CampaignStatus.CANCELLED
+    assert email.status == EmailStatus.CANCELLED
+
+
+def test_minimum_gap_applies_even_without_a_batch_delay(db, outbox, monkeypatch):
+    _limit(db, 40, min_delay_seconds=20)
+    waits = []
+    monkeypatch.setattr(campaigns.random, "uniform", lambda lo, hi: (lo, hi))
+    monkeypatch.setattr(campaigns, "_wait", lambda cid, seconds: waits.append(seconds) or True)
+    c = f.campaign(db, [("a@x.com", P), ("b@x.com", P)], delay_seconds=0)
+
+    campaigns._run(c.id)
+
+    assert waits == [(10, 30)]  # 20s gap, randomised ±50%
+    assert len(outbox) == 2
+
+
+def test_no_gap_when_both_are_zero(db, outbox, monkeypatch):
+    _limit(db, 40, min_delay_seconds=0)
+    waits = []
+    monkeypatch.setattr(campaigns, "_wait", lambda cid, seconds: waits.append(seconds) or True)
+    c = f.campaign(db, [("a@x.com", P), ("b@x.com", P)], delay_seconds=0)
+    campaigns._run(c.id)
+    assert waits == [] and len(outbox) == 2
+
+
+def test_waiting_batches_pick_up_again_after_a_restart(db, started):
+    waiting = f.campaign(db, status=CampaignStatus.WAITING)
+    f.campaign(db, status=CampaignStatus.COMPLETED)
+    campaigns.resume_waiting_on_startup()
+    assert started == [waiting.id]

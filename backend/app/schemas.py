@@ -43,11 +43,27 @@ class PreviewItem(BaseModel):
     last_sent_at: datetime | None = None
 
 
+class SendingQuota(BaseModel):
+    daily_limit: int
+    min_delay_seconds: float
+    sent_last_24h: int
+    remaining: int
+    next_slot_at: datetime
+
+
+class SendingSettingsIn(BaseModel):
+    daily_limit: int = Field(ge=1, le=500)
+    min_delay_seconds: float = Field(ge=0, le=600)
+
+
 class PreviewOut(BaseModel):
     items: list[PreviewItem]
     ready: int
     already_sent: int
     invalid: int
+    quota: SendingQuota
+    sends_now: int  # how many of the ready emails fit under today's limit
+    sends_later: int  # the rest wait until the limit resets
 
 
 class AttachmentOut(ORM):

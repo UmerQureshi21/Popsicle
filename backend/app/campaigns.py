@@ -9,11 +9,11 @@ from datetime import datetime, timezone
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
-from . import gmail
+from . import gmail, sending
 from .db import SessionLocal
 from .models import Attachment, Campaign, CampaignStatus, Company, Contact, Email, EmailStatus
 from .rendering import EMAIL, enrich, render
-from .schemas import CampaignDraft, PreviewItem, PreviewOut
+from .schemas import CampaignDraft, PreviewItem, PreviewOut, SendingQuota
 
 log = logging.getLogger(__name__)
 
@@ -71,11 +71,16 @@ def prepare(db: Session, draft: CampaignDraft) -> PreviewOut:
             )
         )
 
+    ready = sum(it.status == "ready" for it in items)
+    q = sending.quota(db)
     return PreviewOut(
         items=items,
-        ready=sum(it.status == "ready" for it in items),
+        ready=ready,
         already_sent=sum(it.status == "already_sent" for it in items),
         invalid=sum(it.status == "invalid" for it in items),
+        quota=SendingQuota(**vars(q)),
+        sends_now=min(ready, q.remaining),
+        sends_later=max(0, ready - q.remaining),
     )
 
 
@@ -197,6 +202,25 @@ def _wait(campaign_id: int, seconds: float) -> bool:
     return campaign_id not in _cancel_requested
 
 
+def _wait_for_quota(db: Session, campaign: Campaign) -> bool:
+    """If the daily limit is used up, mark the batch as waiting and sleep until there's room.
+    Returns False if it was cancelled while waiting."""
+    q = sending.quota(db)
+    if q.remaining > 0:
+        return True
+    campaign.status = CampaignStatus.WAITING
+    campaign.error = f"Paused at your daily limit of {q.daily_limit} emails. It carries on by itself when the limit resets."
+    db.commit()
+    while q.remaining <= 0:
+        if not _wait(campaign.id, max(1.0, (q.next_slot_at - now()).total_seconds())):
+            return False
+        q = sending.quota(db)
+    campaign.status = CampaignStatus.SENDING
+    campaign.error = None
+    db.commit()
+    return True
+
+
 def _run(campaign_id: int) -> None:
     try:
         with SessionLocal() as db:
@@ -225,6 +249,8 @@ def _run(campaign_id: int) -> None:
                 db.refresh(email)
                 if email.status != EmailStatus.PENDING:
                     continue
+                if not _wait_for_quota(db, campaign):
+                    break
                 try:
                     res = gmail.send(service, email.to_email, email.subject, email.body, attachments)
                     email.status = EmailStatus.SENT
@@ -248,9 +274,10 @@ def _run(campaign_id: int) -> None:
                     email.status = EmailStatus.FAILED
                     email.error = str(e)[:2000]
                 db.commit()
-                if n < len(pending) - 1 and campaign.delay_seconds > 0:
-                    # Randomised spacing so sends don't look machine-generated.
-                    d = campaign.delay_seconds
+                # Randomised spacing so sends don't look machine-generated, never closer than the
+                # account-wide minimum gap.
+                d = max(campaign.delay_seconds, sending.get_settings(db).min_delay_seconds)
+                if n < len(pending) - 1 and d > 0:
                     if not _wait(campaign_id, random.uniform(d * 0.5, d * 1.5)):
                         break
 
@@ -271,6 +298,14 @@ def _run(campaign_id: int) -> None:
         with _lock:
             _running.discard(campaign_id)
             _cancel_requested.discard(campaign_id)
+
+
+def resume_waiting_on_startup() -> None:
+    """Batches waiting on the daily limit pick up again by themselves after a restart."""
+    with SessionLocal() as db:
+        waiting = db.scalars(select(Campaign.id).where(Campaign.status == CampaignStatus.WAITING)).all()
+    for campaign_id in waiting:
+        start(campaign_id)
 
 
 def mark_interrupted_on_startup() -> None:

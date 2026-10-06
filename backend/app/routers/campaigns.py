@@ -92,7 +92,7 @@ def cancel(campaign_id: int, db: Session = Depends(get_db)):
     c = db.get(Campaign, campaign_id)
     if c is None:
         raise HTTPException(404, "Campaign not found")
-    if c.status in (CampaignStatus.QUEUED, CampaignStatus.SENDING, CampaignStatus.INTERRUPTED):
+    if c.status in (CampaignStatus.QUEUED, CampaignStatus.SENDING, CampaignStatus.INTERRUPTED, CampaignStatus.WAITING):
         svc.request_cancel(db, c)
     return _detail(db, campaign_id)
 

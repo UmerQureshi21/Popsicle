@@ -41,6 +41,7 @@ class CampaignStatus(StrEnum):
     COMPLETED = "completed"
     CANCELLED = "cancelled"
     INTERRUPTED = "interrupted"  # server stopped mid-send; can be resumed
+    WAITING = "waiting"  # hit the daily send limit; carries on by itself when it resets
 
 
 class EmailStatus(StrEnum):
@@ -201,6 +202,19 @@ class AuthSession(Base):
     token_hash: Mapped[str] = mapped_column(String(64), unique=True)  # sha256 of the cookie value
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = _created_at()
+
+
+class SendingSettings(Base):
+    """One row (id=1): how much may be sent, to keep the Gmail account in good standing."""
+
+    __tablename__ = "sending_settings"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    daily_limit: Mapped[int] = mapped_column(Integer)  # emails per rolling 24 hours
+    min_delay_seconds: Mapped[float] = mapped_column(Float)  # floor under every batch's own delay
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
 
 class GmailAccount(Base):

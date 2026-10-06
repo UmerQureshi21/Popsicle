@@ -5,12 +5,12 @@ from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .auth import require_user
-from .campaigns import mark_interrupted_on_startup
+from .campaigns import mark_interrupted_on_startup, resume_waiting_on_startup
 from .config import settings
 from .db import engine
 from .models import Base
 from .routers import auth as auth_routes
-from .routers import campaigns, misc, people, people_search
+from .routers import campaigns, misc, people, people_search, sending_limits
 
 logging.basicConfig(level=logging.INFO)
 
@@ -20,6 +20,7 @@ async def lifespan(_: FastAPI):
     # Fine while the schema is young; switch to Alembic once there's data worth migrating.
     Base.metadata.create_all(engine)
     mark_interrupted_on_startup()
+    resume_waiting_on_startup()
     yield
 
 
@@ -38,6 +39,7 @@ app.include_router(campaigns.router, dependencies=protected)
 app.include_router(people.router, dependencies=protected)
 app.include_router(misc.router, dependencies=protected)
 app.include_router(people_search.router, dependencies=protected)
+app.include_router(sending_limits.router, dependencies=protected)
 
 
 @app.get("/api/health")
