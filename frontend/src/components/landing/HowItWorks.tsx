@@ -59,7 +59,7 @@ export default function HowItWorks() {
           <div className="min-w-0 pt-1 lg:mt-7 lg:pt-0">
             <h3 className="text-xl font-semibold tracking-tight text-ink lg:text-2xl">{title}</h3>
             <p className="mt-2.5 text-base leading-relaxed text-pretty text-steel lg:text-lg">{text}</p>
-            <span className="mt-4 inline-block rounded-xl bg-white px-3 py-1.5 text-xs font-medium whitespace-nowrap text-ink/80 lg:px-3.5 lg:text-sm">
+            <span className="mt-4 inline-block rounded-xl bg-cloud px-3 py-1.5 text-xs font-medium whitespace-nowrap text-ink/80 lg:px-3.5 lg:text-sm">
               {example}
             </span>
           </div>
