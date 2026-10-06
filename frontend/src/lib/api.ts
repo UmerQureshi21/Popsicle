@@ -186,7 +186,58 @@ export type Template = {
   updated_at: string;
 };
 
-export type GmailStatus = { connected: boolean; email: string | null; credentials_file_present: boolean };
+export type GmailStatus = {
+  connected: boolean;
+  email: string | null;
+  credentials_file_present: boolean;
+  can_read?: boolean; // may read replies (Conversations)
+  can_meet?: boolean; // may create Google Calendar events with Meet links
+};
+
+export type ConversationSummary = {
+  contact_id: number;
+  email: string;
+  full_name: string | null;
+  title: string | null;
+  linkedin_url: string | null;
+  company_name: string | null;
+  company_domain: string | null;
+  first_emailed_at: string | null;
+  last_message_at: string | null;
+  last_snippet: string;
+  last_from_me: boolean;
+  replied: boolean;
+  message_count: number;
+  next_meeting_at: string | null;
+};
+
+export type ConversationMessage = {
+  id: string;
+  from_me: boolean;
+  from_name: string | null;
+  from_addr: string;
+  to: string;
+  subject: string;
+  body: string;
+  sent_at: string;
+  gmail_thread_id: string | null;
+};
+
+export type Meeting = {
+  id: number;
+  title: string;
+  starts_at: string;
+  ends_at: string;
+  time_zone: string;
+  meet_url: string;
+  calendar_url: string | null;
+  calendar_invite: boolean;
+  created_at: string;
+};
+
+export type ConversationDetail = ConversationSummary & { messages: ConversationMessage[]; meetings: Meeting[] };
+
+export type ConversationSync = { threads_checked: number; threads_downloaded: number; new_messages: number; synced_at: string | null };
 
 export type Stats = {
   sent_total: number;

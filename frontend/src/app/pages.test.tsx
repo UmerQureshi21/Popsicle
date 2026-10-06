@@ -8,6 +8,7 @@ import { navigation } from "@/test/navigation";
 import { api, apiError, quietDefaults } from "@/test/server";
 import ComposePage from "./compose/page";
 import ContactsPage from "./contacts/page";
+import ConversationsPage from "./conversations/page";
 import FindPeoplePage from "./find/page";
 import LoginPage from "./login/page";
 import LookupPage from "./lookup/page";
@@ -290,5 +291,13 @@ describe("pages that render in the browser only", () => {
     render(<LookupPage />);
     expect(screen.getByRole("heading", { name: "Look up a person" })).toBeInTheDocument();
     expect(await screen.findByRole("button", { name: "Find email" })).toBeInTheDocument();
+  });
+
+  it("Inbox", async () => {
+    api("get", "/api/gmail/status", { connected: true, email: "me@gmail.com", credentials_file_present: true });
+    api("get", "/api/conversations", []);
+    render(<ConversationsPage />);
+    expect(screen.getByRole("heading", { name: "Inbox" })).toBeInTheDocument();
+    expect(await screen.findByText("No conversations yet")).toBeInTheDocument();
   });
 });

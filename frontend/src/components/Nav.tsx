@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { AtSign, Building2, Coins, LogOut, Mail, Send, UserSearch, Users } from "lucide-react";
+import { AtSign, Building2, Coins, Inbox, LogOut, Mail, Send, UserSearch, Users } from "lucide-react";
 import { Avatar, Popover, Tooltip } from "@/components/ui";
 import { useAuth } from "@/lib/auth";
 import { useHunterStatus } from "@/lib/credits";
@@ -15,8 +15,9 @@ const TABS = [
   { href: "/find", label: "Find people", short: "Find", icon: UserSearch },
   { href: "/lookup", label: "Look up", short: "Look up", icon: AtSign },
   { href: "/sent", label: "Sent", short: "Sent", icon: Send },
-  { href: "/contacts", label: "Contacts", short: "Contacts", icon: Users },
-  { href: "/companies", label: "Companies", short: "Companies", icon: Building2 },
+  { href: "/conversations", label: "Inbox", short: "Inbox", icon: Inbox },
+  { href: "/contacts", label: "Contacts", short: "People", icon: Users },
+  { href: "/companies", label: "Companies", short: "Firms", icon: Building2 },
 ];
 
 /** Hunter credits left this month; refreshes after every search. */
@@ -41,7 +42,6 @@ function CreditsPill() {
       >
         <Coins className="size-4" />
         {status.credits_remaining}
-        <span className="hidden lg:inline">credits</span>
       </Link>
     </Tooltip>
   );
@@ -132,7 +132,7 @@ export default function Nav() {
         aria-label="Tabs"
         className="fixed inset-x-0 bottom-0 z-40 border-t border-cloud bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl sm:hidden"
       >
-        <ul className="grid h-[60px] grid-cols-6">
+        <ul className="grid h-[60px] grid-cols-7">
           {TABS.map(({ href, short, icon: Icon }) => {
             const active = pathname.startsWith(href);
             return (
@@ -140,7 +140,7 @@ export default function Nav() {
                 <Link
                   href={href}
                   aria-current={active ? "page" : undefined}
-                  className={`flex h-full flex-col items-center justify-center gap-1 text-[11px] font-medium transition-colors ${
+                  className={`flex h-full flex-col items-center justify-center gap-1 text-[10.5px] font-medium tracking-tight transition-colors ${
                     active ? "text-crimson" : "text-ink/55 active:text-ink"
                   }`}
                 >
