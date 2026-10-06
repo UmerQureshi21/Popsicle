@@ -247,6 +247,8 @@ class GmailStatus(BaseModel):
     connected: bool
     email: str | None
     credentials_file_present: bool
+    can_read: bool = False  # may read replies (Conversations)
+    can_meet: bool = False  # may create Google Calendar events with Meet links
 
 
 class Stats(BaseModel):

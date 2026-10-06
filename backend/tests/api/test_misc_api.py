@@ -78,10 +78,18 @@ class TestAttachments:
 
 class TestGmail:
     def test_status(self, client, db):
-        assert client.get("/api/gmail/status").json() == {"connected": False, "email": None, "credentials_file_present": False}
-        db.add(GmailAccount(email="me@gmail.com", token_json="{}"))
+        assert client.get("/api/gmail/status").json() == {
+            "connected": False, "email": None, "credentials_file_present": False, "can_read": False, "can_meet": False,
+        }
+        acct = GmailAccount(email="me@gmail.com", token_json="{}")
+        db.add(acct)
         db.commit()
-        assert client.get("/api/gmail/status").json()["email"] == "me@gmail.com"
+        status = client.get("/api/gmail/status").json()
+        assert (status["email"], status["can_read"], status["can_meet"]) == ("me@gmail.com", False, False)
+        acct.scopes = f"{gmail.SEND_SCOPE} {gmail.READ_SCOPE} {gmail.CALENDAR_SCOPE}"
+        db.commit()
+        status = client.get("/api/gmail/status").json()
+        assert (status["can_read"], status["can_meet"]) == (True, True)
 
     def test_connect_without_credentials_file(self, client):
         r = client.get("/api/gmail/connect", follow_redirects=False)
@@ -92,10 +100,19 @@ class TestGmail:
         secrets = tmp_path / "credentials.json"
         secrets.write_text("{}")
         settings(google_client_secrets=secrets)
-        monkeypatch.setattr(gmail, "start_auth", lambda: "https://accounts.google.com/consent")
+        seen = []
+        monkeypatch.setattr(gmail, "start_auth", lambda next: seen.append(next) or "https://accounts.google.com/consent")
         r = client.get("/api/gmail/connect", follow_redirects=False)
         assert r.status_code == 307
         assert r.headers["location"] == "https://accounts.google.com/consent"
+        client.get("/api/gmail/connect?next=/conversations", follow_redirects=False)
+        assert seen == ["/compose", "/conversations"]
+
+    def test_callback_returns_to_the_page_that_asked(self, client, monkeypatch):
+        gmail._return_to["s2"] = "/conversations"
+        monkeypatch.setattr(gmail, "finish_auth", lambda db, state, url: None)
+        r = client.get("/api/gmail/callback?state=s2&code=c", follow_redirects=False)
+        assert r.headers["location"] == "http://frontend.test/conversations?gmail=connected"
 
     def test_callback_success(self, client, monkeypatch):
         seen = {}

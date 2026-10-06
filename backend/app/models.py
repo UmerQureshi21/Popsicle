@@ -248,4 +248,5 @@ class GmailAccount(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     email: Mapped[str] = mapped_column(String(320), unique=True)
     token_json: Mapped[str] = mapped_column(Text)
+    scopes: Mapped[str | None] = mapped_column(Text)  # space-separated scopes Google granted
     connected_at: Mapped[datetime] = _created_at()

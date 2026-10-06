@@ -10,6 +10,7 @@ from sqlalchemy.engine import Engine
 COLUMNS = [
     ("campaigns", "scheduled_for", "TIMESTAMPTZ"),  # scheduled sending
     ("companies", "status", "VARCHAR(20) NOT NULL DEFAULT 'not_started'"),  # target company list
+    ("gmail_accounts", "scopes", "TEXT"),  # which Google permissions were granted
 ]
 
 # Run once, right after a column is added, to give existing rows a sensible value.
