@@ -146,8 +146,14 @@ def search_company(body: PeopleSearchIn, db: Session = Depends(get_db)):
 @router.post("/person", response_model=EmailFinderOut)
 def find_person(body: EmailFinderIn, db: Session = Depends(get_db)):
     handle = hunter.linkedin_handle(body.linkedin_url) if body.linkedin_url else None
-    if not handle and not (body.full_name and body.full_name.strip()):
-        raise HTTPException(422, "Give a full name or a LinkedIn profile URL.")
+    if body.linkedin_url and body.linkedin_url.strip() and not handle:
+        raise HTTPException(422, "That doesn't look like a LinkedIn profile URL (linkedin.com/in/…).")
+    if not handle:
+        # Without a LinkedIn profile, Hunter needs both a name and where they work.
+        if not (body.full_name and body.full_name.strip()):
+            raise HTTPException(422, "Give a full name or a LinkedIn profile URL.")
+        if not (body.company and body.company.strip()):
+            raise HTTPException(422, "Add their company or website domain, or use their LinkedIn profile URL instead.")
     res, cached = _call(
         hunter.email_finder, db, body.company, full_name=body.full_name, linkedin_handle=handle, refresh=body.refresh
     )
@@ -157,7 +163,7 @@ def find_person(body: EmailFinderIn, db: Session = Depends(get_db)):
         person.full_name = body.full_name.strip()
     return EmailFinderOut(
         person=_mark_already_emailed(db, [person])[0] if person else None,
-        domain=data.get("domain") or hunter.clean_domain(body.company),
+        domain=data.get("domain") or (hunter.clean_domain(body.company) if body.company else None),
         company=data.get("company"),
         cached=cached,
     )

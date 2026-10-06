@@ -267,7 +267,7 @@ class PeopleCount(BaseModel):
 
 
 class EmailFinderIn(BaseModel):
-    company: str = Field(min_length=1)  # company name or domain
+    company: str | None = None  # company name or domain; optional when a LinkedIn URL is given
     full_name: str | None = None
     linkedin_url: str | None = None
     refresh: bool = False

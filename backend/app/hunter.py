@@ -120,15 +120,18 @@ def domain_search(
 
 def email_finder(
     db: Session,
-    company: str,
+    company: str | None,
     *,
     full_name: str | None = None,
     linkedin_handle: str | None = None,
     refresh: bool = False,
 ) -> tuple[dict, bool]:
-    """One person's email from their name (or LinkedIn handle) and their company or domain."""
-    domain = clean_domain(company)
-    params = {"domain" if domain else "company": domain or company.strip()}
+    """One person's email from their name and company or domain, or from just their LinkedIn handle
+    (Hunter works out the person and their company from the profile)."""
+    params: dict = {}
+    if company and company.strip():
+        domain = clean_domain(company)
+        params["domain" if domain else "company"] = domain or company.strip()
     if linkedin_handle:
         params["linkedin_handle"] = linkedin_handle
     if full_name:
