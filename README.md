@@ -170,6 +170,26 @@ npx playwright install chromium   # once
 npm run test:e2e
 ```
 
+### Protecting your Gmail account
+
+Gmail flags accounts that suddenly send a lot, or whose emails bounce, and starts putting their mail in spam. Popsicle guards against both.
+
+**Daily send limit**
+
+- **The limit:** at most **40 emails per rolling 24 hours** by default, and always at least **20 seconds** between emails. Each batch's own randomised spacing comes on top of that.
+- **When a batch reaches the limit,** it shows **waiting for daily limit** and carries on by itself once there's room again, even after a restart. You can still stop it.
+- **Before you send,** the review screen tells you how many emails go out now and when the rest will follow.
+- **To check or change the limit,** use the **Sending safety** card on the Sent page. 30–50 a day is a safe range for cold email.
+
+**Checking addresses exist**
+
+- **Verify N** on the review screen checks unchecked recipients with Hunter's Email Verifier. It uses your monthly Hunter verifications, and the screen shows how many you have left.
+- **Each recipient gets a badge:**
+  - **verified**
+  - **risky:** the company accepts any address, or Hunter couldn't tell. Risky addresses are still sent.
+  - **doesn't exist:** skipped automatically, so they never bounce.
+- **Results are kept for 30 days,** so checking the same address again is free.
+
 ## Data model
 
 ```
@@ -178,6 +198,7 @@ companies 1─* contacts 1─* emails *─1 campaigns *─* attachments
 gmail_accounts (the connected sender)
 hunter_lookups (cached Hunter.io responses)
 users, auth_sessions (invite-only accounts and their login sessions)
+sending_settings (daily limit and minimum gap), email_verifications (Hunter verdicts, kept 30 days)
 ```
 
 - **campaigns:** one batch, e.g. "Stripe, 10 people". It keeps a copy of the exact subject and body used, so editing a template later doesn't change history.
