@@ -344,3 +344,45 @@ class EmailFinderOut(BaseModel):
     domain: str | None = None  # the domain Hunter searched, e.g. "harvey.ai"
     company: str | None = None  # the company name Hunter matched, if it knows one
     cached: bool
+
+
+# ---- Conversations ------------------------------------------------------
+
+
+class ConversationSummary(BaseModel):
+    contact_id: int
+    email: str
+    full_name: str | None
+    title: str | None
+    linkedin_url: str | None
+    company_name: str | None
+    company_domain: str | None
+    first_emailed_at: datetime | None
+    last_message_at: datetime | None
+    last_snippet: str
+    last_from_me: bool
+    replied: bool  # they've written back at least once
+    message_count: int
+
+
+class ConversationMessageOut(BaseModel):
+    id: str  # Gmail's message id (or "email-<id>" for a sent email not synced yet)
+    from_me: bool
+    from_name: str | None
+    from_addr: str
+    to: str
+    subject: str
+    body: str  # without the quoted earlier messages
+    sent_at: datetime
+    gmail_thread_id: str | None
+
+
+class ConversationDetail(ConversationSummary):
+    messages: list[ConversationMessageOut]
+
+
+class ConversationSyncOut(BaseModel):
+    threads_checked: int
+    threads_downloaded: int
+    new_messages: int
+    synced_at: datetime | None

@@ -14,6 +14,7 @@ from datetime import datetime
 from enum import StrEnum
 
 from sqlalchemy import (
+    Boolean,
     Column,
     DateTime,
     Float,
@@ -24,6 +25,7 @@ from sqlalchemy import (
     String,
     Table,
     Text,
+    UniqueConstraint,
     func,
     text,
 )
@@ -249,4 +251,36 @@ class GmailAccount(Base):
     email: Mapped[str] = mapped_column(String(320), unique=True)
     token_json: Mapped[str] = mapped_column(Text)
     scopes: Mapped[str | None] = mapped_column(Text)  # space-separated scopes Google granted
+    synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))  # last conversation sync
     connected_at: Mapped[datetime] = _created_at()
+
+
+class MailThread(Base):
+    """A Gmail thread seen while syncing. Gmail bumps a thread's history id whenever it
+    changes, so threads whose id is unchanged aren't downloaded again."""
+
+    __tablename__ = "mail_threads"
+
+    gmail_thread_id: Mapped[str] = mapped_column(String(100), primary_key=True)
+    history_id: Mapped[str] = mapped_column(String(40))
+
+
+class ConversationMessage(Base):
+    """One Gmail message to or from someone you've emailed, copied while syncing."""
+
+    __tablename__ = "conversation_messages"
+    __table_args__ = (UniqueConstraint("contact_id", "gmail_message_id"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    contact_id: Mapped[int] = mapped_column(ForeignKey("contacts.id", ondelete="CASCADE"), index=True)
+    gmail_message_id: Mapped[str] = mapped_column(String(100))
+    gmail_thread_id: Mapped[str] = mapped_column(String(100), index=True)
+    rfc_message_id: Mapped[str | None] = mapped_column(String(500))  # Message-ID header, to reply in the thread
+    from_me: Mapped[bool] = mapped_column(Boolean)
+    from_name: Mapped[str | None] = mapped_column(String(320))
+    from_addr: Mapped[str] = mapped_column(String(320))
+    to_addrs: Mapped[str] = mapped_column(Text, default="")
+    subject: Mapped[str] = mapped_column(Text, default="")
+    snippet: Mapped[str] = mapped_column(Text, default="")
+    body: Mapped[str] = mapped_column(Text, default="")  # plain text, including any quoted reply
+    sent_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
