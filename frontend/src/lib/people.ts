@@ -33,7 +33,12 @@ export function peopleToRows(people: FoundPerson[], variables: string[]): { vari
 
 const HANDOFF_KEY = "popsicle:recipients-handoff";
 
-export type Handoff = { company: string | null; people: FoundPerson[] };
+export type Handoff = {
+  company: string | null;
+  people: FoundPerson[];
+  /** "replace" starts a fresh batch with these people; "append" adds them to the current one. */
+  mode?: "replace" | "append";
+};
 
 export function saveHandoff(handoff: Handoff) {
   try {

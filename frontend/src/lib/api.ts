@@ -196,7 +196,7 @@ export type PeopleSearch = {
   cached: boolean;
 };
 
-export type EmailFinderResult = { person: FoundPerson | null; cached: boolean };
+export type EmailFinderResult = { person: FoundPerson | null; domain: string | null; company: string | null; cached: boolean };
 
 export type CompanySuggestion = { name: string | null; domain: string; logo: string | null; email_count: number | null };
 

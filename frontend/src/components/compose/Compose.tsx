@@ -86,8 +86,20 @@ function loadInitial(): { draft: Draft; notice: string | null } {
   const draft = loadDraft();
   const handoff = readHandoff();
   if (!handoff?.people.length) return { draft, notice: readGmailNotice() };
-  const { variables, rows } = peopleToRows(handoff.people, draft.variables);
   const n = handoff.people.length;
+  if (handoff.mode === "append") {
+    const existing = new Set(draft.rows.map((r) => (r.email ?? "").trim().toLowerCase()).filter(Boolean));
+    const kept = draft.rows.filter((r) => Object.values(r).some((v) => v?.trim()));
+    const fresh = handoff.people.filter((p) => !existing.has(p.email));
+    const { variables, rows } = peopleToRows(fresh, draft.variables);
+    return {
+      draft: { ...draft, variables, rows: kept.length + rows.length ? [...kept, ...rows] : [{}], company: draft.company || handoff.company || "" },
+      notice: fresh.length
+        ? `Added ${fresh.length} ${fresh.length === 1 ? "person" : "people"} to this batch.`
+        : "They're already in this batch.",
+    };
+  }
+  const { variables, rows } = peopleToRows(handoff.people, draft.variables);
   return {
     draft: { ...draft, variables, rows, company: handoff.company ?? draft.company },
     notice: `Loaded ${n} ${n === 1 ? "person" : "people"}${handoff.company ? ` from ${handoff.company}` : ""}. Check the email below, then send.`,

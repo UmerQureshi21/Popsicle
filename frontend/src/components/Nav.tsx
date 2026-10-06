@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { Building2, Coins, LogOut, Mail, Send, UserSearch, Users } from "lucide-react";
+import { AtSign, Building2, Coins, LogOut, Mail, Send, UserSearch, Users } from "lucide-react";
 import { Avatar, Popover, Tooltip } from "@/components/ui";
 import { useAuth } from "@/lib/auth";
 import { useHunterStatus } from "@/lib/credits";
@@ -13,6 +13,7 @@ import { formatDate } from "@/lib/format";
 const TABS = [
   { href: "/compose", label: "Compose", short: "Compose", icon: Mail },
   { href: "/find", label: "Find people", short: "Find", icon: UserSearch },
+  { href: "/lookup", label: "Look up", short: "Look up", icon: AtSign },
   { href: "/sent", label: "Sent", short: "Sent", icon: Send },
   { href: "/contacts", label: "Contacts", short: "Contacts", icon: Users },
   { href: "/companies", label: "Companies", short: "Companies", icon: Building2 },
@@ -131,7 +132,7 @@ export default function Nav() {
         aria-label="Tabs"
         className="fixed inset-x-0 bottom-0 z-40 border-t border-cloud bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl sm:hidden"
       >
-        <ul className="grid h-[60px] grid-cols-5">
+        <ul className="grid h-[60px] grid-cols-6">
           {TABS.map(({ href, short, icon: Icon }) => {
             const active = pathname.startsWith(href);
             return (
