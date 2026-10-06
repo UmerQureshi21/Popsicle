@@ -1,0 +1,94 @@
+"""The account command line (python -m app.manage), with sys.argv and getpass faked."""
+
+import sys
+from datetime import datetime, timezone
+
+import pytest
+from sqlalchemy import select
+
+from app import manage
+from app.auth import verify_password
+from app.models import User
+from tests import factories as f
+
+
+@pytest.fixture
+def run(monkeypatch, capsys):
+    """run("create-user", "a@x.com", passwords=["pw", "pw"]) -> printed output."""
+
+    def go(*args, passwords=()):
+        answers = iter(passwords)
+        monkeypatch.setattr(manage.getpass, "getpass", lambda prompt: next(answers))
+        monkeypatch.setattr(sys, "argv", ["manage", *args])
+        manage.main()
+        return capsys.readouterr().out
+
+    return go
+
+
+def users(db):
+    db.expire_all()
+    return {u.email: u for u in db.scalars(select(User))}
+
+
+def test_create_user(run, db):
+    out = run("create-user", " Me@Example.com ", "--name", "Me", passwords=["long password", "long password"])
+    assert out == "Created me@example.com.\n"
+    me = users(db)["me@example.com"]
+    assert me.name == "Me"
+    assert verify_password("long password", me.password_hash)
+
+
+def test_password_is_asked_again_until_it_is_long_enough_and_matches(run, db):
+    out = run("create-user", "me@example.com", passwords=["short", "long password", "different", "long password", "long password"])
+    assert "Use at least 8 characters." in out
+    assert "Those didn't match." in out
+    assert verify_password("long password", users(db)["me@example.com"].password_hash)
+
+
+def test_invite(run, db):
+    out = run("invite", "friend@example.com")
+    assert "Invited friend@example.com" in out
+    assert users(db)["friend@example.com"].password_hash is None
+
+
+def test_existing_account_cannot_be_created_again(run, db):
+    f.user(db, email="me@example.com")
+    with pytest.raises(SystemExit, match="already has an account"):
+        run("invite", "me@example.com")
+
+
+def test_not_an_email(run):
+    with pytest.raises(SystemExit, match="doesn't look like an email"):
+        run("create-user", "nope")
+
+
+def test_set_password(run, db):
+    f.user(db, email="me@example.com")
+    assert run("set-password", "me@example.com", passwords=["new password", "new password"]) == "Password updated for me@example.com.\n"
+    assert verify_password("new password", users(db)["me@example.com"].password_hash)
+
+
+def test_delete_user(run, db):
+    f.user(db, email="me@example.com")
+    assert run("delete-user", "me@example.com") == "Deleted me@example.com.\n"
+    assert users(db) == {}
+
+
+@pytest.mark.parametrize("cmd", ["set-password", "delete-user"])
+def test_unknown_account(run, cmd):
+    with pytest.raises(SystemExit, match="No account for"):
+        run(cmd, "who@example.com")
+
+
+def test_list_users(run, db):
+    assert "No accounts yet" in run("list-users")
+    f.user(db, email="me@example.com")
+    f.user(db, email="friend@example.com", password=None)
+    me = users(db)["me@example.com"]
+    me.last_login_at = datetime(2026, 10, 1, 12, tzinfo=timezone.utc)
+    db.commit()
+    assert run("list-users").splitlines() == [
+        "me@example.com  [active, last login 2026-10-01]",
+        "friend@example.com  [invited (no password yet)]",
+    ]

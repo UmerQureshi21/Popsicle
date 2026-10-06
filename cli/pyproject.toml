@@ -1,7 +1,7 @@
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
-addopts = "--cov=app --cov-branch --cov-report=term-missing --cov-fail-under=90"
+addopts = "--cov=send --cov-branch --cov-report=term-missing --cov-fail-under=90"
 
 [tool.coverage.report]
 exclude_also = ["if __name__ == .__main__.:"]
