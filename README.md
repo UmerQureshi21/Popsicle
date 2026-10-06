@@ -129,7 +129,7 @@ If a company search finds no one, Popsicle checks (for free) how many people Hun
 
 ### Looking up one person
 
-The **Look up** tab finds a single person's email. Enter their full name (or LinkedIn profile URL) and their company or website domain.
+The **Look up** tab finds a single person's email. Either paste their **LinkedIn profile URL** on its own (Hunter works out who they are and where they work), or enter their **full name plus their company or website domain**.
 
 - **Works beyond Hunter's lists:** it works out the company's email pattern, so it finds people at companies Hunter has no people for. A website domain like `tiny-startup.io` is the most reliable input.
 - **Results:** the email, Hunter's confidence, whether it's verified, and their title if known.
