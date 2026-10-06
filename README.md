@@ -96,6 +96,9 @@ Popsicle is invite-only. Accounts are created from the terminal, never from the 
 4. **Template:** write the subject and body. Click a variable in the dark toolbar to insert `{{variable}}` at the cursor. Valid placeholders show in red; ones that don't match a variable get a wavy underline.
    - If you have a `full_name` variable, `{{first_name}}` and `{{last_name}}` are filled in automatically.
 5. **Send:** you get a per-person preview first. Then emails go out one at a time, about 30 seconds apart (adjust with the clock icon). You can stop a batch partway through.
+6. **Or schedule it:** **Schedule** on the review screen sends the batch later instead. Pick **Tomorrow 9:00 AM**, next Tuesday or Thursday at 9:00 AM, or any time up to 60 days ahead, in your own timezone. Morning emails get read and answered more.
+   - A scheduled batch shows **scheduled** on the Sent page with the time it sends. Open it to **Send now** or **Cancel**.
+   - It sends by itself even if the page is closed, and after a backend restart, as long as the backend is running at that time. The daily limit still applies.
 
 Your draft is saved in the browser, so a refresh doesn't lose it.
 
@@ -126,6 +129,16 @@ There's also a quicker **Find people** button inside Compose that searches one c
 Results are saved for 30 days, so repeating a search costs nothing. Use **refresh** on saved results to search Hunter again.
 
 If a company search finds no one, Popsicle checks (for free) how many people Hunter has there in total and tells you whether the filters are the reason. It then offers one-click **Search anywhere** or **Remove the job title** retries.
+
+### Your target companies
+
+The **Companies** tab is your list of companies to reach, with each one's logo (from Hunter, free).
+
+- **Add companies:** type a name and pick it from the suggestions, or paste a whole list (one per line or comma-separated). Names and domains both work. Hunter's free company suggestions fill in the domain for an exact name match, or the name for a domain. Companies already on the list are skipped.
+- **Missing logos:** a company with no domain shows a placeholder. **Find N missing logos** asks Hunter (free) for the domains of up to 30 at a time. Names Hunter doesn't recognise exactly are left for you to fill in, so a wrong company is never guessed.
+- **Status:** each company is **Not started**, **Emailed**, **Replied** or **Not a fit**. It moves to Emailed by itself when the first email to it is sent; change it from the card any time. The filters at the top show how many are in each.
+- **Find people at several companies:** tick companies (e.g. under **Not started**) and click **Find people at N companies**. Find people opens with them filled in, keeping your job title and location.
+- **Contacts:** click a company's name to see everyone you have there.
 
 ### Looking up one person
 
@@ -203,9 +216,10 @@ sending_settings (daily limit and minimum gap), email_verifications (Hunter verd
 
 - **campaigns:** one batch, e.g. "Stripe, 10 people". It keeps a copy of the exact subject and body used, so editing a template later doesn't change history.
 - **emails:** one row per person per batch. It stores the rendered text, the variable values used, the status (`pending/sent/failed/skipped/cancelled`) and the Gmail message ID.
+- **companies:** unique by name, with a `status` (`not_started/emailed/replied/not_interested`) for the target list.
 - **contacts:** unique by email address. They're created or updated from the recipients table (`full_name`, `role`/`title` and `linkedin` are picked up automatically).
 - **Already emailed:** someone counts as already emailed if any email to their address has status `sent`. They're skipped by default; you can change this with the person-check icon.
 
-The schema is created with `create_all` for now. Switch to Alembic once there's data you need to migrate.
+The schema is created with `create_all`. Columns added later (like `campaigns.scheduled_for` and `companies.status`) are added at startup by `app/migrations.py`, which never touches existing data. Switch to Alembic if migrations get more involved.
 
 API docs are at http://localhost:8000/docs.
