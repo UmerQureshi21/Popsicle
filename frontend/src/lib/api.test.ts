@@ -40,7 +40,7 @@ describe("api", () => {
 
   it("throws ApiError with FastAPI's detail message", async () => {
     fake("post", "/api/x", { detail: "Nope" }, 409);
-    const err = await api.post("/api/x").catch((e: ApiError) => e);
+    const err = (await api.post("/api/x").catch((e) => e)) as ApiError;
     expect(err).toBeInstanceOf(ApiError);
     expect(err.status).toBe(409);
     expect(err.message).toBe("Nope");
