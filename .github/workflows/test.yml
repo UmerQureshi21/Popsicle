@@ -52,7 +52,7 @@ jobs:
       - name: Lint
         run: npm run lint
       - name: Type check
-        run: npx tsc --noEmit
+        run: npm run typecheck
       - name: Unit and component tests (90% coverage required)
         run: npm run test:coverage
       - name: Install Playwright's browser
