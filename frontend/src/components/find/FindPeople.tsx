@@ -7,6 +7,7 @@ import { api, type FoundPerson, type PeopleSearch } from "@/lib/api";
 import { creditsChanged, creditsText, searchCost, useHunterStatus } from "@/lib/credits";
 import { formatDate } from "@/lib/format";
 import { DEFAULT_LOCATION, LOCATIONS, locationById, type LocationId } from "@/lib/locations";
+import { textChip, textToChips, type Chip } from "@/lib/chips";
 import { saveHandoff } from "@/lib/people";
 import { Button, EmptyState } from "@/components/ui";
 import CompanyAutocomplete, { CompanyLogo } from "@/components/CompanyAutocomplete";
@@ -26,9 +27,6 @@ type CompanyResult = {
 };
 
 type Filters = { jobTitle: string; location: LocationId };
-
-/** A company to search: a picked suggestion (exact domain) or text typed as-is. */
-type Chip = { query: string; label: string; domain: string | null };
 
 type Saved = {
   chips: Chip[];
@@ -64,21 +62,6 @@ function load(): Saved {
     }
   } catch {}
   return DEFAULTS;
-}
-
-const DOMAIN = /^[a-z0-9-]+(\.[a-z0-9-]+)+$/i;
-
-function textChip(text: string): Chip {
-  const q = text.trim().replace(/^https?:\/\//i, "").replace(/^www\./i, "").split("/")[0];
-  return DOMAIN.test(q) ? { query: q.toLowerCase(), label: q.toLowerCase(), domain: q.toLowerCase() } : { query: text.trim(), label: text.trim(), domain: null };
-}
-
-function textToChips(text: string): Chip[] {
-  return text
-    .split(/[\n,]/)
-    .map((s) => s.trim())
-    .filter(Boolean)
-    .map(textChip);
 }
 
 export default function FindPeople() {

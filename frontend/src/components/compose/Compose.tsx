@@ -26,8 +26,9 @@ import {
   type Template,
 } from "@/lib/api";
 import { formatBytes } from "@/lib/format";
-import { clearHandoff, peopleToRows, readHandoff } from "@/lib/people";
-import { derivedVariables, parseTuples, placeholdersIn, validateRows } from "@/lib/tuples";
+import { STORAGE_KEY, addPeople, loadInitial, type Draft } from "@/lib/draft";
+import { clearHandoff } from "@/lib/people";
+import { derivedVariables, placeholdersIn, validateRows } from "@/lib/tuples";
 import { Avatar, Button, Modal, Popover, Tooltip } from "@/components/ui";
 import CampaignProgress from "@/components/CampaignProgress";
 import HighlightEditor, { type EditorHandle } from "./HighlightEditor";
@@ -35,85 +36,6 @@ import PreviewModal from "./PreviewModal";
 import TemplateBar from "./TemplateBar";
 import FindPeopleModal from "./FindPeopleModal";
 import RecipientsTable from "./RecipientsTable";
-
-type Draft = {
-  company: string;
-  variables: string[];
-  rows: Record<string, string>[]; // one per recipient, keyed by variable name
-  subject: string;
-  body: string;
-  attachments: Attachment[];
-  delaySeconds: number;
-  skipAlreadySent: boolean;
-  templateId: number | null;
-};
-
-const STORAGE_KEY = "cold-emailer:compose-draft:v1";
-
-const DEFAULT_DRAFT: Draft = {
-  company: "",
-  variables: ["full_name", "email"],
-  rows: [{}],
-  subject: "Quick question about {{company}}",
-  body: "Hi {{first_name}},\n\nI came across your profile while looking into {{company}} and was really interested in the work your team is doing.\n\n…\n\nWould you be open to a quick 15-minute chat sometime next week?\n\nBest,\nUmer",
-  attachments: [],
-  delaySeconds: 30,
-  skipAlreadySent: true,
-  templateId: null,
-};
-
-function loadDraft(): Draft {
-  try {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      const { tuplesText, ...rest } = JSON.parse(saved);
-      const draft: Draft = { ...DEFAULT_DRAFT, ...rest };
-      // Drafts from before the recipients table stored pasted tuples as text.
-      if (!rest.rows && tuplesText) {
-        const rows = parseTuples(tuplesText).map(({ values }) =>
-          Object.fromEntries(draft.variables.map((v, i) => [v, values[i] ?? ""])),
-        );
-        if (rows.length) draft.rows = rows;
-      }
-      return draft;
-    }
-  } catch {}
-  return DEFAULT_DRAFT;
-}
-
-/** The saved draft, with people sent over from the Find people page loaded as a fresh batch. */
-function loadInitial(): { draft: Draft; notice: string | null } {
-  const draft = loadDraft();
-  const handoff = readHandoff();
-  if (!handoff?.people.length) return { draft, notice: readGmailNotice() };
-  const n = handoff.people.length;
-  if (handoff.mode === "append") {
-    const existing = new Set(draft.rows.map((r) => (r.email ?? "").trim().toLowerCase()).filter(Boolean));
-    const kept = draft.rows.filter((r) => Object.values(r).some((v) => v?.trim()));
-    const fresh = handoff.people.filter((p) => !existing.has(p.email));
-    const { variables, rows } = peopleToRows(fresh, draft.variables);
-    return {
-      draft: { ...draft, variables, rows: kept.length + rows.length ? [...kept, ...rows] : [{}], company: draft.company || handoff.company || "" },
-      notice: fresh.length
-        ? `Added ${fresh.length} ${fresh.length === 1 ? "person" : "people"} to this batch.`
-        : "They're already in this batch.",
-    };
-  }
-  const { variables, rows } = peopleToRows(handoff.people, draft.variables);
-  return {
-    draft: { ...draft, variables, rows, company: handoff.company ?? draft.company },
-    notice: `Loaded ${n} ${n === 1 ? "person" : "people"}${handoff.company ? ` from ${handoff.company}` : ""}. Check the email below, then send.`,
-  };
-}
-
-function readGmailNotice(): string | null {
-  const params = new URLSearchParams(window.location.search);
-  if (params.get("gmail") === "connected") return "Gmail connected. You’re ready to send.";
-  if (params.get("gmail_error") === "missing_send_permission")
-    return "Gmail wasn’t connected: the “Send email on your behalf” box was unticked. Click Connect Gmail and tick it.";
-  if (params.get("gmail_error")) return `Couldn’t connect Gmail (${params.get("gmail_error")}). Try again.`;
-  return null;
-}
 
 export default function Compose() {
   const [initial] = useState(loadInitial);
@@ -212,21 +134,16 @@ export default function Compose() {
 
   // People picked in "Find people" become rows, filling whichever columns match what Hunter knows.
   const addFoundPeople = (people: FoundPerson[], organization: string | null) => {
-    const existing = new Set(rows.map((r) => (r.email ?? "").trim().toLowerCase()).filter(Boolean));
-    const kept = rows.filter((r) => Object.values(r).some((v) => v?.trim()));
-    const { variables: vars, rows: added } = peopleToRows(
-      people.filter((p) => !existing.has(p.email)),
-      variables,
-    );
+    const { variables: vars, rows: next, added } = addPeople(rows, variables, people);
     set({
       variables: vars,
-      rows: kept.length + added.length ? [...kept, ...added] : [{}],
+      rows: next,
       ...(company.trim() || !organization ? {} : { company: organization }),
     });
     setPanelOpen(true);
-    const skipped = people.length - added.length;
+    const skipped = people.length - added;
     setNotice(
-      `Added ${added.length} ${added.length === 1 ? "person" : "people"} to recipients` +
+      `Added ${added} ${added === 1 ? "person" : "people"} to recipients` +
         (skipped ? ` (${skipped} already in the list).` : "."),
     );
   };
