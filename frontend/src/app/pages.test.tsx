@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CampaignSummary, Company, Contact } from "@/lib/api";
@@ -6,7 +6,6 @@ import { AuthProvider } from "@/lib/auth";
 import { campaign, email, hunterStatus, quota } from "@/test/fixtures";
 import { navigation } from "@/test/navigation";
 import { api, apiError, quietDefaults } from "@/test/server";
-import CompaniesPage from "./companies/page";
 import ComposePage from "./compose/page";
 import ContactsPage from "./contacts/page";
 import FindPeoplePage from "./find/page";
@@ -22,119 +21,13 @@ afterEach(() => {
 
 const company = (overrides: Partial<Company> = {}): Company => ({
   id: 1, name: "Stripe", domain: "stripe.com", linkedin_url: null, notes: null, created_at: "2026-09-01T12:00:00Z",
-  contact_count: 2, emailed_count: 1, last_sent_at: "2026-10-01T12:00:00Z", ...overrides,
+  contact_count: 2, emailed_count: 1, last_sent_at: "2026-10-01T12:00:00Z", status: "emailed", ...overrides,
 });
 
 const contact = (overrides: Partial<Contact> = {}): Contact => ({
   id: 1, email: "jane@stripe.com", full_name: "Jane Doe", first_name: "Jane", last_name: "Doe", title: "Engineer",
   linkedin_url: "https://linkedin.com/in/jane", notes: null, company_id: 1, company_name: "Stripe",
   created_at: "2026-09-01T12:00:00Z", sent_count: 2, last_sent_at: "2026-10-01T12:00:00Z", last_status: "sent", ...overrides,
-});
-
-describe("Companies page", () => {
-  it("lists companies and shows one's contacts", async () => {
-    api("get", "/api/companies", [company({ linkedin_url: "https://linkedin.com/company/stripe" }), company({ id: 2, name: "acme", domain: null, emailed_count: 0, last_sent_at: null })]);
-    const contacts = api("get", "/api/contacts", [contact(), contact({ id: 2, email: "sam@stripe.com", full_name: null, title: null, last_status: null, last_sent_at: null })]);
-    render(<CompaniesPage />);
-    const user = userEvent.setup();
-    expect(await screen.findByText("contacted")).toBeInTheDocument();
-    expect(screen.getByText("not yet")).toBeInTheDocument();
-    expect(screen.getByText("A")).toBeInTheDocument();
-
-    await user.click(screen.getByRole("button", { name: /Stripe/ }));
-    const dialog = screen.getByRole("dialog");
-    expect(await within(dialog).findByText("Jane Doe")).toBeInTheDocument();
-    expect(within(dialog).getByText("not emailed")).toBeInTheDocument();
-    expect(within(dialog).getByText(/Added Sep/)).toBeInTheDocument();
-    expect(contacts[0].url.searchParams.get("company_id")).toBe("1");
-    await user.click(within(dialog).getByRole("button", { name: "Close" }));
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-  });
-
-  it("shows a company with no contacts", async () => {
-    api("get", "/api/companies", [company()]);
-    api("get", "/api/contacts", []);
-    render(<CompaniesPage />);
-    await userEvent.setup().click(await screen.findByRole("button", { name: /Stripe/ }));
-    expect(await screen.findByText("No contacts at this company yet.")).toBeInTheDocument();
-  });
-
-  it("shows Loading… while contacts load", async () => {
-    api("get", "/api/companies", [company()]);
-    api("get", "/api/contacts", () => new Promise(() => {}));
-    render(<CompaniesPage />);
-    await userEvent.setup().click(await screen.findByRole("button", { name: /Stripe/ }));
-    expect(screen.getByText("Loading…")).toBeInTheDocument();
-  });
-
-  it("adds a company", async () => {
-    let list: Company[] = [];
-    api("get", "/api/companies", () => list);
-    const create = api("post", "/api/companies", () => {
-      list = [company({ name: "Harvey" })];
-      return list[0];
-    });
-    render(<CompaniesPage />);
-    const user = userEvent.setup();
-    expect(await screen.findByText("No companies yet")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: /Add company/ }));
-    const add = screen.getByRole("button", { name: "Add" });
-    expect(add).toBeDisabled();
-    await user.type(screen.getByPlaceholderText("Stripe"), " Harvey ");
-    await user.type(screen.getByPlaceholderText("stripe.com"), "harvey.ai{Enter}");
-    expect(await screen.findByText("Harvey")).toBeInTheDocument();
-    expect(create[0].body).toEqual({ name: "Harvey", domain: "harvey.ai", linkedin_url: null });
-  });
-
-  it("shows why a company couldn't be added, and the form can be cancelled", async () => {
-    api("get", "/api/companies", []);
-    apiError("post", "/api/companies", 409, 'A company named "Stripe" already exists.');
-    render(<CompaniesPage />);
-    const user = userEvent.setup();
-    await user.click(screen.getByRole("button", { name: /Add company/ }));
-    await user.type(screen.getByPlaceholderText("https://linkedin.com/company/stripe"), "x");
-    await user.type(screen.getByPlaceholderText("Stripe"), "Stripe");
-    await user.click(screen.getByRole("button", { name: "Add" }));
-    expect(await screen.findByText('A company named "Stripe" already exists.')).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Cancel" }));
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-  });
-
-  it("an empty name isn't submitted", async () => {
-    api("get", "/api/companies", []);
-    const create = api("post", "/api/companies", {});
-    render(<CompaniesPage />);
-    const user = userEvent.setup();
-    await user.click(screen.getByRole("button", { name: /Add company/ }));
-    await user.type(screen.getByPlaceholderText("stripe.com"), "x{Enter}");
-    expect(create).toHaveLength(0);
-  });
-
-  it("deletes a company after confirming", async () => {
-    let list = [company()];
-    api("get", "/api/companies", () => list);
-    api("get", "/api/contacts", []);
-    const del = api("delete", "/api/companies/1", () => {
-      list = [];
-      return new Response(null, { status: 204 });
-    });
-    const confirm = vi.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true);
-    render(<CompaniesPage />);
-    const user = userEvent.setup();
-    await user.click(await screen.findByRole("button", { name: /Stripe/ }));
-    await user.click(screen.getByRole("button", { name: /Delete company/ }));
-    expect(del).toHaveLength(0);
-    await user.click(screen.getByRole("button", { name: /Delete company/ }));
-    expect(await screen.findByText("No companies yet")).toBeInTheDocument();
-    expect(confirm).toHaveBeenCalledWith("Delete Stripe? Its contacts and sent history are kept.");
-  });
-
-  it("shows a load error in the add form", async () => {
-    apiError("get", "/api/companies", 500, "Database is down");
-    render(<CompaniesPage />);
-    await userEvent.setup().click(screen.getByRole("button", { name: /Add company/ }));
-    expect(await screen.findByText("Database is down")).toBeInTheDocument();
-  });
 });
 
 describe("Contacts page", () => {

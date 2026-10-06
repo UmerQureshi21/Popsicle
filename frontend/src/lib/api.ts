@@ -142,12 +142,17 @@ export type CampaignDetail = CampaignSummary & {
   emails: EmailRow[];
 };
 
+export type CompanyStatus = "not_started" | "emailed" | "replied" | "not_interested";
+
+export type CompaniesAdded = { added: Company[]; skipped: string[] };
+
 export type Company = {
   id: number;
   name: string;
   domain: string | null;
   linkedin_url: string | null;
   notes: string | null;
+  status: CompanyStatus;
   created_at: string;
   contact_count: number;
   emailed_count: number;
