@@ -68,9 +68,10 @@ function PrimaryButton({ children }: { children: React.ReactNode }) {
   return (
     <Link
       href="/compose"
-      className="inline-flex items-center rounded-2xl bg-crimson px-7 py-4 text-base font-semibold text-white shadow-[0_18px_40px_-12px_rgba(217,4,41,0.6)] transition-all duration-300 hover:-translate-y-0.5 hover:bg-scarlet hover:shadow-[0_24px_50px_-12px_rgba(217,4,41,0.7)]"
+      className="group inline-flex items-center gap-3 rounded-full bg-crimson px-10 py-5 text-lg font-semibold text-white shadow-[0_18px_40px_-12px_rgba(217,4,41,0.6)] transition-all duration-300 hover:-translate-y-0.5 hover:bg-scarlet hover:shadow-[0_24px_50px_-12px_rgba(217,4,41,0.7)]"
     >
       {children}
+      <svg className="size-5 transition-transform group-hover:translate-x-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" /></svg>
     </Link>
   );
 }
@@ -80,20 +81,20 @@ export default function LandingPage() {
     <main className="relative overflow-hidden bg-white">
       {/* Soft glows that pick up the popsicle colours */}
       <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-[900px]">
-        <div className="animate-glow absolute top-32 -left-32 size-[520px] rounded-full bg-[#5aa9ff]/25 blur-3xl" />
-        <div className="animate-glow absolute top-40 -right-32 size-[520px] rounded-full bg-[#c58cff]/25 blur-3xl [animation-delay:-4s]" />
+        <div className="absolute top-32 -left-32 size-[520px] rounded-full bg-[#5aa9ff]/25 blur-3xl" />
+        <div className="absolute top-40 -right-32 size-[520px] rounded-full bg-[#c58cff]/25 blur-3xl" />
         <div className="absolute inset-x-0 bottom-0 h-64 bg-gradient-to-b from-transparent to-white" />
       </div>
 
       {/* Header */}
-      <header className="animate-fade-in relative z-10 mx-auto flex max-w-6xl items-center justify-between px-6 pt-6">
+      <header className="animate-fade-in relative z-10 mx-auto flex max-w-7xl items-center justify-between px-10 pt-6 sm:px-14">
         <Link href="/" className="flex items-center gap-2.5">
           <Image src="/cold-emailer-logo.png" alt="" width={40} height={36} priority />
           <span className="text-xl font-bold tracking-tight text-ink">Popsicle</span>
         </Link>
         <Link
           href="/login"
-          className="rounded-xl border border-steel/30 bg-white/70 px-5 py-2.5 text-sm font-semibold text-ink backdrop-blur transition-all duration-300 hover:-translate-y-0.5 hover:border-ink/30 hover:shadow-lg"
+          className="rounded-full border border-steel/30 bg-white/70 px-6 py-2 text-sm font-semibold text-ink backdrop-blur transition-all duration-300 hover:-translate-y-0.5 hover:border-ink/30 hover:shadow-lg"
         >
           Log in
         </Link>
@@ -106,7 +107,7 @@ export default function LandingPage() {
           className="animate-pop-in absolute top-[18%] left-[-6%] hidden w-[clamp(200px,24vw,340px)] md:block"
           style={{ "--r": "-16deg", animationDelay: "250ms" } as React.CSSProperties}
         >
-          <Image src="/left-pop.png" alt="" width={500} height={500} priority className="animate-float" style={{ filter: POP_SHADOW }} />
+          <Image src="/left-pop.png" alt="" width={500} height={500} priority style={{ filter: POP_SHADOW }} />
         </div>
         <div
           aria-hidden
@@ -119,7 +120,7 @@ export default function LandingPage() {
             width={500}
             height={500}
             priority
-            className="animate-float [animation-delay:-3s]"
+            className=""
             style={{ filter: POP_SHADOW }}
           />
         </div>
@@ -169,39 +170,57 @@ export default function LandingPage() {
         </div>
       </section>
 
+      <div className="h-32 bg-white sm:h-40" />
+
       {/* How it works */}
-      <section id="how" className="relative mx-auto max-w-6xl scroll-mt-10 px-6 py-24">
-        <Reveal className="mb-14 text-center">
-          <p className="text-sm font-semibold tracking-widest text-crimson uppercase">How it works</p>
-          <h2 className="mt-3 text-4xl font-bold tracking-tight text-balance text-ink sm:text-5xl">One template. Every inbox personal.</h2>
-          <p className="mx-auto mt-4 max-w-xl text-lg text-balance text-steel">From a company name to a sent email in four steps.</p>
-        </Reveal>
+      <section id="how" className="relative flex min-h-screen scroll-mt-10 flex-col justify-center bg-cloud px-6 py-32">
+        <div className="mx-auto w-full max-w-6xl">
+          <Reveal className="mb-14 text-center">
+            <p className="text-sm font-semibold tracking-widest text-crimson uppercase">How it works</p>
+            <h2 className="mt-3 text-4xl font-bold tracking-tight text-balance text-ink sm:text-5xl">One template. Every inbox personal.</h2>
+            <p className="mx-auto mt-4 max-w-xl text-lg text-balance text-steel">From a company name to a sent email in four steps.</p>
+          </Reveal>
 
-        <HowItWorks />
-
-        <Reveal className="mt-20 mb-6 text-center">
-          <p className="text-sm font-semibold text-ink">Step 3 in action</p>
-          <p className="mt-1 text-sm text-steel">You write one template; each person gets their own version.</p>
-        </Reveal>
-        <Reveal delay={150}>
-          <TemplateDemo />
-        </Reveal>
-      </section>
-
-      {/* Features */}
-      <section className="mx-auto max-w-5xl px-6 pb-28">
-        <div className="grid gap-6 sm:grid-cols-2">
-          {FEATURES.map(({ image, title, text }, n) => (
-            <Reveal key={title} delay={n * 120}>
-              <div className="h-full rounded-[2rem] border border-cloud bg-white p-8 shadow-sm transition-all duration-300 sm:p-10 hover:-translate-y-1 hover:shadow-[0_30px_60px_-30px_rgba(43,45,66,0.4)]">
-                <Image src={image} alt="" width={64} height={64} className="size-16 object-contain" />
-                <h3 className="mt-7 text-2xl font-semibold tracking-tight text-balance text-ink">{title}</h3>
-                <p className="mt-3 text-lg leading-relaxed text-pretty text-steel">{text}</p>
-              </div>
-            </Reveal>
-          ))}
+          <HowItWorks />
         </div>
       </section>
+
+      {/* Step 3 demo */}
+      <section className="relative flex min-h-screen flex-col justify-center px-6 py-32">
+        <div className="mx-auto w-full max-w-6xl">
+          <Reveal className="mb-6 text-center">
+            <p className="text-sm font-semibold text-ink">Step 3 in action</p>
+            <p className="mt-1 text-sm text-steel">You write one template; each person gets their own version.</p>
+          </Reveal>
+          <Reveal delay={150}>
+            <TemplateDemo />
+          </Reveal>
+        </div>
+      </section>
+
+      <div className="h-32 bg-white sm:h-40" />
+
+      {/* Features */}
+      <section className="relative flex min-h-screen flex-col justify-center bg-cloud px-6 py-32">
+        <div className="mx-auto w-full max-w-7xl">
+          <div className="grid auto-rows-fr gap-6 sm:grid-cols-2">
+            {FEATURES.map(({ image, title, text }, n) => {
+              const dark = n === 1 || n === 2;
+              return (
+                <Reveal key={title} delay={n * 120} direction={n % 2 === 0 ? "left" : "right"}>
+                  <div className={`h-full min-h-[320px] rounded-[2rem] border p-10 shadow-sm transition-all duration-300 sm:p-12 hover:-translate-y-1 hover:shadow-[0_30px_60px_-30px_rgba(43,45,66,0.4)] ${dark ? "border-ink bg-ink" : "border-white bg-white"}`}>
+                    <Image src={image} alt="" width={64} height={64} className={`size-16 object-contain ${dark ? "brightness-0 invert" : ""}`} />
+                    <h3 className={`mt-7 text-2xl font-semibold tracking-tight text-balance ${dark ? "text-white" : "text-ink"}`}>{title}</h3>
+                    <p className={`mt-3 text-lg leading-relaxed text-pretty ${dark ? "text-white/60" : "text-steel"}`}>{text}</p>
+                  </div>
+                </Reveal>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      <div className="h-32 bg-white sm:h-40" />
 
       {/* Closing CTA */}
       <section className="px-6 pb-20">

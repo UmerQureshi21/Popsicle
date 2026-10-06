@@ -24,9 +24,9 @@ export default function LoginPage() {
       <section className="flex items-center justify-center px-6 py-12 sm:px-10">{mounted && <LoginCard />}</section>
 
       {/* Right half: just the popsicle (hidden on phones so the form gets the screen) */}
-      <section aria-hidden className="hidden p-4 lg:block">
-        <div className="relative grid h-full place-items-center overflow-hidden rounded-[2rem] bg-gradient-to-br from-[#d6ebff] via-[#eaf4ff] to-cloud">
-          <div className="animate-glow absolute size-[60%] rounded-full bg-[#5aa9ff]/30 blur-3xl" />
+      <section aria-hidden className="hidden lg:block">
+        <div className="relative grid h-full place-items-center overflow-hidden bg-gradient-to-br from-[#d6ebff] via-[#eaf4ff] to-cloud">
+          <div className="absolute size-[60%] rounded-full bg-[#5aa9ff]/30 blur-3xl" />
           <div className="animate-pop-in relative w-[min(26rem,62%)]" style={{ "--r": "-14deg", animationDelay: "200ms" } as React.CSSProperties}>
             <Image
               src="/left-pop.png"
@@ -34,7 +34,7 @@ export default function LoginPage() {
               width={500}
               height={500}
               priority
-              className="animate-float h-auto w-full"
+              className="h-auto w-full"
               style={{ filter: "drop-shadow(0 50px 60px rgba(43, 45, 66, 0.3))" }}
             />
           </div>
