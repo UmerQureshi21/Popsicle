@@ -151,7 +151,13 @@ def find_person(body: EmailFinderIn, db: Session = Depends(get_db)):
     res, cached = _call(
         hunter.email_finder, db, body.company, full_name=body.full_name, linkedin_handle=handle, refresh=body.refresh
     )
-    person = _person(res.get("data") or {}, "email")
+    data = res.get("data") or {}
+    person = _person(data, "email")
     if person and not person.full_name and body.full_name:
         person.full_name = body.full_name.strip()
-    return EmailFinderOut(person=_mark_already_emailed(db, [person])[0] if person else None, cached=cached)
+    return EmailFinderOut(
+        person=_mark_already_emailed(db, [person])[0] if person else None,
+        domain=data.get("domain") or hunter.clean_domain(body.company),
+        company=data.get("company"),
+        cached=cached,
+    )

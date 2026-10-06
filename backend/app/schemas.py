@@ -275,4 +275,6 @@ class EmailFinderIn(BaseModel):
 
 class EmailFinderOut(BaseModel):
     person: FoundPerson | None  # None when Hunter couldn't find an email (no credit used)
+    domain: str | None = None  # the domain Hunter searched, e.g. "harvey.ai"
+    company: str | None = None  # the company name Hunter matched, if it knows one
     cached: bool
