@@ -333,5 +333,107 @@ def test_no_gap_when_both_are_zero(db, outbox, monkeypatch):
 def test_waiting_batches_pick_up_again_after_a_restart(db, started):
     waiting = f.campaign(db, status=CampaignStatus.WAITING)
     f.campaign(db, status=CampaignStatus.COMPLETED)
-    campaigns.resume_waiting_on_startup()
+    campaigns.resume_on_startup()
     assert started == [waiting.id]
+
+
+# ---- Scheduled sending ------------------------------------------------------------------
+
+
+def test_waits_until_the_scheduled_time_then_sends(db, outbox, monkeypatch):
+    from datetime import timedelta
+
+    when = campaigns.now() + timedelta(hours=10)
+    c = f.campaign(db, [("a@x.com", P)], status=CampaignStatus.SCHEDULED, scheduled_for=when)
+    seen = []
+
+    def fake_wait(cid, seconds):
+        with SessionLocal() as s:
+            seen.append((s.get(Campaign, cid).status, round(seconds / 3600)))
+            # Time passes: pretend it's now the scheduled time.
+            s.execute(update(Campaign).where(Campaign.id == cid).values(scheduled_for=campaigns.now()))
+            s.commit()
+        return True
+
+    monkeypatch.setattr(campaigns, "_wait", fake_wait)
+    campaigns._run(c.id)
+
+    assert seen == [(CampaignStatus.SCHEDULED, 10)]
+    assert [m[0] for m in outbox] == ["a@x.com"]
+    campaign, _ = reload(c.id)
+    assert campaign.status == CampaignStatus.COMPLETED
+
+
+def test_cancelled_while_scheduled(db, outbox, monkeypatch):
+    from datetime import timedelta
+
+    c = f.campaign(db, [("a@x.com", P)], status=CampaignStatus.SCHEDULED, scheduled_for=campaigns.now() + timedelta(days=1))
+
+    def cancel(cid, seconds):
+        with SessionLocal() as s:
+            campaigns.request_cancel(s, s.get(Campaign, cid))
+        return False
+
+    monkeypatch.setattr(campaigns, "_wait", cancel)
+    campaigns._run(c.id)
+
+    assert outbox == []
+    campaign, (email,) = reload(c.id)
+    assert (campaign.status, email.status) == (CampaignStatus.CANCELLED, EmailStatus.CANCELLED)
+
+
+def test_a_schedule_already_in_the_past_sends_straight_away(db, outbox, monkeypatch):
+    from datetime import timedelta
+
+    waits = []
+    monkeypatch.setattr(campaigns, "_wait", lambda cid, s: waits.append(s) or True)
+    c = f.campaign(db, [("a@x.com", P)], status=CampaignStatus.SCHEDULED, scheduled_for=campaigns.now() - timedelta(minutes=5))
+    campaigns._run(c.id)
+    assert waits == [] and len(outbox) == 1
+
+
+def test_scheduled_batches_pick_up_again_after_a_restart(db, started):
+    scheduled = f.campaign(db, status=CampaignStatus.SCHEDULED)
+    campaigns.resume_on_startup()
+    assert started == [scheduled.id]
+
+
+class TestWake:
+    def test_wake_ends_the_wait_early(self):
+        campaigns._wake_requested.add(1)
+        assert campaigns._wait(1, 10) is True
+        assert 1 not in campaigns._wake_requested
+
+    def test_send_now_on_a_running_batch_sets_the_wake_flag(self, db):
+        c = f.campaign(db, status=CampaignStatus.SCHEDULED)
+        campaigns._running.add(c.id)
+        campaigns.send_now(db, c)
+        assert c.id in campaigns._wake_requested
+
+
+class TestCompanyStatus:
+    def test_first_send_marks_the_company_emailed(self, db, outbox):
+        stripe = f.company(db, name="Stripe")
+        c = f.campaign(db, [("a@x.com", P)], company=stripe)
+        campaigns._run(c.id)
+        db.refresh(stripe)
+        assert stripe.status == "emailed"
+
+    def test_a_status_you_set_is_kept(self, db, outbox):
+        stripe = f.company(db, name="Stripe", status="replied")
+        c = f.campaign(db, [("a@x.com", P)], company=stripe)
+        campaigns._run(c.id)
+        db.refresh(stripe)
+        assert stripe.status == "replied"
+
+    def test_nothing_sent_leaves_it_not_started(self, db, outbox):
+        stripe = f.company(db, name="Stripe")
+        c = f.campaign(db, [("bad@x.com", P)], company=stripe)
+
+        def fail(to):
+            raise ValueError("Invalid To header")
+
+        outbox.on_send = fail
+        campaigns._run(c.id)
+        db.refresh(stripe)
+        assert stripe.status == "not_started"

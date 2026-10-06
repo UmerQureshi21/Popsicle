@@ -35,7 +35,7 @@ def _summary(c: Campaign, counts: CampaignCounts) -> dict:
     return dict(
         id=c.id, name=c.name, company_id=c.company_id, company_name=c.company.name if c.company else None,
         status=c.status, error=c.error, delay_seconds=c.delay_seconds, created_at=c.created_at,
-        started_at=c.started_at, finished_at=c.finished_at, counts=counts,
+        started_at=c.started_at, finished_at=c.finished_at, scheduled_for=c.scheduled_for, counts=counts,
     )
 
 
@@ -92,8 +92,26 @@ def cancel(campaign_id: int, db: Session = Depends(get_db)):
     c = db.get(Campaign, campaign_id)
     if c is None:
         raise HTTPException(404, "Campaign not found")
-    if c.status in (CampaignStatus.QUEUED, CampaignStatus.SENDING, CampaignStatus.INTERRUPTED, CampaignStatus.WAITING):
+    if c.status in (
+        CampaignStatus.QUEUED,
+        CampaignStatus.SENDING,
+        CampaignStatus.INTERRUPTED,
+        CampaignStatus.WAITING,
+        CampaignStatus.SCHEDULED,
+    ):
         svc.request_cancel(db, c)
+    return _detail(db, campaign_id)
+
+
+@router.post("/{campaign_id}/send-now", response_model=CampaignDetail)
+def send_now(campaign_id: int, db: Session = Depends(get_db)):
+    """Start a scheduled batch now instead of at its scheduled time."""
+    c = db.get(Campaign, campaign_id)
+    if c is None:
+        raise HTTPException(404, "Campaign not found")
+    if c.status != CampaignStatus.SCHEDULED:
+        raise HTTPException(409, "Only a scheduled batch can be sent early.")
+    svc.send_now(db, c)
     return _detail(db, campaign_id)
 
 

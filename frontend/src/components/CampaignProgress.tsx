@@ -1,13 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CheckCircle2, CircleDashed, CircleSlash, Loader2, RotateCcw, Square, XCircle } from "lucide-react";
+import { CalendarClock, CheckCircle2, CircleDashed, CircleSlash, Loader2, RotateCcw, Send, Square, XCircle } from "lucide-react";
 import { API_URL, api, type CampaignDetail, type EmailStatus } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
 import { Button, StatusBadge } from "@/components/ui";
 
 // Waiting batches carry on by themselves when the daily limit resets, so they count as active.
-const ACTIVE = new Set(["queued", "sending", "waiting"]);
+const ACTIVE = new Set(["queued", "sending", "waiting", "scheduled"]);
 
 export function isActive(c: { status: string }) {
   return ACTIVE.has(c.status);
@@ -70,6 +70,7 @@ export default function CampaignProgress({
   const toSend = counts.total - counts.skipped;
   const gmailProblem = campaign.error?.toLowerCase().includes("gmail");
   const nextPending = campaign.emails.find((e) => e.status === "pending");
+  const scheduled = campaign.status === "scheduled";
 
   return (
     <div className="space-y-4">
@@ -83,7 +84,7 @@ export default function CampaignProgress({
               {counts.skipped > 0 && <span className="text-steel"> · {counts.skipped} skipped</span>}
             </span>
           </span>
-          {active && nextPending && (
+          {active && !scheduled && nextPending && (
             <span className="flex items-center gap-1.5 text-xs text-steel">
               <Loader2 className="size-3.5 animate-spin" /> next: {nextPending.to_email}
             </span>
@@ -91,6 +92,16 @@ export default function CampaignProgress({
         </div>
         <ProgressBar sent={counts.sent} failed={counts.failed} total={toSend} />
       </div>
+
+      {scheduled && campaign.scheduled_for && (
+        <div className="flex items-center gap-2 rounded-xl bg-ink/5 px-4 py-2.5 text-sm text-ink">
+          <CalendarClock className="size-4 shrink-0" />
+          <span>
+            Scheduled for <span className="font-semibold">{formatDateTime(campaign.scheduled_for)}</span>. It sends by itself then,
+            even if you close this page.
+          </span>
+        </div>
+      )}
 
       {campaign.error && (
         <div className="flex items-center justify-between gap-3 rounded-xl bg-crimson/5 px-4 py-2.5 text-sm text-crimson">
@@ -119,7 +130,12 @@ export default function CampaignProgress({
       <div className="flex flex-wrap justify-end gap-2">
         {active && (
           <Button variant="danger" disabled={busy} onClick={() => act("cancel")}>
-            <Square className="size-3.5" /> Stop sending
+            <Square className="size-3.5" /> {scheduled ? "Cancel" : "Stop sending"}
+          </Button>
+        )}
+        {scheduled && (
+          <Button variant="primary" disabled={busy} onClick={() => act("send-now")}>
+            <Send className="size-4" /> Send now
           </Button>
         )}
         {(campaign.status === "interrupted" || (campaign.status === "cancelled" && counts.cancelled > 0)) && (

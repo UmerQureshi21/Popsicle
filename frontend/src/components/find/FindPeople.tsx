@@ -47,6 +47,15 @@ const DEFAULTS: Saved = {
   results: [],
 };
 
+/** Start Find people with these companies (e.g. picked on the Companies page), replacing any
+ * companies and results from the last search but keeping its filters. */
+export function presetCompanies(chips: Chip[]) {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...(raw ? JSON.parse(raw) : {}), chips, results: [] }));
+  } catch {}
+}
+
 function load(): Saved {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);

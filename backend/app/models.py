@@ -42,6 +42,16 @@ class CampaignStatus(StrEnum):
     CANCELLED = "cancelled"
     INTERRUPTED = "interrupted"  # server stopped mid-send; can be resumed
     WAITING = "waiting"  # hit the daily send limit; carries on by itself when it resets
+    SCHEDULED = "scheduled"  # set to start at a chosen time
+
+
+class CompanyStatus(StrEnum):
+    """Where a target company is in the outreach."""
+
+    NOT_STARTED = "not_started"
+    EMAILED = "emailed"  # set automatically when the first email to it is sent
+    REPLIED = "replied"
+    NOT_INTERESTED = "not_interested"  # not a fit, or they said no
 
 
 class EmailStatus(StrEnum):
@@ -65,6 +75,9 @@ class Company(Base):
     domain: Mapped[str | None] = mapped_column(String(200))
     linkedin_url: Mapped[str | None] = mapped_column(String(500))
     notes: Mapped[str | None] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(
+        String(20), default=CompanyStatus.NOT_STARTED, server_default=CompanyStatus.NOT_STARTED.value
+    )
     created_at: Mapped[datetime] = _created_at()
 
     contacts: Mapped[list["Contact"]] = relationship(back_populates="company")
@@ -135,6 +148,7 @@ class Campaign(Base):
     delay_seconds: Mapped[float] = mapped_column(Float, default=30)
     status: Mapped[str] = mapped_column(String(20), default=CampaignStatus.QUEUED)
     error: Mapped[str | None] = mapped_column(Text)  # why it stopped, if it did
+    scheduled_for: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))  # don't start before this
     created_at: Mapped[datetime] = _created_at()
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

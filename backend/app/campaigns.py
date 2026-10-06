@@ -4,14 +4,14 @@ import logging
 import random
 import threading
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from . import gmail, sending, verification
 from .db import SessionLocal
-from .models import Attachment, Campaign, CampaignStatus, Company, Contact, Email, EmailStatus
+from .models import Attachment, Campaign, CampaignStatus, Company, CompanyStatus, Contact, Email, EmailStatus
 from .rendering import EMAIL, enrich, render
 from .schemas import CampaignDraft, PreviewItem, PreviewOut, SendingQuota, Verification
 
@@ -128,7 +128,14 @@ def upsert_contact(db: Session, values: dict[str, str], company: Company | None)
 
 
 def create_campaign(db: Session, draft: CampaignDraft) -> Campaign:
-    """Raises ValueError if any row is invalid or nothing would be sent."""
+    """Raises ValueError if any row is invalid, nothing would be sent, or the schedule is off."""
+    if draft.scheduled_for is not None:
+        if draft.scheduled_for.tzinfo is None:
+            raise ValueError("The scheduled time needs a timezone.")
+        if draft.scheduled_for <= now():
+            raise ValueError("Pick a time in the future.")
+        if draft.scheduled_for > now() + MAX_SCHEDULE_AHEAD:
+            raise ValueError("Schedules can be at most 60 days ahead.")
     preview = prepare(db, draft)
     if preview.invalid:
         bad = [f"row {it.index + 1}: {'; '.join(it.issues)}" for it in preview.items if it.status == "invalid"]
@@ -148,7 +155,8 @@ def create_campaign(db: Session, draft: CampaignDraft) -> Campaign:
         body_template=draft.body,
         variables=draft.variables,
         delay_seconds=draft.delay_seconds,
-        status=CampaignStatus.QUEUED,
+        status=CampaignStatus.SCHEDULED if draft.scheduled_for else CampaignStatus.QUEUED,
+        scheduled_for=draft.scheduled_for,
         attachments=attachments,
     )
     db.add(campaign)
@@ -182,6 +190,9 @@ def create_campaign(db: Session, draft: CampaignDraft) -> Campaign:
 _lock = threading.Lock()
 _running: set[int] = set()
 _cancel_requested: set[int] = set()
+_wake_requested: set[int] = set()  # scheduled batches told to start early
+
+MAX_SCHEDULE_AHEAD = timedelta(days=60)
 
 
 def start(campaign_id: int) -> None:
@@ -210,13 +221,38 @@ def request_cancel(db: Session, campaign: Campaign) -> None:
 
 
 def _wait(campaign_id: int, seconds: float) -> bool:
-    """Sleep in short steps; returns False if the campaign was cancelled meanwhile."""
+    """Sleep in short steps; returns False if the campaign was cancelled meanwhile.
+    Returns early (True) if the batch is told to start now."""
     end = time.monotonic() + seconds
     while time.monotonic() < end:
         if campaign_id in _cancel_requested:
             return False
+        if campaign_id in _wake_requested:
+            _wake_requested.discard(campaign_id)
+            return True
         time.sleep(min(0.5, end - time.monotonic()))
     return campaign_id not in _cancel_requested
+
+
+def send_now(db: Session, campaign: Campaign) -> None:
+    """Move a scheduled batch's time to now and wake its sleeping sender (or start one)."""
+    campaign.scheduled_for = now()
+    db.commit()
+    if is_running(campaign.id):
+        _wake_requested.add(campaign.id)
+    else:
+        start(campaign.id)
+
+
+def _wait_for_schedule(db: Session, campaign: Campaign) -> bool:
+    """Sleep until a scheduled batch's start time. Returns False if it was cancelled meanwhile."""
+    while campaign.scheduled_for and campaign.scheduled_for > now():
+        campaign.status = CampaignStatus.SCHEDULED
+        db.commit()
+        if not _wait(campaign.id, (campaign.scheduled_for - now()).total_seconds()):
+            return False
+        db.refresh(campaign)  # "send now" moves the time forward
+    return True
 
 
 def _wait_for_quota(db: Session, campaign: Campaign) -> bool:
@@ -243,6 +279,8 @@ def _run(campaign_id: int) -> None:
         with SessionLocal() as db:
             campaign = db.get(Campaign, campaign_id)
             if campaign is None:
+                return
+            if not _wait_for_schedule(db, campaign):
                 return
             campaign.status = CampaignStatus.SENDING
             campaign.started_at = campaign.started_at or now()
@@ -275,6 +313,8 @@ def _run(campaign_id: int) -> None:
                     email.gmail_message_id = res.get("id")
                     email.gmail_thread_id = res.get("threadId")
                     email.error = None
+                    if campaign.company is not None and campaign.company.status == CompanyStatus.NOT_STARTED:
+                        campaign.company.status = CompanyStatus.EMAILED
                 except Exception as e:
                     if gmail.is_auth_error(e):
                         # Every remaining send would fail the same way; pause so it can resume after reconnecting.
@@ -315,12 +355,16 @@ def _run(campaign_id: int) -> None:
         with _lock:
             _running.discard(campaign_id)
             _cancel_requested.discard(campaign_id)
+            _wake_requested.discard(campaign_id)
 
 
-def resume_waiting_on_startup() -> None:
-    """Batches waiting on the daily limit pick up again by themselves after a restart."""
+def resume_on_startup() -> None:
+    """Batches waiting on the daily limit or for their scheduled time pick up again by
+    themselves after a restart."""
     with SessionLocal() as db:
-        waiting = db.scalars(select(Campaign.id).where(Campaign.status == CampaignStatus.WAITING)).all()
+        waiting = db.scalars(
+            select(Campaign.id).where(Campaign.status.in_([CampaignStatus.WAITING, CampaignStatus.SCHEDULED]))
+        ).all()
     for campaign_id in waiting:
         start(campaign_id)
 

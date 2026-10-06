@@ -22,6 +22,7 @@ class CampaignDraft(BaseModel):
     template_id: int | None = None
     skip_already_sent: bool = True
     delay_seconds: float = Field(30, ge=0, le=600)
+    scheduled_for: datetime | None = None  # start sending at this time instead of now
 
     @field_validator("variables")
     @classmethod
@@ -129,6 +130,7 @@ class CampaignSummary(BaseModel):
     created_at: datetime
     started_at: datetime | None
     finished_at: datetime | None
+    scheduled_for: datetime | None = None
     counts: CampaignCounts
 
 
@@ -143,11 +145,15 @@ class CampaignDetail(CampaignSummary):
 # ---- Companies / contacts ------------------------------------------------
 
 
+CompanyStatusName = Literal["not_started", "emailed", "replied", "not_interested"]
+
+
 class CompanyIn(BaseModel):
     name: str
     domain: str | None = None
     linkedin_url: str | None = None
     notes: str | None = None
+    status: CompanyStatusName = "not_started"
 
 
 class CompanyPatch(BaseModel):
@@ -155,6 +161,23 @@ class CompanyPatch(BaseModel):
     domain: str | None = None
     linkedin_url: str | None = None
     notes: str | None = None
+    status: CompanyStatusName | None = None
+
+
+class CompaniesBulkIn(BaseModel):
+    """Company names or domains, one per entry, e.g. pasted from a list."""
+
+    lines: list[str] = Field(max_length=100)
+
+
+class CompaniesBulkOut(BaseModel):
+    added: list["CompanyOut"]
+    skipped: list[str]  # already on the list, or listed twice
+
+
+class FillDomainsOut(BaseModel):
+    filled: int  # companies that got a domain
+    missing: int  # companies still without one
 
 
 class CompanyOut(ORM):
@@ -163,6 +186,7 @@ class CompanyOut(ORM):
     domain: str | None
     linkedin_url: str | None
     notes: str | None
+    status: CompanyStatusName = "not_started"
     created_at: datetime
     contact_count: int = 0
     emailed_count: int = 0

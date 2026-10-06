@@ -143,3 +143,43 @@ test("see and change the daily limit on the Sent page", async ({ page }) => {
   await expect(page.getByText("6 of 30 sent in the last 24 hours")).toBeVisible();
   expect(api.called("PUT /api/sending/settings")[0].body).toEqual({ daily_limit: 30, min_delay_seconds: 20 });
 });
+
+test("schedule a batch for later, then send it now", async ({ page }) => {
+  const scheduledFor = "2026-10-07T13:00:00Z";
+  const api = await new FakeApi({
+    "POST /api/campaigns/preview": (body) => {
+      const draft = body as { rows: Record<string, string>[] };
+      return {
+        items: draft.rows.map((values, index) => ({
+          index, to_email: values.email, subject: "Quick question about Stripe", body: "Hi Jane",
+          values, status: "ready", issues: [], last_sent_at: null,
+        })),
+        ready: draft.rows.length, already_sent: 0, invalid: 0,
+      };
+    },
+    "POST /api/campaigns": { ...campaign("scheduled", "pending"), scheduled_for: scheduledFor },
+    "GET /api/campaigns/7": { ...campaign("scheduled", "pending"), scheduled_for: scheduledFor },
+    "POST /api/campaigns/7/send-now": campaign("completed", "sent"),
+  }).install(page);
+
+  await page.goto("/compose");
+  await page.getByPlaceholder("e.g. Stripe").fill("Stripe");
+  await page.getByRole("textbox", { name: "Row 1 full_name" }).fill("Jane Doe");
+  await page.getByRole("textbox", { name: "Row 1 email" }).fill("jane@stripe.com");
+  await page.getByRole("button", { name: "Send", exact: true }).click();
+
+  const review = page.getByRole("dialog");
+  await review.getByRole("button", { name: "Schedule", exact: true }).click();
+  await expect(review.getByText(/Times are in your timezone/)).toBeVisible();
+  await review.getByRole("button", { name: /^Tomorrow, .* 9:00/ }).click();
+
+  await expect(page.getByText(/Scheduled for Oct 7/)).toBeVisible();
+  const sentBody = api.called("POST /api/campaigns")[0].body as { scheduled_for: string };
+  const at = new Date(sentBody.scheduled_for);
+  expect(at.getTime()).toBeGreaterThan(Date.now());
+  expect(at.getHours()).toBe(9);
+
+  await page.getByRole("button", { name: "Send now" }).click();
+  await expect(page.getByText("completed")).toBeVisible();
+  expect(api.called("POST /api/campaigns/7/send-now")).toHaveLength(1);
+});

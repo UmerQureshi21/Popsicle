@@ -5,9 +5,19 @@ from sqlalchemy import distinct, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from .. import hunter, targets
 from ..db import get_db
 from ..models import Company, Contact, Email, EmailStatus
-from ..schemas import CompanyIn, CompanyOut, CompanyPatch, ContactOut, ContactPatch
+from ..schemas import (
+    CompaniesBulkIn,
+    CompaniesBulkOut,
+    CompanyIn,
+    CompanyOut,
+    CompanyPatch,
+    ContactOut,
+    ContactPatch,
+    FillDomainsOut,
+)
 
 router = APIRouter(prefix="/api", tags=["people"])
 
@@ -53,6 +63,24 @@ def create_company(body: CompanyIn, db: Session = Depends(get_db)):
     except IntegrityError as e:
         raise HTTPException(409, f'A company named "{body.name}" already exists.') from e
     return _company_rows(db, c.id)[0]
+
+
+@router.post("/companies/bulk", response_model=CompaniesBulkOut, status_code=201)
+def add_companies(body: CompaniesBulkIn, db: Session = Depends(get_db)):
+    """Add a pasted list of company names or domains to the target list."""
+    added, skipped = targets.add_many(db, body.lines)
+    rows = {r.id: r for r in _company_rows(db)}
+    return CompaniesBulkOut(added=[rows[c.id] for c in added], skipped=skipped)
+
+
+@router.post("/companies/fill-domains", response_model=FillDomainsOut)
+def fill_domains(db: Session = Depends(get_db)):
+    """Find a domain (and so a logo) for companies that don't have one. Free on Hunter."""
+    try:
+        filled, missing = targets.fill_domains(db)
+    except hunter.HunterError as e:
+        raise HTTPException(e.status, str(e)) from e
+    return FillDomainsOut(filled=filled, missing=missing)
 
 
 @router.patch("/companies/{company_id}", response_model=CompanyOut)

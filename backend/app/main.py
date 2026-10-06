@@ -5,7 +5,8 @@ from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .auth import require_user
-from .campaigns import mark_interrupted_on_startup, resume_waiting_on_startup
+from . import migrations
+from .campaigns import mark_interrupted_on_startup, resume_on_startup
 from .config import settings
 from .db import engine
 from .models import Base
@@ -19,8 +20,9 @@ logging.basicConfig(level=logging.INFO)
 async def lifespan(_: FastAPI):
     # Fine while the schema is young; switch to Alembic once there's data worth migrating.
     Base.metadata.create_all(engine)
+    migrations.run(engine)
     mark_interrupted_on_startup()
-    resume_waiting_on_startup()
+    resume_on_startup()
     yield
 
 
