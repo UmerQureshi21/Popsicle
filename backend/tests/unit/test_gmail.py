@@ -259,3 +259,30 @@ def test_send_builds_a_mime_message_with_attachments(db):
         "data.bin": ("application/octet-stream", b"\x00\x01"),
         "notes": ("text/octet-stream", b"hi"),
     }
+
+
+def test_send_as_a_reply_in_a_thread():
+    sent = {}
+
+    class Service:
+        def users(self):
+            return self
+
+        def messages(self):
+            return self
+
+        def send(self, userId, body):
+            sent.update(body=body)
+            return self
+
+        def execute(self):
+            return {"id": "m2", "threadId": "t1"}
+
+    gmail.send(Service(), "douglas@harvey.ai", "Re: Coffee", "Here's the link", [], thread_id="t1", in_reply_to="<m1@mail.gmail.com>")
+    assert sent["body"]["threadId"] == "t1"
+    msg = email.message_from_bytes(base64.urlsafe_b64decode(sent["body"]["raw"]))
+    assert (msg["In-Reply-To"], msg["References"]) == ("<m1@mail.gmail.com>", "<m1@mail.gmail.com>")
+
+    gmail.send(Service(), "douglas@harvey.ai", "Coffee", "Hi", [])
+    assert "threadId" not in sent["body"]
+    assert email.message_from_bytes(base64.urlsafe_b64decode(sent["body"]["raw"]))["In-Reply-To"] is None

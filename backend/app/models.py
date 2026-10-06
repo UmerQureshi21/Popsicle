@@ -284,3 +284,22 @@ class ConversationMessage(Base):
     snippet: Mapped[str] = mapped_column(Text, default="")
     body: Mapped[str] = mapped_column(Text, default="")  # plain text, including any quoted reply
     sent_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class Meeting(Base):
+    """A Google Meet call set up with someone: a calendar event plus the email with its link."""
+
+    __tablename__ = "meetings"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    contact_id: Mapped[int] = mapped_column(ForeignKey("contacts.id", ondelete="CASCADE"), index=True)
+    title: Mapped[str] = mapped_column(String(300))
+    starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    ends_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    time_zone: Mapped[str] = mapped_column(String(64))
+    meet_url: Mapped[str] = mapped_column(String(300))
+    calendar_event_id: Mapped[str] = mapped_column(String(300))
+    calendar_url: Mapped[str | None] = mapped_column(String(1000))
+    calendar_invite: Mapped[bool] = mapped_column(Boolean)  # they were also sent a calendar invite
+    gmail_message_id: Mapped[str | None] = mapped_column(String(100))
+    created_at: Mapped[datetime] = _created_at()

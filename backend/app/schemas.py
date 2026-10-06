@@ -363,6 +363,7 @@ class ConversationSummary(BaseModel):
     last_from_me: bool
     replied: bool  # they've written back at least once
     message_count: int
+    next_meeting_at: datetime | None = None  # the next Meet call set up with them
 
 
 class ConversationMessageOut(BaseModel):
@@ -377,8 +378,48 @@ class ConversationMessageOut(BaseModel):
     gmail_thread_id: str | None
 
 
+class MeetingOut(ORM):
+    id: int
+    title: str
+    starts_at: datetime
+    ends_at: datetime
+    time_zone: str
+    meet_url: str
+    calendar_url: str | None
+    calendar_invite: bool
+    created_at: datetime
+
+
+class MeetingIn(BaseModel):
+    title: str = Field(min_length=1, max_length=300)
+    starts_at: datetime
+    duration_minutes: int = Field(ge=5, le=480)
+    time_zone: str  # IANA name, e.g. America/Toronto
+    message: str = Field(min_length=1, max_length=20_000)  # {{meet_link}} is replaced with the link
+    calendar_invite: bool = True  # also send them a Google Calendar invite
+
+    @field_validator("time_zone")
+    @classmethod
+    def known_time_zone(cls, v: str) -> str:
+        from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+        try:
+            ZoneInfo(v)
+        except (ZoneInfoNotFoundError, ValueError) as e:
+            raise ValueError("Unknown time zone.") from e
+        return v
+
+    @field_validator("starts_at")
+    @classmethod
+    def has_time_zone(cls, v: datetime) -> datetime:
+        if v.tzinfo is None:
+            raise ValueError("The meeting time needs a timezone.")
+        return v
+
+
 class ConversationDetail(ConversationSummary):
     messages: list[ConversationMessageOut]
+    meetings: list[MeetingOut] = []
 
 
 class ConversationSyncOut(BaseModel):

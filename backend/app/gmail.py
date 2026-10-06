@@ -135,13 +135,28 @@ def gmail_service(creds: Credentials):
     return build("gmail", "v1", credentials=creds, cache_discovery=False)
 
 
-def send(service, to: str, subject: str, body: str, attachments: list[Attachment]) -> dict:
+def send(
+    service,
+    to: str,
+    subject: str,
+    body: str,
+    attachments: list[Attachment],
+    *,
+    thread_id: str | None = None,
+    in_reply_to: str | None = None,
+) -> dict:
+    """Send one email. With `thread_id` (and the Message-ID it answers) it's a reply in that
+    conversation, for both you and the recipient."""
     msg = EmailMessage()
     msg["To"] = to
     msg["Subject"] = subject
+    if in_reply_to:
+        msg["In-Reply-To"] = in_reply_to
+        msg["References"] = in_reply_to
     msg.set_content(body)
     for a in attachments:
         maintype, _, subtype = (a.content_type or "application/octet-stream").partition("/")
         msg.add_attachment(a.data, maintype=maintype, subtype=subtype or "octet-stream", filename=a.filename)
     raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()
-    return service.users().messages().send(userId="me", body={"raw": raw}).execute()
+    message = {"raw": raw, **({"threadId": thread_id} if thread_id else {})}
+    return service.users().messages().send(userId="me", body=message).execute()

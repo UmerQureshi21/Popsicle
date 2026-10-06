@@ -1,6 +1,6 @@
 """The Conversations API. Gmail is faked with tests.fake_gmail."""
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -166,3 +166,92 @@ class TestSync:
         fake_gmail.error = error
         r = client.post("/api/conversations/sync")
         assert r.status_code == status
+
+
+class TestMeetings:
+    BODY = {
+        "title": "Coffee chat", "starts_at": "2030-10-07T09:00:00-04:00", "duration_minutes": 30,
+        "time_zone": "America/Toronto", "message": "Here's the link: {{meet_link}}", "calendar_invite": True,
+    }
+
+    @pytest.fixture
+    def scheduled(self, monkeypatch):
+        """Replace meetings.schedule: records its arguments and stores a meeting like it would,
+        or raises `scheduled.error`."""
+        from app import meetings
+        from app.models import Meeting
+
+        class Calls(list):
+            error: Exception | None = None
+
+        calls = Calls()
+
+        def schedule(db, contact, **kw):
+            calls.append(kw)
+            if calls.error:
+                raise calls.error
+            m = Meeting(contact_id=contact.id, title=kw["title"], starts_at=kw["start"],
+                        ends_at=kw["start"] + timedelta(minutes=kw["minutes"]), time_zone=kw["time_zone"],
+                        meet_url="https://meet.google.com/abc", calendar_event_id="ev1", calendar_url=None,
+                        calendar_invite=kw["invite"], gmail_message_id="s1")
+            db.add(m)
+            db.commit()
+            return m
+
+        monkeypatch.setattr(meetings, "schedule", schedule)
+        return calls
+
+    def test_schedules_and_shows_up_in_the_conversation(self, client, db, scheduled):
+        douglas, _ = emailed(db, "douglas@harvey.ai", "Douglas Quan")
+        r = client.post(f"/api/conversations/{douglas.id}/meeting", json={**self.BODY, "title": "  Coffee chat "})
+        assert r.status_code == 201
+        assert r.json()["meet_url"] == "https://meet.google.com/abc"
+        assert datetime.fromisoformat(r.json()["ends_at"]) == datetime(2030, 10, 7, 13, 30, tzinfo=timezone.utc)
+        assert scheduled[0] == dict(title="Coffee chat", start=datetime(2030, 10, 7, 13, tzinfo=timezone.utc), minutes=30,
+                                    time_zone="America/Toronto", message="Here's the link: {{meet_link}}", invite=True)
+
+        detail = client.get(f"/api/conversations/{douglas.id}").json()
+        assert [m["title"] for m in detail["meetings"]] == ["Coffee chat"]
+        nine_toronto = datetime(2030, 10, 7, 13, tzinfo=timezone.utc)
+        assert datetime.fromisoformat(detail["next_meeting_at"]) == nine_toronto
+        assert datetime.fromisoformat(client.get("/api/conversations").json()[0]["next_meeting_at"]) == nine_toronto
+
+    def test_past_meetings_are_listed_but_not_next(self, client, db, scheduled):
+        from app.models import Meeting
+
+        douglas, _ = emailed(db, "douglas@harvey.ai")
+        db.add(Meeting(contact_id=douglas.id, title="Old", starts_at=at(1), ends_at=at(1, 13), time_zone="UTC",
+                       meet_url="x", calendar_event_id="e", calendar_invite=False))
+        db.commit()
+        detail = client.get(f"/api/conversations/{douglas.id}").json()
+        assert [m["title"] for m in detail["meetings"]] == ["Old"]
+        assert detail["next_meeting_at"] is None
+
+    def test_errors_from_google_are_passed_on(self, client, db, scheduled):
+        from app.meetings import MeetingError
+
+        douglas, _ = emailed(db, "douglas@harvey.ai")
+        scheduled.error = MeetingError(400, "Turn on the Google Calendar API")
+        r = client.post(f"/api/conversations/{douglas.id}/meeting", json=self.BODY)
+        assert (r.status_code, r.json()["detail"]) == (400, "Turn on the Google Calendar API")
+
+    def test_unknown_contact(self, client):
+        assert client.post("/api/conversations/999/meeting", json=self.BODY).status_code == 404
+
+    @pytest.mark.parametrize(
+        "change, message",
+        [
+            ({"starts_at": "2020-01-01T09:00:00-05:00"}, "Pick a time in the future."),
+            ({"starts_at": "2030-10-07T09:00:00"}, "needs a timezone"),
+            ({"time_zone": "Mars/Olympus"}, "Unknown time zone"),
+            ({"time_zone": "../../etc"}, "Unknown time zone"),
+            ({"duration_minutes": 0}, "greater than or equal to 5"),
+            ({"title": ""}, "at least 1 character"),
+        ],
+    )
+    def test_bad_input(self, client, db, scheduled, change, message):
+        douglas, _ = emailed(db, "douglas@harvey.ai")
+        r = client.post(f"/api/conversations/{douglas.id}/meeting", json={**self.BODY, **change})
+        assert r.status_code == 422
+        assert message in str(r.json()["detail"])
+        assert scheduled == []

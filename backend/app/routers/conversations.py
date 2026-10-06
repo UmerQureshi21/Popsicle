@@ -1,15 +1,24 @@
 """Conversations: each person you've emailed and everything said since, synced from Gmail."""
 
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, HTTPException
 from googleapiclient.errors import HttpError
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from .. import conversations as svc
-from .. import gmail
+from .. import gmail, meetings
 from ..db import get_db
-from ..models import Contact, ConversationMessage, Email, EmailStatus
-from ..schemas import ConversationDetail, ConversationMessageOut, ConversationSummary, ConversationSyncOut
+from ..models import Contact, ConversationMessage, Email, EmailStatus, Meeting
+from ..schemas import (
+    ConversationDetail,
+    ConversationMessageOut,
+    ConversationSummary,
+    ConversationSyncOut,
+    MeetingIn,
+    MeetingOut,
+)
 
 router = APIRouter(prefix="/api/conversations", tags=["conversations"])
 
@@ -47,7 +56,17 @@ def _messages(db: Session, contact_ids: list[int], me: str) -> dict[int, list[Co
     return out
 
 
-def _summary(c: Contact, msgs: list[ConversationMessageOut]) -> dict:
+def _next_meetings(db: Session, contact_ids: list[int]) -> dict[int, datetime]:
+    """When each person's next upcoming Meet call is."""
+    rows = db.execute(
+        select(Meeting.contact_id, func.min(Meeting.starts_at))
+        .where(Meeting.contact_id.in_(contact_ids), Meeting.ends_at > meetings.now())
+        .group_by(Meeting.contact_id)
+    )
+    return dict(rows.all())
+
+
+def _summary(c: Contact, msgs: list[ConversationMessageOut], next_meeting: datetime | None = None) -> dict:
     mine = [m for m in msgs if m.from_me]
     last = msgs[-1] if msgs else None
     return dict(
@@ -59,6 +78,7 @@ def _summary(c: Contact, msgs: list[ConversationMessageOut]) -> dict:
         last_from_me=last.from_me if last else True,
         replied=any(not m.from_me for m in msgs),
         message_count=len(msgs),
+        next_meeting_at=next_meeting,
     )
 
 
@@ -82,8 +102,10 @@ def _me(db: Session) -> str:
 def list_conversations(db: Session = Depends(get_db)):
     """Everyone you've emailed, most recent conversation first."""
     people = _people(db)
-    msgs = _messages(db, [c.id for c in people], _me(db))
-    rows = [ConversationSummary(**_summary(c, msgs[c.id])) for c in people]
+    ids = [c.id for c in people]
+    msgs = _messages(db, ids, _me(db))
+    upcoming = _next_meetings(db, ids)
+    rows = [ConversationSummary(**_summary(c, msgs[c.id], upcoming.get(c.id))) for c in people]
     return sorted(rows, key=lambda r: r.last_message_at.timestamp() if r.last_message_at else 0, reverse=True)
 
 
@@ -93,7 +115,30 @@ def get_conversation(contact_id: int, db: Session = Depends(get_db)):
     if not people:
         raise HTTPException(404, "You haven't emailed this person yet.")
     msgs = _messages(db, [contact_id], _me(db))[contact_id]
-    return ConversationDetail(**_summary(people[0], msgs), messages=msgs)
+    calls = db.scalars(select(Meeting).where(Meeting.contact_id == contact_id).order_by(Meeting.starts_at.desc()))
+    return ConversationDetail(
+        **_summary(people[0], msgs, _next_meetings(db, [contact_id]).get(contact_id)),
+        messages=msgs,
+        meetings=[MeetingOut.model_validate(m) for m in calls],
+    )
+
+
+@router.post("/{contact_id}/meeting", response_model=MeetingOut, status_code=201)
+def schedule_meeting(contact_id: int, body: MeetingIn, db: Session = Depends(get_db)):
+    """Create a Google Meet call with them and email them the link."""
+    contact = db.get(Contact, contact_id)
+    if contact is None:
+        raise HTTPException(404, "Contact not found")
+    if body.starts_at <= meetings.now():
+        raise HTTPException(422, "Pick a time in the future.")
+    try:
+        meeting = meetings.schedule(
+            db, contact, title=body.title.strip(), start=body.starts_at, minutes=body.duration_minutes,
+            time_zone=body.time_zone, message=body.message, invite=body.calendar_invite,
+        )
+    except meetings.MeetingError as e:
+        raise HTTPException(e.status, str(e)) from e
+    return MeetingOut.model_validate(meeting)
 
 
 @router.post("/sync", response_model=ConversationSyncOut)
