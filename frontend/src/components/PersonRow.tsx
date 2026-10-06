@@ -1,6 +1,6 @@
 "use client";
 
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, TriangleAlert } from "lucide-react";
 import type { FoundPerson } from "@/lib/api";
 import { formatDate } from "@/lib/format";
 import { Avatar } from "@/components/ui";
@@ -16,7 +16,11 @@ export function ConfidencePill({ value }: { value: number | null }) {
   );
 }
 
-/** One person found on Hunter, as a selectable row. */
+/**
+ * One person found on Hunter, as a selectable row. People you've already emailed are flagged in
+ * red (tinted background, red edge, "Already emailed" badge) as an early warning before you
+ * email them again. Red is reserved for that warning; a ticked row is tinted grey.
+ */
 export default function PersonRow({
   person: p,
   selected,
@@ -26,11 +30,16 @@ export default function PersonRow({
   selected: boolean;
   onToggle: () => void;
 }) {
+  const emailed = !!p.already_emailed_at;
+  const tone = emailed
+    ? "bg-crimson/[0.07] shadow-[inset_4px_0_0_var(--color-crimson)] hover:bg-crimson/10"
+    : selected
+      ? "bg-cloud/60 hover:bg-cloud"
+      : "hover:bg-cloud/50";
   return (
     <label
-      className={`flex cursor-pointer items-center gap-3 px-4 py-3 transition-colors hover:bg-cloud/50 ${
-        selected ? "bg-crimson/[0.03]" : ""
-      }`}
+      data-already-emailed={emailed || undefined}
+      className={`flex cursor-pointer items-center gap-3 px-4 py-3 transition-colors ${tone}`}
     >
       <input type="checkbox" className="size-4 accent-crimson" checked={selected} onChange={onToggle} />
       <Avatar name={p.full_name || p.email} size={34} />
@@ -50,8 +59,12 @@ export default function PersonRow({
             </a>
           )}
           {p.already_emailed_at && (
-            <span className="shrink-0 rounded-full bg-cloud px-2 py-0.5 text-[11px] font-medium whitespace-nowrap text-steel">
-              emailed {formatDate(p.already_emailed_at)}
+            <span
+              className="flex shrink-0 items-center gap-1 rounded-full bg-crimson px-2 py-0.5 text-[11px] font-semibold whitespace-nowrap text-white"
+              title="You've emailed this person before"
+            >
+              <TriangleAlert className="size-3" aria-hidden />
+              Already emailed · {formatDate(p.already_emailed_at)}
             </span>
           )}
         </span>

@@ -32,12 +32,39 @@ describe("PersonRow", () => {
     );
     expect(screen.getByText("Jane Doe")).toBeInTheDocument();
     expect(screen.getByText("Software Engineer · senior level")).toBeInTheDocument();
-    expect(screen.getByText(/emailed Mar/)).toBeInTheDocument();
+    expect(screen.getByText(/Already emailed · Mar/)).toBeInTheDocument();
     expect(screen.getByRole("checkbox")).toBeChecked();
 
     expect(screen.getByRole("link", { name: "LinkedIn profile" })).toHaveAttribute("target", "_blank");
     await userEvent.setup().click(screen.getByRole("checkbox"));
     expect(onToggle).toHaveBeenCalledTimes(1);
+  });
+
+  it("flags someone already emailed with a red row and badge", () => {
+    render(<PersonRow person={person({ already_emailed_at: "2026-03-01T12:00:00Z" })} selected={false} onToggle={() => {}} />);
+    const row = screen.getByRole("checkbox").closest("label")!;
+    expect(row).toHaveAttribute("data-already-emailed", "true");
+    expect(row.className).toContain("bg-crimson/[0.07]");
+    expect(row.className).toContain("inset_4px_0_0_var(--color-crimson)");
+    const badge = screen.getByText(/Already emailed · Mar 1/);
+    expect(badge.className).toContain("bg-crimson");
+    expect(badge).toHaveAttribute("title", "You've emailed this person before");
+  });
+
+  it("keeps the red warning even when the emailed person is ticked", () => {
+    render(<PersonRow person={person({ already_emailed_at: "2026-03-01T12:00:00Z" })} selected onToggle={() => {}} />);
+    const row = screen.getByRole("checkbox").closest("label")!;
+    expect(row.className).toContain("bg-crimson/[0.07]");
+    expect(row.className).not.toContain("bg-cloud/60");
+  });
+
+  it("uses grey, not red, for a ticked person who hasn't been emailed", () => {
+    render(<PersonRow person={person({ already_emailed_at: null })} selected onToggle={() => {}} />);
+    const row = screen.getByRole("checkbox").closest("label")!;
+    expect(row).not.toHaveAttribute("data-already-emailed");
+    expect(row.className).toContain("bg-cloud/60");
+    expect(row.className).not.toContain("crimson");
+    expect(screen.queryByText(/Already emailed/)).not.toBeInTheDocument();
   });
 
   it("falls back to the email and 'No title listed'", () => {
