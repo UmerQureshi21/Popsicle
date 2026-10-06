@@ -11,7 +11,7 @@ from .config import settings
 from .db import engine
 from .models import Base
 from .routers import auth as auth_routes
-from .routers import campaigns, misc, people, people_search, sending_limits
+from .routers import campaigns, conversations, misc, people, people_search, sending_limits
 
 logging.basicConfig(level=logging.INFO)
 
@@ -42,6 +42,7 @@ app.include_router(people.router, dependencies=protected)
 app.include_router(misc.router, dependencies=protected)
 app.include_router(people_search.router, dependencies=protected)
 app.include_router(sending_limits.router, dependencies=protected)
+app.include_router(conversations.router, dependencies=protected)
 
 
 @app.get("/api/health")

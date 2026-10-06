@@ -96,29 +96,31 @@ def gmail_status(db: Session = Depends(get_db)):
         connected=acct is not None,
         email=acct.email if acct else None,
         credentials_file_present=gmail.credentials_file_present(),
+        can_read=gmail.can(acct, gmail.READ_SCOPE),
+        can_meet=gmail.can(acct, gmail.CALENDAR_SCOPE),
     )
 
 
 @router.get("/gmail/connect", tags=["gmail"])
-def gmail_connect():
-    """Browser navigates here; we bounce it to Google's consent screen."""
+def gmail_connect(next: str = "/compose"):
+    """Browser navigates here; we bounce it to Google's consent screen, then back to `next`."""
     if not gmail.credentials_file_present():
         raise HTTPException(400, "backend/credentials.json is missing. See README for Gmail setup.")
-    return RedirectResponse(gmail.start_auth())
+    return RedirectResponse(gmail.start_auth(next))
 
 
 @router.get("/gmail/callback", tags=["gmail"])
 def gmail_callback(request: Request, state: str = "", error: str | None = None, db: Session = Depends(get_db)):
-    back = settings.frontend_url
+    back = settings.frontend_url + gmail.pop_return_path(state)
     if error:
-        return RedirectResponse(f"{back}/compose?gmail_error={error}")
+        return RedirectResponse(f"{back}?gmail_error={error}")
     try:
         gmail.finish_auth(db, state, str(request.url))
     except gmail.MissingSendPermission:
-        return RedirectResponse(f"{back}/compose?gmail_error=missing_send_permission")
+        return RedirectResponse(f"{back}?gmail_error=missing_send_permission")
     except Exception as e:
-        return RedirectResponse(f"{back}/compose?gmail_error={type(e).__name__}")
-    return RedirectResponse(f"{back}/compose?gmail=connected")
+        return RedirectResponse(f"{back}?gmail_error={type(e).__name__}")
+    return RedirectResponse(f"{back}?gmail=connected")
 
 
 @router.delete("/gmail", status_code=204, tags=["gmail"])

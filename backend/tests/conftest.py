@@ -53,6 +53,7 @@ def _clean_state():
         conn.execute(text(f"TRUNCATE {tables} RESTART IDENTITY CASCADE"))
     auth._failures.clear()
     gmail._pending_flows.clear()
+    gmail._return_to.clear()
     campaigns._running.clear()
     campaigns._cancel_requested.clear()
     campaigns._wake_requested.clear()

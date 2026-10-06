@@ -39,13 +39,20 @@ Tables are created automatically when the API starts.
 ### Connecting Gmail (once)
 
 1. Go to https://console.cloud.google.com/ and create a project.
-2. Go to **APIs & Services → Library**, then enable the **Gmail API**.
+2. Go to **APIs & Services → Library**, then enable the **Gmail API** and the **Google Calendar API** (the Inbox tab uses Calendar to make Google Meet links).
 3. Go to **OAuth consent screen**, choose **External**, and add your Gmail address under **Test users**.
 4. Go to **Credentials → Create credentials → OAuth client ID**:
    - **Type:** Web application
    - **Authorized redirect URI:** `http://localhost:8000/api/gmail/callback`
 5. Download the JSON and save it as `backend/credentials.json`.
 6. In the app, click **Connect Gmail** in the compose card.
+
+When connecting, tick every box on Google's screen:
+- **Send email on your behalf:** needed to send batches.
+- **Read your email:** lets the Inbox tab show replies. Popsicle only reads mail to and from people you've emailed.
+- **See and edit events on your calendars:** lets the Inbox tab create Google Meet links.
+
+Connected before the Inbox existed? The Inbox tab shows a **Reconnect Gmail** button. Click it once to grant the two new permissions.
 
 While the Google app is in "Testing" mode, Google expires the login after 7 days. When that happens, click Connect Gmail again.
 
@@ -140,6 +147,16 @@ The **Companies** tab is your list of companies to reach, with each one's logo (
 - **Find people at several companies:** tick companies (e.g. under **Not started**) and click **Find people at N companies**. Find people opens with them filled in, keeping your job title and location.
 - **Contacts:** click a company's name to see everyone you have there.
 
+### Inbox: replies and Google Meet
+
+The **Inbox** tab lists everyone you've emailed. Open someone to see the whole conversation with them, your emails and their replies, in order.
+
+- **Replies:** Popsicle checks Gmail for new replies when you open the tab, and when you click the refresh icon. It reads only mail to or from people you've emailed, and only downloads conversations that changed since the last check. Quoted earlier messages are hidden so each reply is easy to read.
+- **Filters:** **Replied** or **No reply yet**, plus search by name, email or company. A red dot marks people who replied.
+- **Company status:** when someone replies, their company moves to **Replied** on the Companies tab, unless you set its status yourself.
+- **Send Meet link:** pick a date, time and length (in your timezone), and edit the email if you like. `{{meet_link}}` becomes the link. Popsicle creates a Google Calendar event with a Google Meet link, then emails it as a reply in your conversation. By default they also get a Google Calendar invite; untick that to send only the email. Meetings show at the top of the conversation with the link, a copy button and a link to the calendar event.
+- **Replying in your own words:** use **Reply in Gmail** at the bottom of a conversation.
+
 ### Looking up one person
 
 The **Look up** tab finds a single person's email. Either paste their **LinkedIn profile URL** on its own (Hunter works out who they are and where they work), or enter their **full name plus their company or website domain**.
@@ -212,6 +229,7 @@ gmail_accounts (the connected sender)
 hunter_lookups (cached Hunter.io responses)
 users, auth_sessions (invite-only accounts and their login sessions)
 sending_settings (daily limit and minimum gap), email_verifications (Hunter verdicts, kept 30 days)
+conversation_messages, mail_threads (Gmail conversations with people emailed), meetings (Google Meet calls set up)
 ```
 
 - **campaigns:** one batch, e.g. "Stripe, 10 people". It keeps a copy of the exact subject and body used, so editing a template later doesn't change history.

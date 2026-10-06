@@ -21,11 +21,16 @@ os.environ.setdefault("OAUTHLIB_INSECURE_TRANSPORT", "1")
 os.environ.setdefault("OAUTHLIB_RELAX_TOKEN_SCOPE", "1")
 
 SEND_SCOPE = "https://www.googleapis.com/auth/gmail.send"
-SCOPES = ["openid", "https://www.googleapis.com/auth/userinfo.email", SEND_SCOPE]
+READ_SCOPE = "https://www.googleapis.com/auth/gmail.readonly"  # replies, for Conversations
+CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar.events"  # Google Meet invites
+BASE_SCOPES = ["openid", "https://www.googleapis.com/auth/userinfo.email"]
+SCOPES = [*BASE_SCOPES, SEND_SCOPE, READ_SCOPE, CALENDAR_SCOPE]
 REDIRECT_PATH = "/api/gmail/callback"
 
-# OAuth flows waiting for Google's redirect, keyed by state (holds the PKCE verifier).
+# OAuth flows waiting for Google's redirect, keyed by state (holds the PKCE verifier),
+# and the page to return to afterwards.
 _pending_flows: dict[str, Flow] = {}
+_return_to: dict[str, str] = {}
 
 
 class GmailNotConnected(Exception):
@@ -34,6 +39,19 @@ class GmailNotConnected(Exception):
 
 class MissingSendPermission(Exception):
     """Google's consent screen lets people untick "Send email on your behalf"."""
+
+
+class MissingPermission(Exception):
+    """An optional permission (reading mail, calendar) wasn't granted when connecting."""
+
+
+def granted_scopes(acct: GmailAccount) -> list[str]:
+    """What the account was allowed to do. Accounts connected before this was recorded could only send."""
+    return acct.scopes.split() if acct.scopes else [*BASE_SCOPES, SEND_SCOPE]
+
+
+def can(acct: GmailAccount | None, scope: str) -> bool:
+    return acct is not None and scope in granted_scopes(acct)
 
 
 def is_auth_error(e: Exception) -> bool:
@@ -47,7 +65,16 @@ def credentials_file_present() -> bool:
     return settings.google_client_secrets.is_file()
 
 
-def start_auth() -> str:
+def safe_return_path(path: str | None) -> str:
+    """Only paths inside the app, so the callback can't be used to redirect anywhere else."""
+    return path if path and path.startswith("/") and not path.startswith("//") and "\\" not in path else "/compose"
+
+
+def pop_return_path(state: str) -> str:
+    return _return_to.pop(state, "/compose")
+
+
+def start_auth(return_to: str = "/compose") -> str:
     flow = Flow.from_client_secrets_file(
         str(settings.google_client_secrets),
         scopes=SCOPES,
@@ -55,6 +82,7 @@ def start_auth() -> str:
     )
     url, state = flow.authorization_url(access_type="offline", prompt="consent")
     _pending_flows[state] = flow
+    _return_to[state] = safe_return_path(return_to)
     return url
 
 
@@ -76,7 +104,7 @@ def finish_auth(db: Session, state: str, callback_url: str) -> str:
     for acct in db.scalars(select(GmailAccount)):
         db.delete(acct)
     db.flush()
-    db.add(GmailAccount(email=email, token_json=creds.to_json()))
+    db.add(GmailAccount(email=email, token_json=creds.to_json(), scopes=" ".join(granted)))
     db.commit()
     return email
 
@@ -89,7 +117,8 @@ def load_credentials(db: Session) -> Credentials:
     acct = current_account(db)
     if acct is None:
         raise GmailNotConnected("Gmail is not connected.")
-    creds = Credentials.from_authorized_user_info(json.loads(acct.token_json), SCOPES)
+    # Only the granted scopes: refreshing with one that wasn't granted fails.
+    creds = Credentials.from_authorized_user_info(json.loads(acct.token_json), granted_scopes(acct))
     if not creds.valid:
         if not creds.refresh_token:
             raise GmailNotConnected("Gmail login expired. Reconnect Gmail.")
@@ -106,13 +135,28 @@ def gmail_service(creds: Credentials):
     return build("gmail", "v1", credentials=creds, cache_discovery=False)
 
 
-def send(service, to: str, subject: str, body: str, attachments: list[Attachment]) -> dict:
+def send(
+    service,
+    to: str,
+    subject: str,
+    body: str,
+    attachments: list[Attachment],
+    *,
+    thread_id: str | None = None,
+    in_reply_to: str | None = None,
+) -> dict:
+    """Send one email. With `thread_id` (and the Message-ID it answers) it's a reply in that
+    conversation, for both you and the recipient."""
     msg = EmailMessage()
     msg["To"] = to
     msg["Subject"] = subject
+    if in_reply_to:
+        msg["In-Reply-To"] = in_reply_to
+        msg["References"] = in_reply_to
     msg.set_content(body)
     for a in attachments:
         maintype, _, subtype = (a.content_type or "application/octet-stream").partition("/")
         msg.add_attachment(a.data, maintype=maintype, subtype=subtype or "octet-stream", filename=a.filename)
     raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()
-    return service.users().messages().send(userId="me", body={"raw": raw}).execute()
+    message = {"raw": raw, **({"threadId": thread_id} if thread_id else {})}
+    return service.users().messages().send(userId="me", body=message).execute()

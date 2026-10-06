@@ -87,6 +87,55 @@ def test_start_auth_remembers_the_flow_by_state(monkeypatch):
     assert gmail.SEND_SCOPE in seen["scopes"]
     assert seen["kw"] == {"access_type": "offline", "prompt": "consent"}
     assert isinstance(gmail._pending_flows["state-1"], Flow)
+    assert {gmail.READ_SCOPE, gmail.CALENDAR_SCOPE} <= set(seen["scopes"])
+    assert gmail.pop_return_path("state-1") == "/compose"
+
+
+def test_start_auth_remembers_where_to_return(monkeypatch):
+    class Flow:
+        @classmethod
+        def from_client_secrets_file(cls, path, scopes, redirect_uri):
+            return cls()
+
+        def authorization_url(self, **kw):
+            return "https://accounts.google.com/x", "state-2"
+
+    monkeypatch.setattr(gmail, "Flow", Flow)
+    gmail.start_auth("/conversations")
+    assert gmail.pop_return_path("state-2") == "/conversations"
+    assert gmail.pop_return_path("state-2") == "/compose"  # used once
+
+
+@pytest.mark.parametrize(
+    "path, expected",
+    [
+        ("/conversations", "/conversations"),
+        ("/conversations?contact=3", "/conversations?contact=3"),
+        ("https://evil.example", "/compose"),
+        ("//evil.example", "/compose"),
+        ("/\\evil.example", "/compose"),
+        ("", "/compose"),
+        (None, "/compose"),
+    ],
+)
+def test_safe_return_path(path, expected):
+    assert gmail.safe_return_path(path) == expected
+
+
+class TestGrantedScopes:
+    def test_older_accounts_could_only_send(self):
+        acct = GmailAccount(email="me@gmail.com", token_json="{}")
+        assert gmail.granted_scopes(acct) == [*gmail.BASE_SCOPES, gmail.SEND_SCOPE]
+        assert gmail.can(acct, gmail.SEND_SCOPE)
+        assert not gmail.can(acct, gmail.READ_SCOPE)
+
+    def test_recorded_scopes(self):
+        acct = GmailAccount(email="me@gmail.com", token_json="{}", scopes=f"openid {gmail.SEND_SCOPE} {gmail.READ_SCOPE}")
+        assert gmail.can(acct, gmail.READ_SCOPE)
+        assert not gmail.can(acct, gmail.CALENDAR_SCOPE)
+
+    def test_no_account(self):
+        assert not gmail.can(None, gmail.SEND_SCOPE)
 
 
 class TestFinishAuth:
@@ -103,7 +152,9 @@ class TestFinishAuth:
 
         assert gmail.finish_auth(db, "s", "http://cb?code=1") == "me@gmail.com"
         assert flow.fetched_with == "http://cb?code=1"
-        assert [(a.email, a.token_json) for a in db.scalars(select(GmailAccount))] == [("me@gmail.com", '{"token": "abc"}')]
+        assert [(a.email, a.token_json, a.scopes) for a in db.scalars(select(GmailAccount))] == [
+            ("me@gmail.com", '{"token": "abc"}', f"openid {gmail.SEND_SCOPE}")
+        ]
         assert "s" not in gmail._pending_flows
 
     @pytest.mark.parametrize("token", [{"scope": "openid email"}, {}])
@@ -208,3 +259,30 @@ def test_send_builds_a_mime_message_with_attachments(db):
         "data.bin": ("application/octet-stream", b"\x00\x01"),
         "notes": ("text/octet-stream", b"hi"),
     }
+
+
+def test_send_as_a_reply_in_a_thread():
+    sent = {}
+
+    class Service:
+        def users(self):
+            return self
+
+        def messages(self):
+            return self
+
+        def send(self, userId, body):
+            sent.update(body=body)
+            return self
+
+        def execute(self):
+            return {"id": "m2", "threadId": "t1"}
+
+    gmail.send(Service(), "douglas@harvey.ai", "Re: Coffee", "Here's the link", [], thread_id="t1", in_reply_to="<m1@mail.gmail.com>")
+    assert sent["body"]["threadId"] == "t1"
+    msg = email.message_from_bytes(base64.urlsafe_b64decode(sent["body"]["raw"]))
+    assert (msg["In-Reply-To"], msg["References"]) == ("<m1@mail.gmail.com>", "<m1@mail.gmail.com>")
+
+    gmail.send(Service(), "douglas@harvey.ai", "Coffee", "Hi", [])
+    assert "threadId" not in sent["body"]
+    assert email.message_from_bytes(base64.urlsafe_b64decode(sent["body"]["raw"]))["In-Reply-To"] is None
