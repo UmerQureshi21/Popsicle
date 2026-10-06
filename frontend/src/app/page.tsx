@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { Inbox, Video, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import Reveal from "@/components/landing/Reveal";
 import HowItWorks from "@/components/landing/HowItWorks";
@@ -6,7 +7,7 @@ import TemplateDemo from "@/components/landing/TemplateDemo";
 
 const Chip = ({ children }: { children: string }) => <span className="placeholder-chip">{`{{${children}}}`}</span>;
 
-const FEATURES: { image: string; title: string; text: React.ReactNode }[] = [
+const FEATURES: { image?: string; icon?: LucideIcon; title: string; text: React.ReactNode }[] = [
   {
     image: "/hunter-logo.png",
     title: "Find the right people",
@@ -30,7 +31,17 @@ const FEATURES: { image: string; title: string; text: React.ReactNode }[] = [
   {
     image: "/gmail-con.png",
     title: "Sent from your Gmail",
-    text: "Emails go out from your own account, spaced out like a person would send them.",
+    text: "Emails go out from your own account, spaced out like a person would send them, or scheduled for the morning when people read.",
+  },
+  {
+    icon: Inbox,
+    title: "Every reply in one place",
+    text: "Popsicle follows each conversation in your Gmail and shows who wrote back, so no reply gets buried.",
+  },
+  {
+    icon: Video,
+    title: "Coffee chat in one click",
+    text: "When they say yes, pick a time. Popsicle creates the Google Meet, sends the calendar invite and replies with the link.",
   },
 ];
 
@@ -149,15 +160,15 @@ export default function LandingPage() {
           </h1>
 
           <p
-            className="animate-fade-in mt-6 text-[clamp(1.5rem,3.4vw,2.5rem)] font-semibold tracking-tight text-ink"
+            className="animate-fade-in mt-6 text-[clamp(1.5rem,3.4vw,2.5rem)] font-semibold tracking-tight text-balance text-ink"
             style={{ animationDelay: "350ms" }}
           >
-            <span className="text-crimson">Streamline</span> your cold emails
+            From cold email to <span className="whitespace-nowrap text-crimson">coffee chat</span>
           </p>
 
           <p className="animate-fade-in mt-5 max-w-xl text-lg leading-relaxed text-balance text-steel" style={{ animationDelay: "500ms" }}>
-            Write one email, add the people you want to reach, and Popsicle sends each of them a personal copy from your
-            own Gmail.
+            Find the people you want to reach and send each a personal email from your own Gmail. Then follow every reply
+            and book the call with a Google Meet link in one click.
           </p>
 
           <div className="animate-fade-in mt-10 flex flex-wrap items-center justify-center gap-3" style={{ animationDelay: "650ms" }}>
@@ -177,8 +188,8 @@ export default function LandingPage() {
         <div className="mx-auto w-full max-w-6xl">
           <Reveal className="mb-14 text-center">
             <p className="text-sm font-semibold tracking-widest text-crimson uppercase">How it works</p>
-            <h2 className="mt-3 text-4xl font-bold tracking-tight text-balance text-ink sm:text-5xl">One template. Every inbox personal.</h2>
-            <p className="mx-auto mt-4 max-w-xl text-lg text-balance text-steel">From a company name to a sent email in four steps.</p>
+            <h2 className="mt-3 text-4xl font-bold tracking-tight text-balance text-ink sm:text-5xl">From first email to first call.</h2>
+            <p className="mx-auto mt-4 max-w-xl text-lg text-balance text-steel">Five steps from a company name to a coffee chat on your calendar.</p>
           </Reveal>
 
           <HowItWorks />
@@ -189,7 +200,7 @@ export default function LandingPage() {
       <section className="relative flex min-h-screen flex-col justify-center px-6 py-32">
         <div className="mx-auto w-full max-w-6xl">
           <Reveal className="mb-6 text-center">
-            <p className="text-sm font-semibold text-ink">Step 3 in action</p>
+            <p className="text-sm font-semibold text-ink">Step 2 in action</p>
             <p className="mt-1 text-sm text-steel">You write one template; each person gets their own version.</p>
           </Reveal>
           <Reveal delay={150}>
@@ -204,12 +215,17 @@ export default function LandingPage() {
       <section className="relative flex min-h-screen flex-col justify-center bg-cloud px-6 py-32">
         <div className="mx-auto w-full max-w-7xl">
           <div className="grid auto-rows-fr gap-6 sm:grid-cols-2">
-            {FEATURES.map(({ image, title, text }, n) => {
-              const dark = n === 1 || n === 2;
+            {FEATURES.map(({ image, icon: Icon, title, text }, n) => {
+              // A checkerboard: the dark cards sit diagonally from each other.
+              const dark = n % 4 === 1 || n % 4 === 2;
               return (
                 <Reveal key={title} delay={n * 120} direction={n % 2 === 0 ? "left" : "right"}>
                   <div className={`h-full min-h-[320px] rounded-[2rem] border p-10 shadow-sm transition-all duration-300 sm:p-12 hover:-translate-y-1 hover:shadow-[0_30px_60px_-30px_rgba(43,45,66,0.4)] ${dark ? "border-ink bg-ink" : "border-white bg-white"}`}>
-                    <Image src={image} alt="" width={64} height={64} className={`size-16 object-contain ${dark ? "brightness-0 invert" : ""}`} />
+                    {image ? (
+                      <Image src={image} alt="" width={64} height={64} className={`size-16 object-contain ${dark ? "brightness-0 invert" : ""}`} />
+                    ) : (
+                      Icon && <Icon className={`size-16 ${dark ? "text-white" : "text-crimson"}`} strokeWidth={1.5} />
+                    )}
                     <h3 className={`mt-7 text-2xl font-semibold tracking-tight text-balance ${dark ? "text-white" : "text-ink"}`}>{title}</h3>
                     <p className={`mt-3 text-lg leading-relaxed text-pretty ${dark ? "text-white/60" : "text-steel"}`}>{text}</p>
                   </div>
@@ -243,7 +259,7 @@ export default function LandingPage() {
               className="pointer-events-none absolute -top-16 -right-10 w-56 rotate-[200deg] opacity-90 sm:w-64"
             />
             <h2 className="relative text-3xl font-bold tracking-tight text-white sm:text-4xl">Ready to warm up your outreach?</h2>
-            <p className="relative mx-auto mt-3 max-w-md text-balance text-white/60">Your next ten emails can take the time it takes to write one.</p>
+            <p className="relative mx-auto mt-3 max-w-md text-balance text-white/60">Write one email, reach ten people, and spend your time on the conversations that follow.</p>
             <div className="relative mt-8">
               <PrimaryButton>Get started</PrimaryButton>
             </div>
