@@ -1,3 +1,4 @@
+import { StrictMode } from "react";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -124,6 +125,23 @@ describe("Conversations: checking Gmail", () => {
     fail = true;
     await user.click(button);
     expect(await screen.findByText("Already checking Gmail.")).toBeInTheDocument();
+  });
+
+  it("starting twice at once (React's development mode) checks Gmail once, without an error", async () => {
+    const sync = api("post", "/api/conversations/sync", async () => {
+      await new Promise((r) => setTimeout(r, 20));
+      return { threads_checked: 1, threads_downloaded: 1, new_messages: 3, synced_at: "2026-10-06T12:00:00Z" };
+    });
+    api("get", "/api/gmail/status", ALLOWED);
+    api("get", "/api/conversations", PEOPLE);
+    render(
+      <StrictMode>
+        <Conversations />
+      </StrictMode>,
+    );
+    expect(await screen.findByText("3 new messages from Gmail.")).toBeInTheDocument();
+    expect(sync).toHaveLength(1);
+    expect(screen.queryByText(/Already checking/)).not.toBeInTheDocument();
   });
 
   it("shows Checking… while it runs", async () => {
