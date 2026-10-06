@@ -138,6 +138,38 @@ The **Look up** tab finds a single person's email. Either paste their **LinkedIn
 
 Recent lookups stay on the page so you can come back to them.
 
+## Testing
+
+None of the tests reach Hunter or Gmail: Hunter calls and sends are faked, so no credits are spent and no email goes out. Each suite fails if coverage drops below 90%. GitHub Actions runs all of them on every push (`.github/workflows/test.yml`).
+
+**Backend** (pytest). The tests use a `cold_emailer_test` database on the 5442 cluster, which they create at the start and drop at the end, so your real data is never touched. Postgres must be running.
+
+```sh
+cd backend
+.venv/bin/pip install -r requirements-dev.txt   # once
+.venv/bin/pytest
+```
+
+To use another server, set `TEST_DATABASE_URL`. Its database name must end in `_test`.
+
+**Old CLI:** `cd cli && ../backend/.venv/bin/pytest`
+
+**Frontend** (Vitest and React Testing Library). The backend is faked at the network level.
+
+```sh
+cd frontend
+npm test                # watch mode
+npm run test:coverage   # one run, with the coverage report
+```
+
+**End-to-end** (Playwright). Real browser runs of logging in, Find people, Look up and sending. The app is built into `frontend/.next-e2e` and talks to a fake API inside the browser, so it can run while `./dev.sh` is up.
+
+```sh
+cd frontend
+npx playwright install chromium   # once
+npm run test:e2e
+```
+
 ## Data model
 
 ```
