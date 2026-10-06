@@ -80,6 +80,10 @@ describe("FindPeople", () => {
 
     const stripe = (await screen.findByText("Jane Doe")).closest("section")!;
     expect(within(stripe).getByText(/2 of 2 matching “software engineer” in Canada/)).toBeInTheDocument();
+    // Early warning: Sam was emailed before, so his row is flagged and the header says so.
+    expect(within(stripe).getByText("· 1 already emailed")).toBeInTheDocument();
+    expect(within(stripe).getByText("Sam Lee").closest("label")).toHaveAttribute("data-already-emailed", "true");
+    expect(within(stripe).getByText("Jane Doe").closest("label")).not.toHaveAttribute("data-already-emailed");
     expect(calls.map((c) => c.body)).toEqual([
       { query: "stripe.com", limit: 25, offset: 0, job_titles: "software engineer", location: [{ country: "CA" }], refresh: false },
       { query: "tiny.io", limit: 25, offset: 0, job_titles: "software engineer", location: [{ country: "CA" }], refresh: false },

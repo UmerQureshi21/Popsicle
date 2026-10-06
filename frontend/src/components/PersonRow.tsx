@@ -16,6 +16,13 @@ export function ConfidencePill({ value }: { value: number | null }) {
   );
 }
 
+/** "· 2 already emailed" in red, for a list of results; nothing when there are none. */
+export function EmailedCount({ people }: { people: FoundPerson[] }) {
+  const n = people.filter((p) => p.already_emailed_at).length;
+  if (!n) return null;
+  return <span className="font-semibold text-crimson"> · {n} already emailed</span>;
+}
+
 /**
  * One person found on Hunter, as a selectable row. People you've already emailed are flagged in
  * red (tinted background, red edge, "Already emailed" badge) as an early warning before you

@@ -2,7 +2,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { person } from "@/test/fixtures";
-import PersonRow, { ConfidencePill } from "./PersonRow";
+import PersonRow, { ConfidencePill, EmailedCount } from "./PersonRow";
 
 describe("ConfidencePill", () => {
   it.each([
@@ -16,6 +16,20 @@ describe("ConfidencePill", () => {
 
   it("shows nothing without a score", () => {
     const { container } = render(<ConfidencePill value={null} />);
+    expect(container).toBeEmptyDOMElement();
+  });
+});
+
+describe("EmailedCount", () => {
+  it("counts the people already emailed, in red", () => {
+    const people = [person(), person({ already_emailed_at: "2026-03-01T12:00:00Z" }), person({ already_emailed_at: "2026-04-01T12:00:00Z" })];
+    render(<EmailedCount people={people} />);
+    const count = screen.getByText(/2 already emailed/);
+    expect(count.className).toContain("text-crimson");
+  });
+
+  it("shows nothing when nobody has been emailed", () => {
+    const { container } = render(<EmailedCount people={[person()]} />);
     expect(container).toBeEmptyDOMElement();
   });
 });

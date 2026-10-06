@@ -48,7 +48,8 @@ describe("FindPeopleModal", () => {
     expect(calls[0].body).toEqual({
       query: "stripe.com", limit: 25, offset: 0, department: "it", seniority: "senior", job_titles: "engineer", location: null, refresh: false,
     });
-    expect(screen.getByText("showing 2 of 2")).toBeInTheDocument();
+    expect(screen.getByText(/showing 2 of 2/)).toHaveTextContent("showing 2 of 2 · 1 already emailed");
+    expect(screen.getByText("Sam Lee").closest("label")).toHaveAttribute("data-already-emailed", "true");
     expect(screen.getByText("1 selected")).toBeInTheDocument();
     const [all, jane, sam] = screen.getAllByRole("checkbox");
     expect([all, jane, sam].map((c) => (c as HTMLInputElement).checked)).toEqual([false, true, false]);

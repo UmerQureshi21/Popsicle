@@ -9,7 +9,7 @@ import { DEFAULT_LOCATION, LOCATIONS, locationById, type LocationId } from "@/li
 import { Button, Modal } from "@/components/ui";
 import CompanyAutocomplete from "@/components/CompanyAutocomplete";
 import EmptyResultHelp from "@/components/EmptyResultHelp";
-import PersonRow from "@/components/PersonRow";
+import PersonRow, { EmailedCount } from "@/components/PersonRow";
 import Select from "@/components/Select";
 
 // Hunter's department and seniority filters (https://hunter.io/api-documentation/v2#domain-search).
@@ -307,6 +307,7 @@ export default function FindPeopleModal({ initialQuery, onClose, onAdd }: Props)
                     </button>
                   )}
                   showing {people.length} of {result.total}
+                  <EmailedCount people={people} />
                 </span>
               </div>
 

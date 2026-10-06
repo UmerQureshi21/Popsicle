@@ -22,6 +22,11 @@ test("find people at a company and take them to Compose", async ({ page }) => {
   await page.getByRole("button", { name: /^Search/ }).click();
 
   await expect(page.getByText("Jane Doe")).toBeVisible();
+  // Sam was emailed before: his row carries the red early warning.
+  await expect(page.locator("label[data-already-emailed]")).toHaveCount(1);
+  await expect(page.locator("label[data-already-emailed]")).toContainText("Sam Lee");
+  await expect(page.getByText(/Already emailed · Mar 1/)).toBeVisible();
+  await expect(page.getByText("· 1 already emailed")).toBeVisible();
   expect(api.called("POST /api/people-search/company")[0].body).toMatchObject({ query: "stripe.com", job_titles: "software engineer" });
   // Sam was already emailed, so only Jane is picked.
   await page.getByRole("button", { name: /Email 1 person/ }).click();

@@ -12,6 +12,7 @@ import { saveHandoff } from "@/lib/people";
 import { Button, EmptyState } from "@/components/ui";
 import CompanyAutocomplete, { CompanyLogo } from "@/components/CompanyAutocomplete";
 import EmptyResultHelp from "@/components/EmptyResultHelp";
+import { EmailedCount } from "@/components/PersonRow";
 import PersonRow from "@/components/PersonRow";
 import Select from "@/components/Select";
 
@@ -290,6 +291,7 @@ export default function FindPeople() {
                     {r.state === "done" && (
                       <>
                         {" "}· {r.people.length} of {total} {r.filterLabel || "people"}
+                        <EmailedCount people={r.people} />
                       </>
                     )}
                   </p>
