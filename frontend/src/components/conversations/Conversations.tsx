@@ -102,6 +102,17 @@ function Thread({ detail }: { detail: ConversationDetail }) {
   );
 }
 
+// A check of Gmail already on its way. Starting another (e.g. React running effects twice in
+// development) shares it instead of being refused as "already checking".
+let inflight: Promise<ConversationSync> | null = null;
+
+function checkGmail(): Promise<ConversationSync> {
+  inflight ??= api.post<ConversationSync>("/api/conversations/sync").finally(() => {
+    inflight = null;
+  });
+  return inflight;
+}
+
 /** Everyone you've emailed, what was said since, and Google Meet invites. */
 export default function Conversations() {
   const [gmail, setGmail] = useState<GmailStatus | null>(null);
@@ -129,7 +140,7 @@ export default function Conversations() {
     setSyncing(true);
     setError(null);
     try {
-      const res = await api.post<ConversationSync>("/api/conversations/sync");
+      const res = await checkGmail();
       setSyncedAt(res.synced_at ?? new Date().toISOString());
       if (res.new_messages) setNotice(`${res.new_messages} new message${res.new_messages === 1 ? "" : "s"} from Gmail.`);
     } catch (e) {
