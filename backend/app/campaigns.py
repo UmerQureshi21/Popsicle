@@ -9,11 +9,11 @@ from datetime import datetime, timezone
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
-from . import gmail, sending
+from . import gmail, sending, verification
 from .db import SessionLocal
 from .models import Attachment, Campaign, CampaignStatus, Company, Contact, Email, EmailStatus
 from .rendering import EMAIL, enrich, render
-from .schemas import CampaignDraft, PreviewItem, PreviewOut, SendingQuota
+from .schemas import CampaignDraft, PreviewItem, PreviewOut, SendingQuota, Verification
 
 log = logging.getLogger(__name__)
 
@@ -39,6 +39,7 @@ def last_sent_by_address(db: Session, addresses: list[str]) -> dict[str, datetim
 def prepare(db: Session, draft: CampaignDraft) -> PreviewOut:
     rows = [enrich(r, draft.company) for r in draft.rows]
     sent = last_sent_by_address(db, [r.get("email", "") for r in rows])
+    verdicts = verification.fresh(db, [r.get("email", "") for r in rows])
     seen: set[str] = set()
     items: list[PreviewItem] = []
 
@@ -58,16 +59,22 @@ def prepare(db: Session, draft: CampaignDraft) -> PreviewOut:
             issues.append("no value for " + ", ".join(missing))
         seen.add(to)
 
+        v = verdicts.get(to)
         if issues:
             status = "invalid"
         elif to in sent and draft.skip_already_sent:
             status = "already_sent"
+        elif v and v.status in verification.UNDELIVERABLE:
+            status = "undeliverable"
         else:
             status = "ready"
         items.append(
             PreviewItem(
                 index=i, to_email=to, subject=subject, body=body, values=values,
                 status=status, issues=issues, last_sent_at=sent.get(to),
+                verification=Verification(email=v.email, status=v.status, score=v.score, checked_at=v.checked_at, cached=True)
+                if v
+                else None,
             )
         )
 
@@ -78,6 +85,7 @@ def prepare(db: Session, draft: CampaignDraft) -> PreviewOut:
         ready=ready,
         already_sent=sum(it.status == "already_sent" for it in items),
         invalid=sum(it.status == "invalid" for it in items),
+        undeliverable=sum(it.status == "undeliverable" for it in items),
         quota=SendingQuota(**vars(q)),
         sends_now=min(ready, q.remaining),
         sends_later=max(0, ready - q.remaining),
@@ -125,6 +133,8 @@ def create_campaign(db: Session, draft: CampaignDraft) -> Campaign:
         bad = [f"row {it.index + 1}: {'; '.join(it.issues)}" for it in preview.items if it.status == "invalid"]
         raise ValueError("Fix these rows first: " + " | ".join(bad))
     if not preview.ready:
+        if preview.undeliverable:
+            raise ValueError("No one left to email: everyone here was already emailed or has an address that doesn't exist.")
         raise ValueError("Everyone in this list has already been emailed.")
 
     company = get_or_create_company(db, draft.company)
@@ -144,7 +154,13 @@ def create_campaign(db: Session, draft: CampaignDraft) -> Campaign:
 
     for it in preview.items:
         contact = upsert_contact(db, it.values, company)
-        skipped = it.status == "already_sent"
+        skipped = it.status in ("already_sent", "undeliverable")
+        if it.status == "undeliverable":
+            why = f"Hunter says this address doesn't exist (checked {it.verification.checked_at:%b %d, %Y})"
+        elif it.last_sent_at:
+            why = f"already emailed on {it.last_sent_at:%b %d, %Y}"
+        else:
+            why = None
         campaign.emails.append(
             Email(
                 contact=contact,
@@ -153,7 +169,7 @@ def create_campaign(db: Session, draft: CampaignDraft) -> Campaign:
                 body=it.body,
                 variables={k: it.values[k] for k in draft.variables if k in it.values},
                 status=EmailStatus.SKIPPED if skipped else EmailStatus.PENDING,
-                error=f"already emailed on {it.last_sent_at:%b %d, %Y}" if skipped and it.last_sent_at else None,
+                error=why if skipped else None,
             )
         )
     db.commit()

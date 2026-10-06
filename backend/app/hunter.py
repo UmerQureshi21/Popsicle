@@ -6,6 +6,7 @@ the free plan only has 50 credits a month.
 
 import json
 import re
+import time
 from datetime import datetime, timedelta, timezone
 
 import requests
@@ -39,6 +40,11 @@ def configured() -> bool:
 
 def _request(path: str, params: dict, body: dict | None = None) -> dict:
     """GET with query params, or POST when there's a JSON body (Hunter's location filter needs one)."""
+    return _send(path, params, body).json()
+
+
+def _send(path: str, params: dict, body: dict | None = None) -> requests.Response:
+    """A successful response from Hunter, or HunterError with a readable message."""
     if not configured():
         raise HunterError(400, "Hunter isn't set up. Add HUNTER_API_KEY to backend/.env and restart the backend.")
     try:
@@ -53,7 +59,7 @@ def _request(path: str, params: dict, body: dict | None = None) -> dict:
     except requests.RequestException as e:
         raise HunterError(502, f"Couldn't reach Hunter: {e}") from e
     if r.ok:
-        return r.json()
+        return r
     try:
         details = r.json()["errors"][0]["details"]
     except Exception:
@@ -150,6 +156,23 @@ def email_count(query: str) -> dict:
     domain = clean_domain(query)
     params = {"domain" if domain else "company": domain or query.strip(), "type": "personal"}
     return _request("/email-count", params).get("data") or {}
+
+
+VERIFY_ATTEMPTS = 3
+VERIFY_RETRY_SECONDS = 2.0
+
+
+def verify_email(email: str) -> dict | None:
+    """Hunter's verdict on one address: status (valid, invalid, accept_all, webmail, disposable,
+    unknown) and score. Hunter answers 202 while a slow mail server is still being checked;
+    returns None if it's still not done after a few tries."""
+    for attempt in range(VERIFY_ATTEMPTS):
+        r = _send("/email-verifier", {"email": email})
+        if r.status_code != 202:
+            return r.json().get("data") or {}
+        if attempt < VERIFY_ATTEMPTS - 1:
+            time.sleep(VERIFY_RETRY_SECONDS)
+    return None
 
 
 def account() -> dict:

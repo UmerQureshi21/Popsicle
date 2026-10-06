@@ -217,6 +217,17 @@ class SendingSettings(Base):
     )
 
 
+class EmailVerification(Base):
+    """Hunter's latest verdict on whether an address exists, reused for 30 days."""
+
+    __tablename__ = "email_verifications"
+
+    email: Mapped[str] = mapped_column(String(320), primary_key=True)  # lowercase
+    status: Mapped[str] = mapped_column(String(30))  # valid | invalid | accept_all | webmail | disposable | unknown
+    score: Mapped[int | None] = mapped_column(Integer)
+    checked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
 class GmailAccount(Base):
     __tablename__ = "gmail_accounts"
 

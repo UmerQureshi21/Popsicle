@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from .. import hunter
+from .. import hunter, verification
 from ..campaigns import last_sent_by_address
 from ..db import get_db
 from ..models import Company
@@ -17,6 +17,9 @@ from ..schemas import (
     PeopleCount,
     PeopleSearchIn,
     PeopleSearchOut,
+    Verification,
+    VerifyIn,
+    VerifyOut,
 )
 
 router = APIRouter(prefix="/api/people-search", tags=["people search"])
@@ -69,7 +72,9 @@ def status():
         return HunterStatus(configured=True, error=str(e))
     # Hunter reports credits as {"used": 3.0, "available": 50.0, "remaining": 47.0}, where
     # "available" is the monthly allowance, not what's left.
-    credits = (account.get("requests") or {}).get("credits") or {}
+    usage = account.get("requests") or {}
+    credits = usage.get("credits") or {}
+    checks = usage.get("verifications") or {}
     used, total = credits.get("used"), credits.get("available")
     remaining = credits.get("remaining")
     if remaining is None and used is not None and total is not None:
@@ -80,6 +85,8 @@ def status():
         credits_used=_int(used),
         credits_total=_int(total),
         credits_remaining=_int(remaining),
+        verifications_total=_int(checks.get("available")),
+        verifications_remaining=_int(checks.get("remaining")),
         reset_date=account.get("reset_date"),
     )
 
@@ -166,4 +173,19 @@ def find_person(body: EmailFinderIn, db: Session = Depends(get_db)):
         domain=data.get("domain") or (hunter.clean_domain(body.company) if body.company else None),
         company=data.get("company"),
         cached=cached,
+    )
+
+
+@router.post("/verify", response_model=VerifyOut)
+def verify_emails(body: VerifyIn, db: Session = Depends(get_db)):
+    """Check whether addresses exist (Hunter's Email Verifier). Saved verdicts under 30 days old are
+    reused for free unless refresh is set."""
+    results = _call(verification.verify, db, body.emails, body.refresh)
+    return VerifyOut(
+        results=[
+            Verification(email=a, status=v.status, score=v.score, checked_at=v.checked_at, cached=cached)
+            if v
+            else Verification(email=a, status="pending")
+            for a, v, cached in results
+        ]
     )

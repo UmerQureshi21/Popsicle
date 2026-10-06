@@ -205,3 +205,44 @@ def test_clean_domain(query, domain):
 )
 def test_linkedin_handle(value, handle):
     assert hunter.linkedin_handle(value) == handle
+
+
+class TestVerifyEmail:
+    URL = hunter.BASE_URL + "/email-verifier"
+
+    @responses.activate
+    def test_returns_hunters_verdict(self):
+        responses.get(self.URL, json={"data": {"status": "valid", "score": 97}})
+        assert hunter.verify_email("jane@stripe.com") == {"status": "valid", "score": 97}
+        assert responses.calls[0].request.url.endswith("email=jane%40stripe.com")
+
+    @responses.activate
+    def test_retries_while_hunter_is_still_checking(self, monkeypatch):
+        sleeps = []
+        monkeypatch.setattr(hunter.time, "sleep", sleeps.append)
+        responses.get(self.URL, status=202, json={})
+        responses.get(self.URL, json={"data": {"status": "accept_all", "score": 70}})
+        assert hunter.verify_email("a@x.com") == {"status": "accept_all", "score": 70}
+        assert sleeps == [hunter.VERIFY_RETRY_SECONDS]
+
+    @responses.activate
+    def test_gives_up_after_a_few_tries(self, monkeypatch):
+        sleeps = []
+        monkeypatch.setattr(hunter.time, "sleep", sleeps.append)
+        for _ in range(hunter.VERIFY_ATTEMPTS):
+            responses.get(self.URL, status=202, json={})
+        assert hunter.verify_email("slow@x.com") is None
+        assert len(responses.calls) == hunter.VERIFY_ATTEMPTS
+        assert len(sleeps) == hunter.VERIFY_ATTEMPTS - 1  # no pointless sleep after the last try
+
+    @responses.activate
+    def test_empty_answer(self):
+        responses.get(self.URL, json={})
+        assert hunter.verify_email("a@x.com") == {}
+
+    @responses.activate
+    def test_out_of_verifications(self):
+        responses.get(self.URL, status=429, json={"errors": [{"details": "quota"}]})
+        with pytest.raises(hunter.HunterError) as e:
+            hunter.verify_email("a@x.com")
+        assert e.value.status == 429

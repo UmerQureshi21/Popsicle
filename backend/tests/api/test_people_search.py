@@ -42,12 +42,16 @@ class TestStatus:
             "data": {
                 "plan_name": "Free",
                 "reset_date": "2026-11-02",
-                "requests": {"credits": {"used": 3.0, "available": 50.0, "remaining": 47.0}},
+                "requests": {
+                    "credits": {"used": 3.0, "available": 50.0, "remaining": 47.0},
+                    "verifications": {"used": 6, "available": 100, "remaining": 94},
+                },
             }
         }
         assert client.get("/api/people-search/status").json() == {
             "configured": True, "plan_name": "Free", "credits_used": 3, "credits_total": 50,
-            "credits_remaining": 47, "reset_date": "2026-11-02", "error": None,
+            "credits_remaining": 47, "verifications_total": 100, "verifications_remaining": 94,
+            "reset_date": "2026-11-02", "error": None,
         }
 
     def test_remaining_is_worked_out_when_missing(self, client, hunter_api):

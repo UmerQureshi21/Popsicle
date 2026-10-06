@@ -32,15 +32,34 @@ class CampaignDraft(BaseModel):
         return v
 
 
+class Verification(BaseModel):
+    email: str
+    status: str  # valid | invalid | accept_all | webmail | disposable | unknown | pending
+    score: int | None = None
+    checked_at: datetime | None = None
+    cached: bool = False  # came from a saved result, so no Hunter verification was used
+
+
+class VerifyIn(BaseModel):
+    emails: list[str] = Field(min_length=1, max_length=100)
+    refresh: bool = False
+
+
+class VerifyOut(BaseModel):
+    results: list[Verification]
+
+
 class PreviewItem(BaseModel):
     index: int
     to_email: str
     subject: str
     body: str
     values: dict[str, str]
-    status: Literal["ready", "already_sent", "invalid"]
+    # undeliverable: Hunter says the address doesn't exist, so it's skipped like already_sent
+    status: Literal["ready", "already_sent", "invalid", "undeliverable"]
     issues: list[str]
     last_sent_at: datetime | None = None
+    verification: Verification | None = None  # saved Hunter verdict from the last 30 days
 
 
 class SendingQuota(BaseModel):
@@ -61,6 +80,7 @@ class PreviewOut(BaseModel):
     ready: int
     already_sent: int
     invalid: int
+    undeliverable: int
     quota: SendingQuota
     sends_now: int  # how many of the ready emails fit under today's limit
     sends_later: int  # the rest wait until the limit resets
@@ -220,6 +240,8 @@ class HunterStatus(BaseModel):
     credits_used: int | None = None
     credits_total: int | None = None  # the monthly allowance
     credits_remaining: int | None = None
+    verifications_total: int | None = None  # monthly email verifications, counted separately
+    verifications_remaining: int | None = None
     reset_date: str | None = None  # when the allowance resets, e.g. "2026-11-02"
     error: str | None = None
 
