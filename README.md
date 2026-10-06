@@ -127,6 +127,17 @@ Results are saved for 30 days, so repeating a search costs nothing. Use **refres
 
 If a company search finds no one, Popsicle checks (for free) how many people Hunter has there in total and tells you whether the filters are the reason. It then offers one-click **Search anywhere** or **Remove the job title** retries.
 
+### Looking up one person
+
+The **Look up** tab finds a single person's email. Enter their full name (or LinkedIn profile URL) and their company or website domain.
+
+- **Works beyond Hunter's lists:** it works out the company's email pattern, so it finds people at companies Hunter has no people for. A website domain like `tiny-startup.io` is the most reliable input.
+- **Results:** the email, Hunter's confidence, whether it's verified, and their title if known.
+- **What you can do with a result:** **Copy** it, **Email them** (Compose opens with just them), or **Add to batch** (they join the recipients you're already writing to).
+- **Cost:** 1 credit if an email is found. It's free if not, or if you've looked them up before.
+
+Recent lookups stay on the page so you can come back to them.
+
 ## Data model
 
 ```
