@@ -98,8 +98,8 @@ export default function LandingPage() {
             <span className="text-crimson">Pop</span> into their inbox
           </h1>
           <p className="animate-fade-in mt-7 max-w-xl text-lg leading-relaxed text-pretty text-ink/70" style={{ animationDelay: "500ms" }}>
-            Find the people you want to reach and send each a personal email from your own Gmail. Then follow every reply and book
-            the call with a Google Meet link in one click.
+            Find the emails of people you want to connect with, send them in one batch, track who replied, and book the coffee
+            chat, all in one place.
           </p>
           <div className="animate-fade-in mt-10" style={{ animationDelay: "650ms" }}>
             <PrimaryButton>Get started</PrimaryButton>
