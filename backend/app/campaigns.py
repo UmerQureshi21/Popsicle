@@ -211,6 +211,8 @@ WORKER_ID = f"{socket.gethostname()}-{os.getpid()}-{uuid.uuid4().hex[:6]}"[:64]
 LEASE = timedelta(seconds=60)
 RENEW_EVERY = 15.0  # seconds, well inside LEASE
 SWEEP_EVERY = 30.0  # seconds between checks for batches whose process died
+OFFLINE_RETRY = 60.0  # seconds between tries while Google can't be reached
+OFFLINE = "Can't reach Gmail right now (is the internet down?). It carries on by itself when the connection is back."
 ACTIVE = (CampaignStatus.QUEUED, CampaignStatus.SENDING, CampaignStatus.WAITING, CampaignStatus.SCHEDULED)
 INTERRUPTED_MID_SEND = (
     "Sending stopped while this email was being handed to Gmail, so it may have gone out. "
@@ -354,6 +356,44 @@ def _reserve_slot(db: Session, campaign: Campaign, email: Email) -> bool:
     return True
 
 
+def _wait_offline(db: Session, campaign: Campaign) -> bool:
+    """Google can't be reached: show the batch as waiting and try again in a minute, instead of
+    failing every email or asking for a reconnect that can't help. Returns False if it was
+    cancelled or stopped meanwhile."""
+    if campaign.error != OFFLINE:
+        campaign.status = CampaignStatus.WAITING
+        campaign.error = OFFLINE
+        db.commit()
+    return _wait(campaign.id, OFFLINE_RETRY)
+
+
+def _back_online(db: Session, campaign: Campaign) -> None:
+    if campaign.error == OFFLINE:
+        campaign.status = CampaignStatus.SENDING
+        campaign.error = None
+        db.commit()
+
+
+def _send_when_online(db: Session, campaign: Campaign, email: Email, service, attachments) -> dict | None:
+    """Hands the email to Gmail. If Google can't be reached, the email never left, so it gives
+    back its slot in the daily limit and is tried again every minute until the connection is
+    back. Returns None if the batch was cancelled or stopped meanwhile."""
+    while True:
+        try:
+            res = gmail.send(service, email.to_email, email.subject, email.body, attachments)
+        except Exception as e:
+            if not gmail.is_network_error(e):
+                raise
+            log.warning("can't reach gmail, campaign %s waits: %s", campaign.id, e)
+            email.attempted_at = None
+            db.commit()
+            if not _wait_offline(db, campaign) or not _renew(campaign.id) or not _reserve_slot(db, campaign, email):
+                return None
+            continue
+        _back_online(db, campaign)
+        return res
+
+
 def _run(campaign_id: int) -> None:
     try:
         if not _claim(campaign_id):
@@ -375,13 +415,19 @@ def _run(campaign_id: int) -> None:
             campaign.error = None
             db.commit()
 
-            try:
-                service = gmail.gmail_service(gmail.load_credentials(db))
-            except gmail.GmailNotConnected as e:
-                campaign.status = CampaignStatus.INTERRUPTED
-                campaign.error = str(e)
-                db.commit()
-                return
+            while True:
+                try:
+                    service = gmail.gmail_service(gmail.load_credentials(db))
+                    break
+                except gmail.GmailNotConnected as e:
+                    campaign.status = CampaignStatus.INTERRUPTED
+                    campaign.error = str(e)
+                    db.commit()
+                    return
+                except gmail.GmailUnreachable:
+                    if not _wait_offline(db, campaign):
+                        return
+            _back_online(db, campaign)
 
             attachments = list(campaign.attachments)
             pending = [e.id for e in campaign.emails if e.status == EmailStatus.PENDING]
@@ -398,7 +444,9 @@ def _run(campaign_id: int) -> None:
                 if not _reserve_slot(db, campaign, email):
                     break
                 try:
-                    res = gmail.send(service, email.to_email, email.subject, email.body, attachments)
+                    res = _send_when_online(db, campaign, email, service, attachments)
+                    if res is None:
+                        break  # cancelled or stopped while waiting for the connection
                     email.status = EmailStatus.SENT
                     email.sent_at = now()
                     email.gmail_message_id = res.get("id")
@@ -412,8 +460,9 @@ def _run(campaign_id: int) -> None:
                         log.warning("gmail auth error, pausing campaign %s: %s", campaign_id, e)
                         campaign.status = CampaignStatus.INTERRUPTED
                         campaign.error = (
-                            "Gmail didn't allow sending. Reconnect Gmail and tick "
-                            "“Send email on your behalf”, then resume."
+                            "Gmail login expired. Reconnect Gmail, then resume."
+                            if isinstance(e, gmail.RefreshError)
+                            else "Gmail didn't allow sending. Reconnect Gmail and tick “Send email on your behalf”, then resume."
                         )
                         db.commit()
                         return

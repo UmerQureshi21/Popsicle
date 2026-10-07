@@ -3,11 +3,13 @@
 import base64
 import email
 import json
+import socket
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
 import httplib2
 import pytest
+from google.auth.exceptions import RefreshError, TransportError
 from googleapiclient.errors import HttpError
 from sqlalchemy import select
 
@@ -44,10 +46,31 @@ class TestIsAuthError:
             (http_error(403, "Rate limit exceeded"), False),
             (http_error(400, "Invalid to header"), False),
             (RuntimeError("401"), False),
+            (RefreshError("invalid_grant: Token has been expired or revoked."), True),
         ],
     )
     def test_matrix(self, error, expected):
         assert gmail.is_auth_error(error) is expected
+
+
+class TestIsNetworkError:
+    """Only errors where the request certainly never reached Google count: those are safe to retry."""
+
+    @pytest.mark.parametrize(
+        "error, expected",
+        [
+            (gmail.GmailUnreachable(gmail.UNREACHABLE), True),
+            (TransportError("Failed to resolve 'oauth2.googleapis.com'"), True),
+            (httplib2.ServerNotFoundError("Unable to find the server at gmail.googleapis.com"), True),
+            (socket.gaierror(8, "nodename nor servname provided, or not known"), True),
+            (ConnectionRefusedError(), True),
+            (TimeoutError(), False),  # may have been sent
+            (http_error(500, "Backend Error"), False),
+            (RuntimeError("boom"), False),
+        ],
+    )
+    def test_matrix(self, error, expected):
+        assert gmail.is_network_error(error) is expected
 
 
 def test_credentials_file_present(settings, tmp_path):
@@ -261,11 +284,28 @@ class TestLoadCredentials:
         with pytest.raises(gmail.GmailNotConnected, match="expired"):
             gmail.load_credentials(db)
 
-    def test_refresh_fails(self, db, monkeypatch):
+    def test_refresh_refused_means_expired(self, db, monkeypatch):
         db.add(GmailAccount(email="me@gmail.com", token_json="{}"))
         db.commit()
-        self.use(monkeypatch, FakeCredentials(valid=False, refresh_error=RuntimeError("revoked")))
-        with pytest.raises(gmail.GmailNotConnected, match=r"expired \(revoked\)"):
+        self.use(monkeypatch, FakeCredentials(valid=False, refresh_error=RefreshError("invalid_grant")))
+        with pytest.raises(gmail.GmailNotConnected, match=r"^Gmail login expired. Reconnect Gmail.$"):
+            gmail.load_credentials(db)
+
+    def test_no_internet_is_not_an_expired_login(self, db, monkeypatch):
+        """The error that used to say "Gmail login expired (... NameResolutionError ...)"."""
+        db.add(GmailAccount(email="me@gmail.com", token_json='{"token": "old"}'))
+        db.commit()
+        offline = TransportError("HTTPSConnectionPool(host='oauth2.googleapis.com', port=443): Failed to resolve")
+        self.use(monkeypatch, FakeCredentials(valid=False, refresh_error=offline))
+        with pytest.raises(gmail.GmailUnreachable, match="internet connection"):
+            gmail.load_credentials(db)
+        assert gmail.current_account(db).token_json == '{"token": "old"}'  # the login is kept as it was
+
+    def test_other_refresh_errors_are_not_hidden(self, db, monkeypatch):
+        db.add(GmailAccount(email="me@gmail.com", token_json="{}"))
+        db.commit()
+        self.use(monkeypatch, FakeCredentials(valid=False, refresh_error=RuntimeError("boom")))
+        with pytest.raises(RuntimeError, match="boom"):
             gmail.load_credentials(db)
 
 

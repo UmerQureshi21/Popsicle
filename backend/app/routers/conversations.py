@@ -135,9 +135,12 @@ def _run_sync(account_id: int) -> None:
             error = str(e)
         except HttpError as e:
             error = NEEDS_READ if gmail.is_auth_error(e) else f"Gmail error: {e.reason}"
-        except Exception:
-            log.exception("gmail sync failed")
-            error = "Checking Gmail failed unexpectedly. Try again."
+        except Exception as e:
+            if gmail.is_network_error(e):
+                error = gmail.UNREACHABLE  # GmailUnreachable too: no internet isn't a bad login
+            else:
+                log.exception("gmail sync failed")
+                error = "Checking Gmail failed unexpectedly. Try again."
         db.rollback()
         svc.finish_sync(db, acct, result, error)
 

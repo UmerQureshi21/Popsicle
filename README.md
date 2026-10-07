@@ -56,6 +56,8 @@ Connected before the Inbox existed? The Inbox tab shows a **Reconnect Gmail** bu
 
 While the Google app is in "Testing" mode, Google expires the login after 7 days. When that happens, click Connect Gmail again.
 
+"Couldn't reach Google" (or a batch saying "Can't reach Gmail right now") means your internet dropped, not that the login expired, so there's no need to reconnect. A batch waits and carries on by itself once the connection is back, and never sends an email twice. For the Inbox or a Meet link, just try again.
+
 ### Connecting Hunter.io (once, for Find people)
 
 1. Copy your API key from https://hunter.io/api-keys.

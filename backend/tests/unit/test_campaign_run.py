@@ -4,7 +4,9 @@ gmail.gmail_service and gmail.send swapped out, so no real email is ever sent.""
 import threading
 from datetime import timedelta
 
+import httplib2
 import pytest
+from google.auth.exceptions import RefreshError
 from sqlalchemy import update
 
 from app import campaigns, gmail
@@ -98,6 +100,126 @@ def test_gmail_auth_error_pauses_the_campaign(db, outbox):
     assert campaign.status == CampaignStatus.INTERRUPTED
     assert "Reconnect Gmail" in campaign.error
     assert [e.status for e in emails] == [P, P]
+
+
+def test_login_expiring_mid_batch_pauses_it(db, outbox):
+    c = f.campaign(db, [("a@x.com", P)])
+
+    def on_send(to):
+        raise RefreshError("invalid_grant: Token has been expired or revoked.")
+
+    outbox.on_send = on_send
+    campaigns._run(c.id)
+
+    campaign, (e,) = reload(c.id)
+    assert (campaign.status, campaign.error) == (CampaignStatus.INTERRUPTED, "Gmail login expired. Reconnect Gmail, then resume.")
+    assert e.status == P
+
+
+class TestOffline:
+    """No internet: the batch waits and tries again by itself, and never fails or doubles an email."""
+
+    def test_offline_at_the_start_waits_then_sends(self, db, outbox, monkeypatch):
+        tries = []
+
+        def load_credentials(db):
+            tries.append(1)
+            if len(tries) == 1:
+                raise gmail.GmailUnreachable(gmail.UNREACHABLE)
+            return "creds"
+
+        seen = []
+
+        def wait(cid, seconds):
+            seen.append((seconds, reload(cid)[0].status, reload(cid)[0].error))
+            return True
+
+        monkeypatch.setattr(gmail, "load_credentials", load_credentials)
+        monkeypatch.setattr(campaigns, "_wait", wait)
+        c = f.campaign(db, [("a@x.com", P)])
+
+        campaigns._run(c.id)
+
+        assert seen[0] == (campaigns.OFFLINE_RETRY, CampaignStatus.WAITING, campaigns.OFFLINE)
+        campaign, (e,) = reload(c.id)
+        assert (campaign.status, campaign.error) == (CampaignStatus.COMPLETED, None)
+        assert e.status == EmailStatus.SENT
+
+    def test_offline_mid_batch_retries_the_same_email(self, db, outbox, monkeypatch):
+        c = f.campaign(db, [("a@x.com", P), ("b@x.com", P), ("c@x.com", P)])
+        fails = {"b@x.com": 2}
+
+        def on_send(to):
+            if fails.get(to):
+                fails[to] -= 1
+                raise httplib2.ServerNotFoundError("Unable to find the server at gmail.googleapis.com")
+
+        seen = []
+
+        def wait(cid, seconds):
+            campaign, emails = reload(cid)
+            seen.append((campaign.status, campaign.error, emails[1].attempted_at))
+            return True
+
+        outbox.on_send = on_send
+        monkeypatch.setattr(campaigns, "_wait", wait)
+
+        campaigns._run(c.id)
+
+        # Each wait while offline: shown as waiting, and b's slot in the daily limit given back.
+        offline = [w for w in seen if w[1] == campaigns.OFFLINE]
+        assert offline == [(CampaignStatus.WAITING, campaigns.OFFLINE, None)] * 2
+        assert [m[0] for m in outbox] == ["a@x.com", "b@x.com", "c@x.com"]  # each once
+        campaign, emails = reload(c.id)
+        assert (campaign.status, campaign.error) == (CampaignStatus.COMPLETED, None)
+        assert [e.status for e in emails] == [EmailStatus.SENT] * 3
+
+    def test_cancelled_while_offline(self, db, outbox, monkeypatch):
+        c = f.campaign(db, [("a@x.com", P), ("b@x.com", P)])
+
+        def on_send(to):
+            raise ConnectionRefusedError()
+
+        def cancel_while_waiting(cid, seconds):
+            with SessionLocal() as s:
+                campaigns.request_cancel(s, s.get(Campaign, cid))
+            return False
+
+        outbox.on_send = on_send
+        monkeypatch.setattr(campaigns, "_wait", cancel_while_waiting)
+        campaigns._run(c.id)
+
+        assert outbox == []
+        campaign, emails = reload(c.id)
+        assert campaign.status == CampaignStatus.CANCELLED
+        assert [e.status for e in emails] == [EmailStatus.CANCELLED] * 2
+
+    def test_cancelled_while_offline_at_the_start(self, db, outbox, monkeypatch):
+        def offline(db):
+            raise gmail.GmailUnreachable(gmail.UNREACHABLE)
+
+        monkeypatch.setattr(gmail, "load_credentials", offline)
+        monkeypatch.setattr(campaigns, "_wait", lambda cid, seconds: False)
+        c = f.campaign(db)
+        campaigns._run(c.id)
+
+        campaign, (e,) = reload(c.id)
+        assert campaign.status == CampaignStatus.WAITING  # stopped elsewhere; the sweeper deals with it
+        assert e.status == P
+
+    def test_a_timeout_may_have_sent_so_it_is_not_retried(self, db, outbox):
+        c = f.campaign(db, [("a@x.com", P), ("b@x.com", P)])
+
+        def on_send(to):
+            if to == "a@x.com":
+                raise TimeoutError("timed out")
+
+        outbox.on_send = on_send
+        campaigns._run(c.id)
+
+        a, b = reload(c.id)[1]
+        assert (a.status, a.error) == (EmailStatus.FAILED, "timed out")
+        assert b.status == EmailStatus.SENT
 
 
 def test_gmail_not_connected(db, monkeypatch):
