@@ -38,6 +38,27 @@ class TestMessageText:
         payload = {"mimeType": "text/html", "body": {"data": b64(markup)}}
         assert conv.message_text(payload) == "Sounds good & see you\nTuesday\nDouglas"
 
+    def test_self_closing_breaks_and_hidden_blocks(self):
+        markup = "Hi<br/>there<style>p{color:red}</style><script>alert('x')</script></h2><p>Next</p>"
+        assert conv._html_to_text(markup) == "Hi\nthere\nNext"
+
+    @pytest.mark.parametrize(
+        "hostile",
+        ["<script" * 20_000, "<" * 2_000_000, "<br>" * 100_000, "<a " * 100_000],
+    )
+    def test_hostile_html_from_a_stranger_is_quick(self, hostile):
+        """These took 7-13+ seconds (growing with size) with the old regexes."""
+        import time
+
+        start = time.perf_counter()
+        conv._html_to_text(hostile)
+        assert time.perf_counter() - start < 1.0
+
+    def test_huge_bodies_are_cut_short(self):
+        assert len(conv._html_to_text("x" * (conv.MAX_BODY_CHARS * 3))) == conv.MAX_BODY_CHARS
+        payload = {"mimeType": "text/plain", "body": {"data": b64("y" * (conv.MAX_BODY_CHARS + 10))}}
+        assert len(conv.message_text(payload)) == conv.MAX_BODY_CHARS
+
     def test_no_body(self):
         assert conv.message_text({"mimeType": "multipart/mixed", "parts": []}) == ""
 

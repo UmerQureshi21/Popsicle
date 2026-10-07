@@ -8,6 +8,7 @@ downloads only threads that changed since the last sync.
 import base64
 import html
 import re
+from html.parser import HTMLParser
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
 from email.utils import getaddresses, parseaddr
@@ -85,10 +86,45 @@ def _decode(data: str) -> str:
     return base64.urlsafe_b64decode(data + "=" * (-len(data) % 4)).decode("utf-8", errors="replace")
 
 
+# Replies come from strangers, so their size is capped before any processing.
+MAX_BODY_CHARS = 200_000
+_BLOCKS = {"p", "div", "li", "tr", "h1", "h2", "h3", "h4", "h5", "h6"}
+
+
+class _TextOnly(HTMLParser):
+    """HTML to plain text in one pass (regexes over hostile HTML can take minutes)."""
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.parts: list[str] = []
+        self.hidden = 0  # inside <script> or <style>
+
+    def handle_starttag(self, tag, attrs):
+        if tag in ("script", "style"):
+            self.hidden += 1
+        elif tag == "br":
+            self.parts.append("\n")
+
+    def handle_startendtag(self, tag, attrs):
+        if tag == "br":
+            self.parts.append("\n")
+
+    def handle_endtag(self, tag):
+        if tag in ("script", "style"):
+            self.hidden = max(0, self.hidden - 1)
+        elif tag in _BLOCKS:
+            self.parts.append("\n")
+
+    def handle_data(self, data):
+        if not self.hidden:
+            self.parts.append(data)
+
+
 def _html_to_text(markup: str) -> str:
-    markup = re.sub(r"(?is)<(script|style).*?</\1>", "", markup)
-    markup = re.sub(r"(?i)<br\s*/?>|</(p|div|li|tr|h\d)>", "\n", markup)
-    text = html.unescape(re.sub(r"<[^>]+>", "", markup))
+    parser = _TextOnly()
+    parser.feed(markup[:MAX_BODY_CHARS])
+    parser.close()
+    text = "".join(parser.parts)
     return re.sub(r"\n{3,}", "\n\n", text).strip()
 
 
@@ -106,7 +142,7 @@ def message_text(payload: dict) -> str:
     """The plain-text body of a Gmail message, or its HTML body turned into text."""
     plain = _find_part(payload, "text/plain")
     if plain is not None:
-        return plain.replace("\r\n", "\n").strip()
+        return plain[:MAX_BODY_CHARS].replace("\r\n", "\n").strip()
     markup = _find_part(payload, "text/html")
     return _html_to_text(markup) if markup is not None else ""
 

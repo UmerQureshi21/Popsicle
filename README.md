@@ -203,6 +203,8 @@ Popsicle shows data it doesn't control: replies from strangers, Hunter's people 
 - **Gmail searches can't be changed by data.** Only well-formed addresses go into the Inbox's Gmail search, each in quotes.
 - **Other websites can't act for you.** The login cookie isn't sent to other sites, and changes coming from another website (by the browser's `Origin`) are refused.
 - **Pages can't be framed** by other sites, and links out don't reveal which page you were on.
+- **Hostile emails can't stall the app.** Reply bodies are capped in size and their HTML is turned into text by a single-pass parser, so a crafted email can't make processing take minutes (a "ReDoS").
+- **No SQL, command or template injection.** Database queries always use parameters; Popsicle never runs shell commands, never `eval`s or unpickles data, and fills `{{placeholders}}` in one pass (a value containing `{{email}}` isn't filled in again). The only outside service the backend calls is Hunter, at a fixed address, so it can't be made to fetch arbitrary URLs.
 - **Prompt injection:** Popsicle has no AI features, so nothing it reads (replies, profiles, Hunter data) is ever given to a model as instructions. If an AI feature is added later, treat those as untrusted data.
 
 ## Testing
