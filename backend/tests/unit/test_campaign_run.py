@@ -627,3 +627,67 @@ class TestSweep:
         t = campaigns.start_sweeper(stop, every=0)
         t.join(timeout=5)
         assert len(calls) == 2 and t.daemon and t.name == "campaign-sweeper"
+
+
+class TestDailyLimitAcrossBatches:
+    def test_two_batches_sending_at_once_never_go_over_the_limit(self, db, outbox, monkeypatch):
+        """Reproduces the race: both batches check the limit at the same moment."""
+        _limit(db, 1, min_delay_seconds=0)
+        a = f.campaign(db, [("a@x.com", P)])
+        b = f.campaign(db, [("b@x.com", P)])
+        both_checking = threading.Barrier(2)
+        real_quota = campaigns.sending.quota
+
+        def quota_side_by_side(d):
+            q = real_quota(d)
+            try:
+                both_checking.wait(timeout=1)  # make the two checks overlap
+            except threading.BrokenBarrierError:
+                pass
+            return q
+
+        waited = []
+
+        def wait_then_cancel(cid, seconds):
+            # The batch over the limit waits for room; record that, then stop it like a Cancel would.
+            with SessionLocal() as other:
+                camp = other.get(Campaign, cid)
+                waited.append(camp.status)
+                campaigns.request_cancel(other, camp)
+            return False
+
+        monkeypatch.setattr(campaigns.sending, "quota", quota_side_by_side)
+        monkeypatch.setattr(campaigns, "_wait", wait_then_cancel)
+        threads = [threading.Thread(target=campaigns._run, args=(c.id,)) for c in (a, b)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(timeout=10)
+
+        assert len(outbox) == 1  # was 2 before the fix
+        assert waited == [CampaignStatus.WAITING]
+        statuses = sorted(reload(c.id)[0].status for c in (a, b))
+        assert statuses == sorted([CampaignStatus.COMPLETED, CampaignStatus.CANCELLED])
+
+    def test_an_email_being_sent_counts_toward_the_limit(self, db):
+        from app import sending
+
+        _limit(db, 1)
+        c = f.campaign(db, [("a@x.com", P), ("b@x.com", P)])
+        first, second = reload(c.id)[1]
+        assert sending.reserve(db, db.get(Email, first.id)) is None  # in flight, not yet confirmed
+        assert sending.quota(db).remaining == 0
+        assert sending.reserve(db, db.get(Email, second.id)) is not None
+        assert db.get(Email, second.id).attempted_at is None  # not marked when refused
+
+    def test_meet_link_emails_count_toward_the_limit(self, db):
+        from app import sending
+        from app.models import Meeting
+
+        _limit(db, 2)
+        contact = f.contact(db)
+        db.add(Meeting(contact_id=contact.id, title="Coffee", starts_at=campaigns.now(), ends_at=campaigns.now(),
+                       time_zone="UTC", meet_url="https://meet.google.com/x", calendar_event_id="e", calendar_invite=False))
+        db.commit()
+        q = sending.quota(db)
+        assert (q.sent_last_24h, q.remaining) == (1, 1)
