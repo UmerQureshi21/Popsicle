@@ -256,7 +256,8 @@ describe("Compose", () => {
       expect(await screen.findByText("2 attachments")).toBeInTheDocument();
       expect(screen.getByText("resume.pdf")).toBeInTheDocument();
       expect(screen.getByText("4 kB")).toBeInTheDocument();
-      expect(savedDraft().attachments).toHaveLength(2);
+      // The draft is saved by an effect after the list renders, so wait for it.
+      await waitFor(() => expect(savedDraft().attachments).toHaveLength(2));
 
       await user.click(screen.getByRole("button", { name: "Remove resume.pdf" }));
       expect(screen.getByText("1 attachment")).toBeInTheDocument();
