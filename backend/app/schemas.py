@@ -42,7 +42,8 @@ class Verification(BaseModel):
 
 
 class VerifyIn(BaseModel):
-    emails: list[str] = Field(min_length=1, max_length=100)
+    # A few at a time, so each request finishes well within the hosting proxy's time limit.
+    emails: list[str] = Field(min_length=1, max_length=10)
     refresh: bool = False
 
 
@@ -167,7 +168,7 @@ class CompanyPatch(BaseModel):
 class CompaniesBulkIn(BaseModel):
     """Company names or domains, one per entry, e.g. pasted from a list."""
 
-    lines: list[str] = Field(max_length=100)
+    lines: list[str] = Field(max_length=25)  # the page sends a long list in pieces
 
 
 class CompaniesBulkOut(BaseModel):
@@ -176,8 +177,9 @@ class CompaniesBulkOut(BaseModel):
 
 
 class FillDomainsOut(BaseModel):
-    filled: int  # companies that got a domain
+    filled: int  # companies that got a domain in this piece
     missing: int  # companies still without one
+    next_after: int | None  # pass back as after_id to look up the next piece; None when done
 
 
 class CompanyOut(ORM):
@@ -423,7 +425,11 @@ class ConversationDetail(ConversationSummary):
 
 
 class ConversationSyncOut(BaseModel):
-    threads_checked: int
-    threads_downloaded: int
-    new_messages: int
-    synced_at: datetime | None
+    """A Gmail check runs in the background: poll until `running` is false."""
+
+    running: bool
+    threads_checked: int = 0
+    threads_downloaded: int = 0
+    new_messages: int = 0
+    synced_at: datetime | None = None
+    error: str | None = None  # why the last check failed

@@ -1,11 +1,12 @@
 """Syncing conversations from Gmail (faked with tests.fake_gmail) and reading message text."""
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from sqlalchemy import select
 
 from app import conversations as conv
+from app.db import SessionLocal
 from app.models import ConversationMessage, GmailAccount, MailThread
 from tests import factories as f
 from tests.fake_gmail import FakeGmail, b64, message
@@ -104,7 +105,6 @@ class TestSync:
         assert gmail.searches == ["from:(douglas@harvey.ai) OR to:(douglas@harvey.ai) OR cc:(douglas@harvey.ai)"]
         db.refresh(harvey)
         assert harvey.status == "replied"
-        assert account.synced_at is not None
 
     def test_a_message_from_my_address_counts_as_mine_without_the_sent_label(self, db, account):
         emailed(db, "jane@stripe.com")
@@ -174,21 +174,36 @@ class TestSync:
         assert account.synced_at is None
         assert conv.sync(db, gmail, account, [jane.id]).new_messages == 0
 
-    def test_only_one_sync_at_a_time(self, db, account):
-        assert conv._lock.acquire(blocking=False)
-        try:
-            with pytest.raises(conv.AlreadySyncing):
-                conv.sync(db, FakeGmail(), account)
-        finally:
-            conv._lock.release()
 
-    def test_the_lock_is_released_after_an_error(self, db, account):
-        emailed(db, "jane@stripe.com")
-        gmail = FakeGmail()
-        gmail.error = RuntimeError("boom")
-        with pytest.raises(RuntimeError):
-            conv.sync(db, gmail, account)
-        assert not conv._lock.locked()
+
+class TestSyncClaim:
+    """One sync at a time, across every server process, claimed on the account's row."""
+
+    def test_only_one_at_a_time(self, db, account):
+        assert conv.claim_sync(db, account)
+        assert conv.sync_running(account)
+        with SessionLocal() as other:  # another process
+            assert not conv.claim_sync(other, other.get(GmailAccount, account.id))
+
+    def test_a_claim_left_by_a_dead_process_can_be_taken_over(self, db, account):
+        account.sync_started_at = conv.now() - conv.SYNC_STALE - timedelta(seconds=1)
+        db.commit()
+        assert not conv.sync_running(account)
+        assert conv.claim_sync(db, account)
+
+    def test_finishing_records_how_it_went(self, db, account):
+        conv.claim_sync(db, account)
+        conv.finish_sync(db, account, conv.SyncResult(threads_checked=3, threads_downloaded=1, new_messages=2))
+        assert not conv.sync_running(account)
+        assert account.sync_result == {"threads_checked": 3, "threads_downloaded": 1, "new_messages": 2, "error": None}
+        assert account.synced_at is not None
+
+    def test_a_failure_is_recorded_without_moving_the_last_sync_time(self, db, account):
+        conv.claim_sync(db, account)
+        conv.finish_sync(db, account, None, "Gmail error: Backend Error")
+        assert account.sync_result["error"] == "Gmail error: Backend Error"
+        assert account.synced_at is None
+        assert conv.claim_sync(db, account)  # free again
 
 
 def test_people_emailed(db):

@@ -74,3 +74,29 @@ def test_missing_status_counts_as_unknown(db, verdicts):
     verdicts["odd@x.com"] = {}
     [(_, v, _)] = verification.verify(db, ["odd@x.com"])
     assert v.status == "unknown"
+
+
+def test_checks_several_at_once(db, monkeypatch):
+    import threading
+
+    together = threading.Barrier(3, timeout=5)  # only passes if 3 checks run at the same time
+
+    def verify_email(address):
+        together.wait()
+        return {"status": "valid", "score": 90}
+
+    monkeypatch.setattr(hunter, "verify_email", verify_email)
+    results = verification.verify(db, ["a@x.com", "b@x.com", "c@x.com"])
+    assert [(a, v.status) for a, v, _ in results] == [("a@x.com", "valid"), ("b@x.com", "valid"), ("c@x.com", "valid")]
+
+
+def test_an_error_still_saves_the_verdicts_that_came_back(db, monkeypatch):
+    def verify_email(address):
+        if address == "b@x.com":
+            raise hunter.HunterError(429, "Out of verifications")
+        return {"status": "valid", "score": 90}
+
+    monkeypatch.setattr(hunter, "verify_email", verify_email)
+    with pytest.raises(hunter.HunterError):
+        verification.verify(db, ["a@x.com", "b@x.com"])
+    assert set(verification.fresh(db, ["a@x.com", "b@x.com"])) == {"a@x.com"}

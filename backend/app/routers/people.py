@@ -74,13 +74,14 @@ def add_companies(body: CompaniesBulkIn, db: Session = Depends(get_db)):
 
 
 @router.post("/companies/fill-domains", response_model=FillDomainsOut)
-def fill_domains(db: Session = Depends(get_db)):
-    """Find a domain (and so a logo) for companies that don't have one. Free on Hunter."""
+def fill_domains(after_id: int = 0, db: Session = Depends(get_db)):
+    """Find a domain (and so a logo) for the next few companies that don't have one. Free on
+    Hunter. Call again with after_id = next_after until next_after is null."""
     try:
-        filled, missing = targets.fill_domains(db)
+        filled, missing, next_after = targets.fill_domains(db, after_id)
     except hunter.HunterError as e:
         raise HTTPException(e.status, str(e)) from e
-    return FillDomainsOut(filled=filled, missing=missing)
+    return FillDomainsOut(filled=filled, missing=missing, next_after=next_after)
 
 
 @router.patch("/companies/{company_id}", response_model=CompanyOut)

@@ -15,6 +15,8 @@ COLUMNS = [
     ("campaigns", "worker_id", "VARCHAR(64)"),  # which server process is sending it
     ("campaigns", "lease_until", "TIMESTAMPTZ"),  # ...and until when
     ("emails", "attempted_at", "TIMESTAMPTZ"),  # handed to Gmail, not yet confirmed
+    ("gmail_accounts", "sync_started_at", "TIMESTAMPTZ"),  # a conversation sync in progress
+    ("gmail_accounts", "sync_result", "JSONB"),  # how the last one went
 ]
 
 # Run once, right after a column is added, to give existing rows a sensible value.

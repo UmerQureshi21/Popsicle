@@ -81,3 +81,8 @@ def test_nothing_left_to_send(client, db):
     r = client.post("/api/campaigns", json=draft(ROWS))
     assert r.status_code == 422
     assert r.json()["detail"] == "No one left to email: everyone here was already emailed or has an address that doesn't exist."
+
+
+def test_at_most_10_addresses_per_request(client):
+    r = client.post("/api/people-search/verify", json={"emails": [f"a{n}@x.com" for n in range(11)]})
+    assert r.status_code == 422
