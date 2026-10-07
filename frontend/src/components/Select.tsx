@@ -132,7 +132,7 @@ export default function Select<T extends string | number>({ value, onChange, opt
         aria-controls={open ? `${id}-list` : undefined}
         onClick={() => (open ? close() : openMenu())}
         onKeyDown={onButtonKey}
-        className={`flex items-center justify-between gap-2 rounded-xl border bg-white px-3 py-2.5 text-left text-sm text-ink transition-colors outline-none hover:border-steel/50 focus-visible:border-scarlet focus-visible:ring-4 focus-visible:ring-scarlet/10 ${
+        className={`flex items-center justify-between gap-2 rounded-xl border bg-paper px-3 py-2.5 text-left text-sm text-ink transition-colors outline-none hover:border-steel/50 focus-visible:border-scarlet focus-visible:ring-4 focus-visible:ring-scarlet/10 ${
           open ? "border-scarlet ring-4 ring-scarlet/10" : "border-steel/30"
         } ${className}`}
       >
@@ -155,7 +155,7 @@ export default function Select<T extends string | number>({ value, onChange, opt
             aria-activedescendant={`${id}-opt-${active}`}
             onKeyDown={onListKey}
             style={{ ...pos, width: "max-content", maxWidth: `min(${MAX_WIDTH}px, calc(100vw - 16px))` }}
-            className="animate-fade-up fixed z-[60] overflow-y-auto rounded-2xl border border-cloud bg-white p-1.5 shadow-[0_20px_50px_-12px_rgba(43,45,66,0.35)] outline-none"
+            className="animate-fade-up fixed z-[60] overflow-y-auto rounded-2xl border border-cloud bg-paper p-1.5 shadow-[0_20px_50px_-12px_rgba(43,45,66,0.35)] outline-none"
           >
             {options.map((o, i) => {
               const isSelected = i === selectedIndex;

@@ -17,7 +17,7 @@ const reducedMotion = () => typeof window.matchMedia === "function" && window.ma
  * each card glowing as the particle reaches it. Only on two-column layouts; on phones the
  * cards just appear.
  */
-export default function FeatureBeams({ children, theme = "light" }: { children: ReactNode; theme?: BeamTheme }) {
+export default function FeatureBeams({ children, theme }: { children: ReactNode; theme?: BeamTheme }) {
   const outer = useRef<HTMLDivElement>(null);
   const ref = useRef<HTMLDivElement>(null); // the cards and the trail, which slide in together
   const [geo, setGeo] = useState<Geo | null>(null);
@@ -100,7 +100,7 @@ export default function FeatureBeams({ children, theme = "light" }: { children: 
   const d = geo ? polyline(geo.points) : "";
 
   return (
-    <div ref={outer} data-shown={shown || undefined} style={BEAM_THEMES[theme]}>
+    <div ref={outer} data-shown={shown || undefined} style={theme ? BEAM_THEMES[theme] : undefined}>
       <div
         ref={ref}
         className={`relative transition-all duration-700 ease-out ${shown ? "translate-y-0 opacity-100" : "translate-y-8 opacity-0"}`}

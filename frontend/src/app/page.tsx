@@ -53,7 +53,7 @@ function PoweredByHunter() {
       href="https://hunter.io"
       target="_blank"
       rel="noreferrer"
-      className="inline-flex items-center gap-2.5 rounded-full border border-cloud bg-white/80 py-1.5 pr-4 pl-1.5 text-sm text-ink/70 shadow-sm backdrop-blur transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md"
+      className="inline-flex items-center gap-2.5 rounded-full border border-cloud bg-paper/80 py-1.5 pr-4 pl-1.5 text-sm text-ink/70 shadow-sm backdrop-blur transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md"
     >
       <Image src="/hunter-logo.png" alt="" width={24} height={24} className="size-6" />
       <span>
@@ -90,12 +90,12 @@ function PrimaryButton({ children }: { children: React.ReactNode }) {
 
 export default function LandingPage() {
   return (
-    <main className="relative overflow-hidden bg-white">
+    <main className="relative overflow-hidden bg-paper">
       {/* Soft glows that pick up the popsicle colours */}
       <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-[900px]">
         <div className="absolute top-32 -left-32 size-[520px] rounded-full bg-[#5aa9ff]/25 blur-3xl" />
         <div className="absolute top-40 -right-32 size-[520px] rounded-full bg-[#c58cff]/25 blur-3xl" />
-        <div className="absolute inset-x-0 bottom-0 h-64 bg-gradient-to-b from-transparent to-white" />
+        <div className="absolute inset-x-0 bottom-0 h-64 bg-gradient-to-b from-transparent to-paper" />
       </div>
 
       {/* Header */}
@@ -106,7 +106,7 @@ export default function LandingPage() {
         </Link>
         <Link
           href="/login"
-          className="rounded-full border border-steel/30 bg-white/70 px-6 py-2 text-sm font-semibold text-ink backdrop-blur transition-all duration-300 hover:-translate-y-0.5 hover:border-ink/30 hover:shadow-lg"
+          className="rounded-full border border-steel/30 bg-paper/70 px-6 py-2 text-sm font-semibold text-ink backdrop-blur transition-all duration-300 hover:-translate-y-0.5 hover:border-ink/30 hover:shadow-lg"
         >
           Log in
         </Link>
@@ -182,7 +182,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <div className="h-32 bg-white sm:h-40" />
+      <div className="h-32 bg-paper sm:h-40" />
 
       {/* How it works */}
       <section id="how" className="relative flex min-h-screen scroll-mt-10 flex-col justify-center bg-cloud px-6 py-32">
@@ -193,7 +193,7 @@ export default function LandingPage() {
             <p className="mx-auto mt-4 max-w-xl text-lg text-balance text-steel">Five steps from a company name to a coffee chat on your calendar.</p>
           </Reveal>
 
-          <HowItWorks theme="light" />
+          <HowItWorks />
         </div>
       </section>
 
@@ -210,12 +210,12 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <div className="h-32 bg-white sm:h-40" />
+      <div className="h-32 bg-paper sm:h-40" />
 
       {/* Features */}
       <section className="relative flex min-h-screen flex-col justify-center bg-cloud px-6 py-32">
         <div className="mx-auto w-full max-w-7xl">
-          <FeatureBeams theme="light">
+          <FeatureBeams>
             <div className="grid auto-rows-fr gap-6 sm:grid-cols-2 sm:gap-x-16 sm:gap-y-14">
               {FEATURES.map(({ image, icon: Icon, title, text }, n) => {
                 // A checkerboard: the dark cards sit diagonally from each other.
@@ -224,7 +224,7 @@ export default function LandingPage() {
                   <div key={title}>
                     <div
                       data-beam-card
-                      className={`h-full min-h-[320px] rounded-[2rem] border p-10 shadow-sm ring-0 ring-crimson/20 transition-all duration-500 sm:p-12 hover:-translate-y-1 hover:shadow-[0_30px_60px_-30px_rgba(43,45,66,0.4)] data-lit:ring-2 data-lit:shadow-[0_30px_70px_-34px_rgba(217,4,41,0.55)] ${dark ? "border-ink bg-ink" : "border-white bg-white"}`}
+                      className={`h-full min-h-[320px] rounded-[2rem] border p-10 shadow-sm ring-0 ring-crimson/20 transition-all duration-500 sm:p-12 hover:-translate-y-1 hover:shadow-[0_30px_60px_-30px_rgba(43,45,66,0.4)] data-lit:ring-2 data-lit:shadow-[0_30px_70px_-34px_rgba(217,4,41,0.55)] ${dark ? "border-night bg-night" : "border-paper bg-paper"}`}
                     >
                       {image ? (
                         <Image src={image} alt="" width={64} height={64} className={`size-16 object-contain ${dark ? "brightness-0 invert" : ""}`} />
@@ -242,12 +242,12 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <div className="h-32 bg-white sm:h-40" />
+      <div className="h-32 bg-paper sm:h-40" />
 
       {/* Closing CTA */}
       <section className="px-6 pb-20">
         <Reveal>
-          <div className="relative mx-auto max-w-5xl overflow-hidden rounded-[2rem] bg-ink px-8 py-16 text-center shadow-2xl">
+          <div className="relative mx-auto max-w-5xl overflow-hidden rounded-[2rem] bg-night px-8 py-16 text-center shadow-2xl">
             <Image
               src="/left-pop.png"
               alt=""

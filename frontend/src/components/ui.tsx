@@ -49,7 +49,7 @@ export function Modal({
       <div
         role="dialog"
         aria-modal="true"
-        className={`animate-fade-up flex w-full flex-col overflow-hidden bg-white shadow-2xl ${sheet} ${
+        className={`animate-fade-up flex w-full flex-col overflow-hidden bg-paper shadow-2xl ${sheet} ${
           wide ? "sm:max-w-5xl" : "sm:max-w-xl"
         } ${compact ? "max-w-sm sm:max-w-md" : ""}`}
         onMouseDown={(e) => e.stopPropagation()}
@@ -107,7 +107,7 @@ export function Popover({
   return (
     <div
       ref={ref}
-      className={`animate-fade-up absolute z-30 rounded-2xl border border-cloud bg-white p-4 shadow-xl ${className}`}
+      className={`animate-fade-up absolute z-30 rounded-2xl border border-cloud bg-paper p-4 shadow-xl ${className}`}
     >
       {children}
     </div>
@@ -118,7 +118,7 @@ export function Tooltip({ label, children }: { label: string; children: ReactNod
   return (
     <span className="group/tip relative inline-flex">
       {children}
-      <span className="pointer-events-none absolute bottom-full left-1/2 mb-2 -translate-x-1/2 hidden whitespace-nowrap rounded-lg bg-ink px-2.5 py-1.5 text-xs font-medium text-white shadow-lg group-hover/tip:block">
+      <span className="pointer-events-none absolute bottom-full left-1/2 mb-2 -translate-x-1/2 hidden whitespace-nowrap rounded-lg bg-night px-2.5 py-1.5 text-xs font-medium text-white shadow-lg group-hover/tip:block">
         {label}
       </span>
     </span>
@@ -151,12 +151,12 @@ const STATUS_STYLES: Record<string, string> = {
   invalid: "bg-crimson/10 text-crimson ring-crimson/25",
   undeliverable: "bg-crimson/10 text-crimson ring-crimson/25",
   interrupted: "bg-crimson/10 text-crimson ring-crimson/25",
-  sending: "bg-ink text-white ring-ink",
+  sending: "bg-night text-white ring-night",
   queued: "bg-cloud text-ink ring-steel/30",
   pending: "bg-cloud text-ink ring-steel/30",
-  skipped: "bg-white text-steel ring-steel/30",
-  already_sent: "bg-white text-steel ring-steel/30",
-  cancelled: "bg-white text-steel ring-steel/30",
+  skipped: "bg-paper text-steel ring-steel/30",
+  already_sent: "bg-paper text-steel ring-steel/30",
+  cancelled: "bg-paper text-steel ring-steel/30",
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -190,7 +190,7 @@ export function Button({
 }: React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: "primary" | "secondary" | "ghost" | "danger" }) {
   const styles = {
     primary: "bg-crimson text-white shadow-sm hover:bg-scarlet disabled:bg-steel/60",
-    secondary: "border border-steel/30 bg-white text-ink hover:bg-cloud disabled:text-steel",
+    secondary: "border border-steel/30 bg-paper text-ink hover:bg-cloud disabled:text-steel",
     ghost: "text-ink/70 hover:bg-cloud hover:text-ink disabled:text-steel",
     danger: "text-crimson hover:bg-crimson/10 disabled:text-steel",
   }[variant];
@@ -204,7 +204,7 @@ export function Button({
 
 export function EmptyState({ icon, title, children }: { icon: ReactNode; title: string; children?: ReactNode }) {
   return (
-    <div className="flex flex-col items-center justify-center rounded-3xl border border-dashed border-steel/40 bg-white px-6 py-16 text-center">
+    <div className="flex flex-col items-center justify-center rounded-3xl border border-dashed border-steel/40 bg-paper px-6 py-16 text-center">
       <div className="mb-3 grid size-12 place-items-center rounded-2xl bg-cloud text-steel">{icon}</div>
       <p className="font-medium text-ink">{title}</p>
       {children && <div className="mt-1 max-w-sm text-sm text-steel">{children}</div>}

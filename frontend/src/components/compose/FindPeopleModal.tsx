@@ -235,14 +235,14 @@ export default function FindPeopleModal({ initialQuery, onClose, onAdd }: Props)
               }}
               placeholder="Company name or domain, e.g. Harvey"
               leading={<Search className="size-4 shrink-0 text-steel" />}
-              className="min-w-60 flex-1 rounded-xl border border-steel/30 bg-white px-3 focus-within:border-scarlet focus-within:ring-4 focus-within:ring-scarlet/10"
+              className="min-w-60 flex-1 rounded-xl border border-steel/30 bg-paper px-3 focus-within:border-scarlet focus-within:ring-4 focus-within:ring-scarlet/10"
             />
             <input
               aria-label="Job title"
               value={jobTitle}
               onChange={(e) => setJobTitle(e.target.value)}
               placeholder="Job title, e.g. software engineer"
-              className="w-full rounded-xl border border-steel/30 bg-white px-3 py-2.5 text-sm outline-none placeholder:text-steel focus:border-scarlet sm:w-56"
+              className="w-full rounded-xl border border-steel/30 bg-paper px-3 py-2.5 text-sm outline-none placeholder:text-steel focus:border-scarlet sm:w-56"
             />
             <Select
               ariaLabel="Location"
@@ -372,13 +372,13 @@ export default function FindPeopleModal({ initialQuery, onClose, onAdd }: Props)
                     value={lookupName}
                     onChange={(e) => setLookupName(e.target.value)}
                     placeholder="Full name, e.g. Jane Doe"
-                    className="rounded-xl border border-steel/30 bg-white px-3 py-2.5 text-sm outline-none focus:border-scarlet"
+                    className="rounded-xl border border-steel/30 bg-paper px-3 py-2.5 text-sm outline-none focus:border-scarlet"
                   />
                   <input
                     value={lookupUrl}
                     onChange={(e) => setLookupUrl(e.target.value)}
                     placeholder="or linkedin.com/in/…"
-                    className="rounded-xl border border-steel/30 bg-white px-3 py-2.5 text-sm outline-none focus:border-scarlet"
+                    className="rounded-xl border border-steel/30 bg-paper px-3 py-2.5 text-sm outline-none focus:border-scarlet"
                   />
                 </div>
                 <div className="flex items-center justify-between gap-3">

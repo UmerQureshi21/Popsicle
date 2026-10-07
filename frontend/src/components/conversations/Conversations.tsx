@@ -47,7 +47,7 @@ function MeetingCard({ m }: { m: Meeting }) {
   };
   return (
     <li className={`flex flex-wrap items-center gap-3 rounded-2xl border px-4 py-3 ${past ? "border-cloud bg-cloud/40" : "border-crimson/20 bg-crimson/5"}`}>
-      <span className={`grid size-9 shrink-0 place-items-center rounded-xl ${past ? "bg-white text-steel" : "bg-crimson text-white"}`}>
+      <span className={`grid size-9 shrink-0 place-items-center rounded-xl ${past ? "bg-paper text-steel" : "bg-crimson text-white"}`}>
         <Video className="size-4" />
       </span>
       <div className="min-w-0 flex-1">
@@ -58,14 +58,14 @@ function MeetingCard({ m }: { m: Meeting }) {
         </p>
       </div>
       <div className="flex items-center gap-1">
-        <a href={safeHref(m.meet_url)} target="_blank" rel="noreferrer" className="rounded-lg px-2 py-1 text-xs font-medium text-crimson hover:bg-white">
+        <a href={safeHref(m.meet_url)} target="_blank" rel="noreferrer" className="rounded-lg px-2 py-1 text-xs font-medium text-crimson hover:bg-paper">
           {m.meet_url.replace(/^https:\/\//, "")}
         </a>
-        <button onClick={copy} aria-label="Copy Meet link" className="rounded-lg p-1.5 text-steel hover:bg-white hover:text-ink">
+        <button onClick={copy} aria-label="Copy Meet link" className="rounded-lg p-1.5 text-steel hover:bg-paper hover:text-ink">
           {copied ? <Check className="size-4 text-crimson" /> : <Copy className="size-4" />}
         </button>
         {safeHref(m.calendar_url) && (
-          <a href={safeHref(m.calendar_url)} target="_blank" rel="noreferrer" aria-label="Open in Google Calendar" className="rounded-lg p-1.5 text-steel hover:bg-white hover:text-ink">
+          <a href={safeHref(m.calendar_url)} target="_blank" rel="noreferrer" aria-label="Open in Google Calendar" className="rounded-lg p-1.5 text-steel hover:bg-paper hover:text-ink">
             <CalendarDays className="size-4" />
           </a>
         )}
@@ -90,7 +90,7 @@ function Thread({ detail }: { detail: ConversationDetail }) {
               </p>
               <div
                 className={`rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap break-words shadow-sm ${
-                  m.from_me ? "rounded-br-md bg-ink text-white" : "rounded-bl-md border border-cloud bg-white text-ink"
+                  m.from_me ? "rounded-br-md bg-night text-white" : "rounded-bl-md border border-cloud bg-paper text-ink"
                 }`}
               >
                 {showSubject && <p className={`mb-1.5 text-xs font-semibold ${m.from_me ? "text-white/70" : "text-steel"}`}>{m.subject}</p>}
@@ -251,7 +251,7 @@ export default function Conversations() {
       ) : (
         <div className="grid gap-4 md:h-[calc(100vh-15rem)] md:min-h-[32rem] md:grid-cols-[320px_1fr]">
           {/* People */}
-          <section className={`flex min-h-0 flex-col rounded-3xl border border-cloud bg-white shadow-sm ${selectedId != null ? "hidden md:flex" : ""}`}>
+          <section className={`flex min-h-0 flex-col rounded-3xl border border-cloud bg-paper shadow-sm ${selectedId != null ? "hidden md:flex" : ""}`}>
             <div className="space-y-3 border-b border-cloud p-3">
               <div className="flex items-center gap-2">
                 <label className="flex flex-1 items-center gap-2 rounded-xl bg-cloud/60 px-3 py-2">
@@ -281,7 +281,7 @@ export default function Conversations() {
                     role="tab"
                     aria-selected={filter === f.value}
                     onClick={() => setFilter(f.value)}
-                    className={`rounded-full px-2.5 py-1 text-xs font-medium ${filter === f.value ? "bg-ink text-white" : "text-steel hover:bg-cloud hover:text-ink"}`}
+                    className={`rounded-full px-2.5 py-1 text-xs font-medium ${filter === f.value ? "bg-night text-white" : "text-steel hover:bg-cloud hover:text-ink"}`}
                   >
                     {f.label} {counts[f.value]}
                   </button>
@@ -324,7 +324,7 @@ export default function Conversations() {
           </section>
 
           {/* One conversation */}
-          <section className={`flex min-h-0 flex-col rounded-3xl border border-cloud bg-white shadow-sm ${selectedId == null ? "hidden md:flex" : ""}`}>
+          <section className={`flex min-h-0 flex-col rounded-3xl border border-cloud bg-paper shadow-sm ${selectedId == null ? "hidden md:flex" : ""}`}>
             {selectedId == null || !selected ? (
               <div className="grid flex-1 place-items-center p-10 text-center text-sm text-steel">
                 {selectedId == null ? "Pick someone to see your conversation." : "Loading…"}

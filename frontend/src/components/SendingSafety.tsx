@@ -52,7 +52,7 @@ export default function SendingSafety({ refreshKey = 0 }: { refreshKey?: number 
     "mt-1 w-24 rounded-lg border border-steel/30 px-2.5 py-1.5 text-sm text-ink outline-none focus:border-scarlet focus:ring-4 focus:ring-scarlet/10";
 
   return (
-    <section aria-label="Sending safety" className="mb-8 rounded-2xl border border-cloud bg-white p-5 shadow-sm">
+    <section aria-label="Sending safety" className="mb-8 rounded-2xl border border-cloud bg-paper p-5 shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex items-start gap-3">
           <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-cloud text-ink">
@@ -77,7 +77,7 @@ export default function SendingSafety({ refreshKey = 0 }: { refreshKey?: number 
       </div>
 
       <div className="mt-4 h-2 overflow-hidden rounded-full bg-cloud" aria-hidden>
-        <div className={`h-full rounded-full transition-all ${full ? "bg-crimson" : "bg-ink"}`} style={{ width: `${used * 100}%` }} />
+        <div className={`h-full rounded-full transition-all ${full ? "bg-crimson" : "bg-night"}`} style={{ width: `${used * 100}%` }} />
       </div>
 
       {editing && (

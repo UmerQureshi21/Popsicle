@@ -105,7 +105,7 @@ export default function TemplateBar({ subject, body, variables, templateId, onLo
           onClick={() => setMenuOpen(!menuOpen)}
           aria-haspopup="menu"
           aria-expanded={menuOpen}
-          className="flex min-w-0 items-center gap-2 rounded-xl border border-steel/25 bg-white px-3 py-2 text-sm font-medium text-ink shadow-sm transition-colors hover:border-steel/50"
+          className="flex min-w-0 items-center gap-2 rounded-xl border border-steel/25 bg-paper px-3 py-2 text-sm font-medium text-ink shadow-sm transition-colors hover:border-steel/50"
         >
           <FileText className="size-4 shrink-0 text-steel" />
           <span className="truncate">{loaded?.name ?? "Untitled draft"}</span>
@@ -158,7 +158,7 @@ export default function TemplateBar({ subject, body, variables, templateId, onLo
                   ) : (
                     <button
                       onClick={() => setConfirmDelete(t.id)}
-                      className="mr-1 shrink-0 rounded-lg p-1.5 text-steel opacity-0 group-hover:opacity-100 hover:bg-white hover:text-crimson focus:opacity-100"
+                      className="mr-1 shrink-0 rounded-lg p-1.5 text-steel opacity-0 group-hover:opacity-100 hover:bg-paper hover:text-crimson focus:opacity-100"
                       aria-label={`Delete ${t.name}`}
                     >
                       <Trash2 className="size-3.5" />

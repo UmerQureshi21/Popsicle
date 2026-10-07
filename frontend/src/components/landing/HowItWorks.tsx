@@ -94,7 +94,7 @@ function Particle({ name, glow, size = 1 }: { name: string; glow: string; size?:
  * inbox); they meet and become one, which runs down through each step as you scroll, lighting
  * the path behind it.
  */
-export default function HowItWorks({ theme = "light" }: { theme?: BeamTheme }) {
+export default function HowItWorks({ theme }: { theme?: BeamTheme }) {
   const ref = useRef<HTMLDivElement>(null);
   const [geo, setGeo] = useState<Geo | null>(null);
   const id = useId().replace(/:/g, "");
@@ -159,7 +159,7 @@ export default function HowItWorks({ theme = "light" }: { theme?: BeamTheme }) {
       <span
         data-source={name}
         className={`grid size-20 place-items-center rounded-3xl border shadow-sm transition-all duration-500 data-lit:shadow-[0_18px_40px_-14px_rgba(217,4,41,0.45)] sm:size-24 ${
-          dark ? "border-white/10 bg-white/5" : "border-cloud bg-white"
+          dark ? "border-white/10 bg-white/5" : "border-cloud bg-paper"
         }`}
       >
         {name === "hunter" ? (
@@ -174,7 +174,7 @@ export default function HowItWorks({ theme = "light" }: { theme?: BeamTheme }) {
   );
 
   return (
-    <div ref={ref} className="relative" style={BEAM_THEMES[theme]}>
+    <div ref={ref} className="relative" style={theme ? BEAM_THEMES[theme] : undefined}>
       {geo && (
         <svg aria-hidden className="pointer-events-none absolute inset-0 overflow-visible" width={geo.w} height={geo.h}>
           <defs>
@@ -236,13 +236,13 @@ export default function HowItWorks({ theme = "light" }: { theme?: BeamTheme }) {
               <span
                 data-beam-dot
                 className={`relative z-10 grid size-14 place-items-center rounded-full border text-xl font-bold transition-all duration-500 lg:col-start-2 lg:row-start-1 lg:mx-auto lg:size-16 ${
-                  dark ? "border-white/15 bg-ink text-white/40" : "border-cloud bg-white text-steel/60"
+                  dark ? "border-white/15 bg-night text-white/40" : "border-cloud bg-paper text-steel/60"
                 } group-data-lit:border-crimson/30 group-data-lit:text-crimson group-data-lit:shadow-[0_14px_35px_-10px_rgba(217,4,41,0.55)] ${
                   last ? "ring-4 ring-transparent group-data-lit:ring-[#a26bff]/25" : ""
                 }`}
               >
                 {i + 1}
-                <span className="absolute -right-1 -bottom-1 grid size-7 place-items-center rounded-full bg-ink text-white ring-[3px] ring-white">
+                <span className="absolute -right-1 -bottom-1 grid size-7 place-items-center rounded-full bg-night text-white ring-[3px] ring-paper">
                   <Icon className="size-3.5" />
                 </span>
               </span>
@@ -255,7 +255,7 @@ export default function HowItWorks({ theme = "light" }: { theme?: BeamTheme }) {
                 <p className={`mt-2 text-base leading-relaxed text-pretty ${dark ? "text-white/60" : "text-steel"}`}>{text}</p>
                 <span
                   className={`mt-3 inline-block rounded-xl px-3 py-1.5 text-xs font-medium whitespace-nowrap lg:text-sm ${
-                    dark ? "bg-white/10 text-white/80" : "bg-white text-ink/80"
+                    dark ? "bg-white/10 text-white/80" : "bg-paper text-ink/80"
                   }`}
                 >
                   {example}

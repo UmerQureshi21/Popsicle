@@ -26,7 +26,7 @@ export default function TemplateDemo() {
 
   return (
     <div className="grid items-stretch gap-4 md:grid-cols-[1fr_auto_1fr]">
-      <div className="rounded-3xl border border-cloud bg-white p-7 text-left shadow-[0_30px_60px_-30px_rgba(43,45,66,0.35)]">
+      <div className="rounded-3xl border border-cloud bg-paper p-7 text-left shadow-[0_30px_60px_-30px_rgba(43,45,66,0.35)]">
         <p className="mb-5 text-xs font-semibold tracking-widest text-steel uppercase">Your template</p>
         <p className="mb-4 text-lg font-semibold text-ink">
           Quick question about <Chip>company</Chip>
@@ -44,12 +44,12 @@ export default function TemplateDemo() {
       </div>
 
       <div className="flex items-center justify-center">
-        <span className="grid size-12 rotate-90 place-items-center rounded-full bg-ink text-white shadow-lg md:rotate-0">
+        <span className="grid size-12 rotate-90 place-items-center rounded-full bg-night text-white shadow-lg md:rotate-0">
           <ArrowRight className="size-5" />
         </span>
       </div>
 
-      <div className="relative rounded-3xl border border-cloud bg-white p-7 text-left shadow-[0_30px_60px_-30px_rgba(43,45,66,0.35)]">
+      <div className="relative rounded-3xl border border-cloud bg-paper p-7 text-left shadow-[0_30px_60px_-30px_rgba(43,45,66,0.35)]">
         <div className="mb-5 flex items-center justify-between">
           <p className="text-xs font-semibold tracking-widest text-steel uppercase">What they get</p>
           <div className="flex gap-1.5">

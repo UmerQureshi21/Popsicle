@@ -108,12 +108,12 @@ export default function LookupPerson() {
   }
 
   const field =
-    "mt-2 w-full rounded-xl border border-steel/25 bg-white px-3.5 py-2.5 text-sm text-ink outline-none placeholder:text-steel/60 focus:border-scarlet focus:ring-4 focus:ring-scarlet/10";
+    "mt-2 w-full rounded-xl border border-steel/25 bg-paper px-3.5 py-2.5 text-sm text-ink outline-none placeholder:text-steel/60 focus:border-scarlet focus:ring-4 focus:ring-scarlet/10";
 
   return (
     <div className="space-y-6">
       <form
-        className="-mx-4 border-y border-cloud bg-white p-5 sm:mx-0 sm:rounded-3xl sm:border sm:p-6 sm:shadow-sm"
+        className="-mx-4 border-y border-cloud bg-paper p-5 sm:mx-0 sm:rounded-3xl sm:border sm:p-6 sm:shadow-sm"
         onSubmit={(e) => {
           e.preventDefault();
           lookUp();
@@ -145,7 +145,7 @@ export default function LookupPerson() {
               onPick={(s) => setCompany(s.domain)}
               placeholder="Company name or website, e.g. meta.com"
               leading={<Search className="size-4 shrink-0 text-steel" />}
-              className="mt-2 rounded-xl border border-steel/25 bg-white px-3.5 focus-within:border-scarlet focus-within:ring-4 focus-within:ring-scarlet/10"
+              className="mt-2 rounded-xl border border-steel/25 bg-paper px-3.5 focus-within:border-scarlet focus-within:ring-4 focus-within:ring-scarlet/10"
             />
             <p className="mt-2 text-xs leading-relaxed text-steel">
               Works for any company, even ones with no people in Hunter: it figures out the company’s email pattern. Their
@@ -186,7 +186,7 @@ export default function LookupPerson() {
             return (
               <article
                 key={l.id}
-                className="animate-fade-up -mx-4 border-y border-cloud bg-white p-5 sm:mx-0 sm:rounded-3xl sm:border sm:shadow-sm"
+                className="animate-fade-up -mx-4 border-y border-cloud bg-paper p-5 sm:mx-0 sm:rounded-3xl sm:border sm:shadow-sm"
               >
                 <div className="flex items-start gap-4">
                   {p ? <Avatar name={p.full_name || p.email} size={44} /> : <CompanyLogo domain={l.result.domain} size={44} />}

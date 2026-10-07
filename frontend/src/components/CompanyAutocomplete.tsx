@@ -23,7 +23,7 @@ export function CompanyLogo({ domain, size = 20 }: { domain?: string | null; siz
       width={size}
       height={size}
       onError={() => setFailed(true)}
-      className="shrink-0 rounded-md bg-white object-contain"
+      className="shrink-0 rounded-md bg-paper object-contain"
     />
   );
 }
@@ -186,7 +186,7 @@ export default function CompanyAutocomplete({
             role="listbox"
             aria-label="Matching companies"
             style={{ left: rect.left, top: rect.top, width: Math.max(rect.width, 280) }}
-            className="animate-fade-up fixed z-[60] max-h-80 max-w-[calc(100vw-16px)] overflow-y-auto rounded-2xl border border-cloud bg-white p-1.5 shadow-[0_20px_50px_-12px_rgba(43,45,66,0.35)]"
+            className="animate-fade-up fixed z-[60] max-h-80 max-w-[calc(100vw-16px)] overflow-y-auto rounded-2xl border border-cloud bg-paper p-1.5 shadow-[0_20px_50px_-12px_rgba(43,45,66,0.35)]"
           >
             {suggestions.map((s, i) => (
               <li

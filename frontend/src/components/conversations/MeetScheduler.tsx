@@ -9,7 +9,7 @@ import Select from "@/components/Select";
 
 const SLOTS = timeSlots();
 const inputClass =
-  "mt-1 block w-full rounded-xl border border-steel/30 bg-white px-3 py-2 text-sm text-ink outline-none focus:border-scarlet focus:ring-4 focus:ring-scarlet/10";
+  "mt-1 block w-full rounded-xl border border-steel/30 bg-paper px-3 py-2 text-sm text-ink outline-none focus:border-scarlet focus:ring-4 focus:ring-scarlet/10";
 
 /** Pick a time for a Google Meet call with someone, and email them the link. */
 export default function MeetScheduler({
