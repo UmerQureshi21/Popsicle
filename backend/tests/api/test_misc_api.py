@@ -119,7 +119,9 @@ class TestGmail:
         monkeypatch.setattr(gmail, "finish_auth", lambda db, state, url: seen.update(state=state, url=url))
         r = client.get("/api/gmail/callback?state=s1&code=c", follow_redirects=False)
         assert r.headers["location"] == "http://frontend.test/compose?gmail=connected"
-        assert seen["state"] == "s1" and "code=c" in seen["url"]
+        assert seen["state"] == "s1"
+        # Built from the public address, not the backend's internal one behind the forwarding.
+        assert seen["url"] == "http://localhost:8000/api/gmail/callback?state=s1&code=c"
 
     def test_callback_when_the_user_declined(self, client):
         r = client.get("/api/gmail/callback?error=access_denied", follow_redirects=False)

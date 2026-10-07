@@ -115,7 +115,9 @@ def gmail_callback(request: Request, state: str = "", error: str | None = None, 
     if error:
         return RedirectResponse(f"{back}?gmail_error={error}")
     try:
-        gmail.finish_auth(db, state, str(request.url))
+        # Rebuilt from the public address: behind the frontend's /api forwarding, request.url is
+        # the backend's internal (http) address, which Google's sign-in library rejects.
+        gmail.finish_auth(db, state, f"{settings.backend_url}{gmail.REDIRECT_PATH}?{request.url.query}")
     except gmail.MissingSendPermission:
         return RedirectResponse(f"{back}?gmail_error=missing_send_permission")
     except Exception as e:

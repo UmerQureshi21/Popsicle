@@ -83,7 +83,7 @@ def test_start_auth_remembers_the_flow_by_state(monkeypatch):
 
     monkeypatch.setattr(gmail, "Flow", Flow)
     assert gmail.start_auth() == "https://accounts.google.com/o/oauth2/auth?x"
-    assert seen["redirect_uri"] == "http://backend.test/api/gmail/callback"
+    assert seen["redirect_uri"] == "http://localhost:8000/api/gmail/callback"
     assert gmail.SEND_SCOPE in seen["scopes"]
     assert seen["kw"] == {"access_type": "offline", "prompt": "consent"}
     assert isinstance(gmail._pending_flows["state-1"], Flow)
