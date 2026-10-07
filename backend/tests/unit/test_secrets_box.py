@@ -87,12 +87,13 @@ class TestGmailLogin:
             gmail.load_credentials(db)
 
     def test_connecting_stores_it_encrypted(self, db, key, monkeypatch):
-        from tests.unit.test_gmail import FakeFlow
+        from tests.unit.test_gmail import FakeGoogleFlow
 
         monkeypatch.setattr(gmail, "build", lambda *a, **kw: type("B", (), {
             "userinfo": lambda self: type("U", (), {"get": lambda self: type("E", (), {"execute": lambda self: {"email": "me@gmail.com"}})()})()
         })())
-        gmail._pending_flows["s"] = FakeFlow({"scope": gmail.SEND_SCOPE})
-        gmail.finish_auth(db, "s", "http://cb")
+        monkeypatch.setattr(gmail.Flow, "from_client_secrets_file", staticmethod(lambda *a, **kw: FakeGoogleFlow()))
+        gmail.start_auth(db)
+        gmail.finish_auth(db, "state-1", "http://cb")
         stored = db.scalars(select(GmailAccount)).one().token_json
         assert stored.startswith("fernet:") and secrets_box.unseal(stored) == '{"token": "abc"}'

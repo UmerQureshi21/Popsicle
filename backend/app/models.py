@@ -228,6 +228,19 @@ class AuthSession(Base):
     created_at: Mapped[datetime] = _created_at()
 
 
+class OAuthState(Base):
+    """A Gmail connection in progress, between leaving for Google's consent screen and coming
+    back. In the database (not memory) so it survives a restart and works whichever server
+    process Google's redirect reaches."""
+
+    __tablename__ = "oauth_states"
+
+    state: Mapped[str] = mapped_column(String(200), primary_key=True)
+    code_verifier: Mapped[str | None] = mapped_column(Text)  # PKCE: proves the redirect is ours
+    return_to: Mapped[str] = mapped_column(String(500))
+    created_at: Mapped[datetime] = _created_at()
+
+
 class TrustedDevice(Base):
     """A browser you've logged in from before. Guessing passwords elsewhere can't lock it out."""
 

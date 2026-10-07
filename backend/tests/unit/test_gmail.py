@@ -3,6 +3,7 @@
 import base64
 import email
 import json
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
 import httplib2
@@ -17,17 +18,6 @@ from tests import factories as f
 
 def http_error(status: int, message: str) -> HttpError:
     return HttpError(httplib2.Response({"status": status}), json.dumps({"error": {"message": message}}).encode())
-
-
-class FakeFlow:
-    def __init__(self, token: dict):
-        self.token = token
-        self.credentials = SimpleNamespace(to_json=lambda: '{"token": "abc"}')
-        self.fetched_with = None
-
-    def fetch_token(self, authorization_response):
-        self.fetched_with = authorization_response
-        return self.token
 
 
 @pytest.fixture
@@ -68,42 +58,79 @@ def test_credentials_file_present(settings, tmp_path):
     assert gmail.credentials_file_present()
 
 
-def test_start_auth_remembers_the_flow_by_state(monkeypatch):
-    seen = {}
+class FakeGoogleFlow:
+    """Stands in for google_auth_oauthlib's Flow: records how it was made and what it did."""
 
-    class Flow:
-        @classmethod
-        def from_client_secrets_file(cls, path, scopes, redirect_uri):
-            seen.update(path=path, scopes=scopes, redirect_uri=redirect_uri)
-            return cls()
+    made: list = []
 
-        def authorization_url(self, **kw):
-            seen["kw"] = kw
-            return "https://accounts.google.com/o/oauth2/auth?x", "state-1"
+    def __init__(self, token=None, verifier="verifier-123"):
+        self.token = token or {"scope": gmail.SEND_SCOPE}
+        self.code_verifier = verifier
+        self.credentials = SimpleNamespace(to_json=lambda: '{"token": "abc"}')
+        self.fetched_with = None
 
-    monkeypatch.setattr(gmail, "Flow", Flow)
-    assert gmail.start_auth() == "https://accounts.google.com/o/oauth2/auth?x"
-    assert seen["redirect_uri"] == "http://localhost:8000/api/gmail/callback"
-    assert gmail.SEND_SCOPE in seen["scopes"]
-    assert seen["kw"] == {"access_type": "offline", "prompt": "consent"}
-    assert isinstance(gmail._pending_flows["state-1"], Flow)
-    assert {gmail.READ_SCOPE, gmail.CALENDAR_SCOPE} <= set(seen["scopes"])
-    assert gmail.pop_return_path("state-1") == "/compose"
+    def authorization_url(self, **kw):
+        self.auth_kw = kw
+        return "https://accounts.google.com/o/oauth2/auth?x", "state-1"
+
+    def fetch_token(self, authorization_response):
+        self.fetched_with = authorization_response
+        return self.token
 
 
-def test_start_auth_remembers_where_to_return(monkeypatch):
-    class Flow:
-        @classmethod
-        def from_client_secrets_file(cls, path, scopes, redirect_uri):
-            return cls()
+@pytest.fixture
+def google_flow(monkeypatch):
+    """gmail.Flow.from_client_secrets_file returns `google_flow.next` (a FakeGoogleFlow)."""
 
-        def authorization_url(self, **kw):
-            return "https://accounts.google.com/x", "state-2"
+    class Factory:
+        next = FakeGoogleFlow()
+        made: list = []
 
-    monkeypatch.setattr(gmail, "Flow", Flow)
-    gmail.start_auth("/conversations")
-    assert gmail.pop_return_path("state-2") == "/conversations"
-    assert gmail.pop_return_path("state-2") == "/compose"  # used once
+    factory = Factory()
+    factory.made = []
+
+    def from_client_secrets_file(path, scopes, redirect_uri, **kw):
+        factory.made.append(dict(path=path, scopes=scopes, redirect_uri=redirect_uri, **kw))
+        return factory.next
+
+    monkeypatch.setattr(gmail.Flow, "from_client_secrets_file", staticmethod(from_client_secrets_file))
+    return factory
+
+
+class TestStartAuth:
+    def test_saves_the_attempt_in_the_database(self, db, google_flow):
+        from app.models import OAuthState
+
+        assert gmail.start_auth(db) == "https://accounts.google.com/o/oauth2/auth?x"
+        (made,) = google_flow.made
+        assert made["redirect_uri"] == "http://localhost:8000/api/gmail/callback"
+        assert {gmail.SEND_SCOPE, gmail.READ_SCOPE, gmail.CALENDAR_SCOPE} <= set(made["scopes"])
+        assert google_flow.next.auth_kw == {"access_type": "offline", "prompt": "consent"}
+        saved = db.get(OAuthState, "state-1")
+        assert (saved.code_verifier, saved.return_to) == ("verifier-123", "/compose")
+        assert gmail.return_path(db, "state-1") == "/compose"
+
+    def test_remembers_where_to_return_but_only_inside_the_app(self, db, google_flow):
+        gmail.start_auth(db, "/conversations")
+        assert gmail.return_path(db, "state-1") == "/conversations"
+        gmail.forget_state(db, "state-1")
+        gmail.start_auth(db, "https://evil.example")
+        assert gmail.return_path(db, "state-1") == "/compose"
+
+    def test_unknown_or_missing_state_returns_to_compose(self, db):
+        assert gmail.return_path(db, "nope") == "/compose"
+        assert gmail.return_path(db, "") == "/compose"
+
+    def test_abandoned_attempts_expire_and_are_cleared(self, db, google_flow):
+        from app.models import OAuthState
+
+        old = datetime.now(timezone.utc) - gmail.STATE_TTL - timedelta(minutes=1)
+        db.add(OAuthState(state="old", code_verifier=None, return_to="/inbox", created_at=old))
+        db.commit()
+        assert gmail.return_path(db, "old") == "/compose"  # expired
+        gmail.start_auth(db)
+        db.expire_all()
+        assert db.get(OAuthState, "old") is None
 
 
 @pytest.mark.parametrize(
@@ -139,29 +166,51 @@ class TestGrantedScopes:
 
 
 class TestFinishAuth:
+    def start(self, db, google_flow, token=None):
+        """Begin a connection (saved in the database), and make the flow Google hands back."""
+        gmail.start_auth(db, "/conversations")
+        google_flow.next = FakeGoogleFlow(token)
+        return google_flow.next
+
     def test_unknown_state(self, db):
         with pytest.raises(ValueError, match="Unknown or expired"):
             gmail.finish_auth(db, "nope", "http://cb")
 
+    def test_an_expired_attempt_cant_be_finished(self, db, google_flow):
+        from app.models import OAuthState
+
+        self.start(db, google_flow)
+        db.get(OAuthState, "state-1").created_at = datetime.now(timezone.utc) - gmail.STATE_TTL - timedelta(seconds=1)
+        db.commit()
+        with pytest.raises(ValueError, match="Unknown or expired"):
+            gmail.finish_auth(db, "state-1", "http://cb")
+        assert db.get(OAuthState, "state-1") is None
+
     @pytest.mark.parametrize("scope", [f"openid {gmail.SEND_SCOPE}", ["openid", gmail.SEND_SCOPE]])
-    def test_saves_the_account_replacing_any_previous_one(self, db, userinfo, scope):
+    def test_saves_the_account_replacing_any_previous_one(self, db, userinfo, google_flow, scope):
+        from app.models import OAuthState
+
         db.add(GmailAccount(email="old@gmail.com", token_json="{}"))
         db.commit()
-        flow = FakeFlow({"scope": scope})
-        gmail._pending_flows["s"] = flow
+        flow = self.start(db, google_flow, {"scope": scope})
 
-        assert gmail.finish_auth(db, "s", "http://cb?code=1") == "me@gmail.com"
+        # Works in a process that never saw the start: everything it needs is in the database.
+        assert gmail.finish_auth(db, "state-1", "http://cb?code=1") == "me@gmail.com"
+        assert google_flow.made[-1]["state"] == "state-1"
+        assert google_flow.made[-1]["code_verifier"] == "verifier-123"
         assert flow.fetched_with == "http://cb?code=1"
         assert [(a.email, a.token_json, a.scopes) for a in db.scalars(select(GmailAccount))] == [
             ("me@gmail.com", '{"token": "abc"}', f"openid {gmail.SEND_SCOPE}")
         ]
-        assert "s" not in gmail._pending_flows
+        assert db.get(OAuthState, "state-1") is None  # can't be used twice
+        with pytest.raises(ValueError):
+            gmail.finish_auth(db, "state-1", "http://cb?code=1")
 
-    @pytest.mark.parametrize("token", [{"scope": "openid email"}, {}])
-    def test_send_permission_unticked(self, db, userinfo, token):
-        gmail._pending_flows["s"] = FakeFlow(token)
+    @pytest.mark.parametrize("token", [{"scope": "openid email"}, {"scope": None}])
+    def test_send_permission_unticked(self, db, userinfo, google_flow, token):
+        self.start(db, google_flow, token)
         with pytest.raises(gmail.MissingSendPermission):
-            gmail.finish_auth(db, "s", "http://cb")
+            gmail.finish_auth(db, "state-1", "http://cb")
         assert db.scalars(select(GmailAccount)).all() == []
 
 

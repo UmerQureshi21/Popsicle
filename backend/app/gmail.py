@@ -3,6 +3,7 @@
 import base64
 import json
 import os
+from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
 
 from google.auth.transport.requests import Request
@@ -10,12 +11,12 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from . import secrets_box
 from .config import settings
-from .models import Attachment, GmailAccount
+from .models import Attachment, GmailAccount, OAuthState
 
 # Google may return scopes in a different order than asked.
 os.environ.setdefault("OAUTHLIB_RELAX_TOKEN_SCOPE", "1")
@@ -30,10 +31,8 @@ BASE_SCOPES = ["openid", "https://www.googleapis.com/auth/userinfo.email"]
 SCOPES = [*BASE_SCOPES, SEND_SCOPE, READ_SCOPE, CALENDAR_SCOPE]
 REDIRECT_PATH = "/api/gmail/callback"
 
-# OAuth flows waiting for Google's redirect, keyed by state (holds the PKCE verifier),
-# and the page to return to afterwards.
-_pending_flows: dict[str, Flow] = {}
-_return_to: dict[str, str] = {}
+# How long you have to finish Google's consent screen.
+STATE_TTL = timedelta(minutes=15)
 
 
 class GmailNotConnected(Exception):
@@ -73,26 +72,46 @@ def safe_return_path(path: str | None) -> str:
     return path if path and path.startswith("/") and not path.startswith("//") and "\\" not in path else "/compose"
 
 
-def pop_return_path(state: str) -> str:
-    return _return_to.pop(state, "/compose")
-
-
-def start_auth(return_to: str = "/compose") -> str:
-    flow = Flow.from_client_secrets_file(
-        str(settings.google_client_secrets),
-        scopes=SCOPES,
-        redirect_uri=settings.backend_url + REDIRECT_PATH,
+def _flow(**kwargs) -> Flow:
+    return Flow.from_client_secrets_file(
+        str(settings.google_client_secrets), scopes=SCOPES, redirect_uri=settings.backend_url + REDIRECT_PATH, **kwargs
     )
+
+
+def _live_state(db: Session, state: str) -> OAuthState | None:
+    s = db.get(OAuthState, state) if state else None
+    if s is None or s.created_at < datetime.now(timezone.utc) - STATE_TTL:
+        return None
+    return s
+
+
+def return_path(db: Session, state: str) -> str:
+    """The page that started this connection, to go back to afterwards."""
+    s = _live_state(db, state)
+    return s.return_to if s else "/compose"
+
+
+def start_auth(db: Session, return_to: str = "/compose") -> str:
+    flow = _flow()
     url, state = flow.authorization_url(access_type="offline", prompt="consent")
-    _pending_flows[state] = flow
-    _return_to[state] = safe_return_path(return_to)
+    # Clear out abandoned attempts while we're here.
+    db.execute(delete(OAuthState).where(OAuthState.created_at < datetime.now(timezone.utc) - STATE_TTL))
+    db.add(OAuthState(state=state, code_verifier=flow.code_verifier, return_to=safe_return_path(return_to)))
+    db.commit()
     return url
 
 
+def forget_state(db: Session, state: str) -> None:
+    db.execute(delete(OAuthState).where(OAuthState.state == state))
+    db.commit()
+
+
 def finish_auth(db: Session, state: str, callback_url: str) -> str:
-    flow = _pending_flows.pop(state, None)
-    if flow is None:
+    pending = _live_state(db, state)
+    forget_state(db, state)  # each attempt can only be finished once
+    if pending is None:
         raise ValueError("Unknown or expired sign-in attempt. Try connecting again.")
+    flow = _flow(state=state, code_verifier=pending.code_verifier)
     token = flow.fetch_token(authorization_response=callback_url)
     # flow.credentials reports the scopes we asked for; the token response says what was granted.
     granted = token.get("scope") or []
