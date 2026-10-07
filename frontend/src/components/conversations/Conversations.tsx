@@ -12,6 +12,7 @@ import {
   type Meeting,
 } from "@/lib/api";
 import { readGmailNotice } from "@/lib/draft";
+import { sleep } from "@/lib/pieces";
 import { formatDateTime, timeAgo } from "@/lib/format";
 import { Avatar, Button, EmptyState } from "@/components/ui";
 import { CompanyLogo } from "@/components/CompanyAutocomplete";
@@ -106,8 +107,21 @@ function Thread({ detail }: { detail: ConversationDetail }) {
 // development) shares it instead of being refused as "already checking".
 let inflight: Promise<ConversationSync> | null = null;
 
+export const POLL_MS = 1500;
+
+/** Start a Gmail check (it runs in the background on the server) and wait for it to finish. */
+async function runCheck(): Promise<ConversationSync> {
+  let status = await api.post<ConversationSync>("/api/conversations/sync");
+  while (status.running) {
+    await sleep(POLL_MS);
+    status = await api.get<ConversationSync>("/api/conversations/sync");
+  }
+  if (status.error) throw new Error(status.error);
+  return status;
+}
+
 function checkGmail(): Promise<ConversationSync> {
-  inflight ??= api.post<ConversationSync>("/api/conversations/sync").finally(() => {
+  inflight ??= runCheck().finally(() => {
     inflight = null;
   });
   return inflight;

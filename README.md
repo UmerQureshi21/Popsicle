@@ -179,14 +179,19 @@ Popsicle is built to run as one site: the frontend (e.g. on Vercel) forwards `/a
 | `DATABASE_URL` | Your hosted Postgres, as `postgresql+psycopg://…` |
 | `FRONTEND_URL`, `BACKEND_URL` | Both the frontend's public address, e.g. `https://popsicle.vercel.app`. Google returns to `BACKEND_URL/api/gmail/callback` after connecting Gmail, so add that address to the OAuth client's redirect URIs |
 | `TOKEN_ENCRYPTION_KEY` | Required. Encrypts the Gmail login in the database (see `backend/.env.example` for how to make one). Keep it safe: losing it means reconnecting Gmail |
+| `PROXY_SECRET` | Required. 32+ random characters, the same value as the frontend's. The backend refuses any call that didn't come through the frontend, so its own address can't be used directly. Make one with `python -c "import secrets; print(secrets.token_urlsafe(32))"` |
 | `HUNTER_API_KEY` | Your Hunter key |
 | `GOOGLE_CLIENT_SECRETS` | Path to the OAuth client JSON (from a secret file, never committed) |
 
-Anywhere but localhost, login is always on, the session cookie is https-only and the API docs are hidden; the backend refuses to start if `AUTH_REQUIRED=false` or `TOKEN_ENCRYPTION_KEY` is missing. Create your account with `python -m app.manage create-user you@example.com`.
+Popsicle counts as local only when its addresses and its database are all on your machine; anything else gets the deployed rules: login always on, the session cookie https-only, the API docs hidden. The backend refuses to start if `AUTH_REQUIRED=false`, if `TOKEN_ENCRYPTION_KEY` or `PROXY_SECRET` is missing, or if `BACKEND_URL` or `FRONTEND_URL` is still a localhost address. Create your account with `python -m app.manage create-user you@example.com`.
 
-**Frontend settings:** `BACKEND_ORIGIN` = the backend's own address (e.g. `https://popsicle.up.railway.app`), and `NEXT_PUBLIC_API_URL` set to an empty value, so API calls go to the frontend's own `/api`.
+**Frontend settings:** `BACKEND_ORIGIN` = the backend's own address (e.g. `https://popsicle.up.railway.app`), `PROXY_SECRET` = the same value as the backend's, and `NEXT_PUBLIC_API_URL` set to an empty value, so API calls go to the frontend's own `/api`.
 
-**Sending safely across restarts.** Each batch is claimed in the database by the server process sending it, and the claim is renewed while it works. During a redeploy, when the old and new servers overlap, a batch is only ever sent by one of them. An email that was being handed to Gmail when a server stopped is marked failed ("may have gone out, check Gmail's Sent folder") rather than resent. Waiting and scheduled batches whose server stopped are picked up again within a minute.
+**Logging in.** Wrong passwords are limited per visitor (5 per 15 minutes) and per account (20). A browser you've logged in from before isn't held to the per-account limit, so someone guessing your password can't lock you out of your own browser.
+
+**Long jobs.** Checking Gmail for replies runs in the background (the Inbox shows it until it's done), and verifying addresses, pasting companies and finding missing logos are sent a few at a time, so no request runs long enough to be cut off by the hosting proxy.
+
+**Sending safely across restarts.** Each batch is claimed in the database by the server process sending it, and the claim is renewed while it works. During a redeploy, when the old and new servers overlap, a batch is only ever sent by one of them. An email that was being handed to Gmail when a server stopped is marked failed ("may have gone out, check Gmail's Sent folder") rather than resent. Waiting and scheduled batches whose server stopped are picked up again within a minute. The daily limit holds even when several batches send at once (it's checked and taken in one locked step), and Google Meet link emails count toward it. A Gmail connection in progress is kept in the database, so it finishes even if a redeploy happens in the middle.
 
 ## Testing
 

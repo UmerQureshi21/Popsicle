@@ -144,6 +144,27 @@ describe("Conversations: checking Gmail", () => {
     expect(screen.queryByText(/Already checking/)).not.toBeInTheDocument();
   });
 
+  it("waits for the check running in the background to finish", async () => {
+    const posts = api("post", "/api/conversations/sync", { running: true, threads_checked: 0, threads_downloaded: 0, new_messages: 0, synced_at: null });
+    let polls = 0;
+    api("get", "/api/conversations/sync", () =>
+      ++polls < 2
+        ? { running: true, threads_checked: 0, threads_downloaded: 0, new_messages: 0, synced_at: null }
+        : { running: false, threads_checked: 4, threads_downloaded: 2, new_messages: 3, synced_at: "2026-10-06T12:00:00Z", error: null },
+    );
+    setup({ gmail: ALLOWED });
+    expect(await screen.findByText("3 new messages from Gmail.", {}, { timeout: 6000 })).toBeInTheDocument();
+    expect(posts).toHaveLength(1);
+    expect(polls).toBe(2);
+  }, 10_000);
+
+  it("shows why the background check failed", async () => {
+    api("post", "/api/conversations/sync", { running: false, threads_checked: 0, threads_downloaded: 0, new_messages: 0, synced_at: null,
+      error: "Gmail error: Backend Error" });
+    setup({ gmail: ALLOWED });
+    expect(await screen.findByText("Gmail error: Backend Error")).toBeInTheDocument();
+  });
+
   it("shows Checking… while it runs", async () => {
     api("post", "/api/conversations/sync", () => new Promise(() => {}));
     setup({ gmail: ALLOWED });
