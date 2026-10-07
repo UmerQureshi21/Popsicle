@@ -75,7 +75,11 @@ def started(monkeypatch):
 
 
 @pytest.fixture
-def client(started):
+def client(started, monkeypatch):
+    # Startup would launch the background sweeper; tests call campaigns.sweep() directly instead.
+    import app.main as main
+
+    monkeypatch.setattr(main, "start_sweeper", lambda: None)
     with TestClient(app) as c:
         yield c
 

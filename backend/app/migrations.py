@@ -12,6 +12,9 @@ COLUMNS = [
     ("companies", "status", "VARCHAR(20) NOT NULL DEFAULT 'not_started'"),  # target company list
     ("gmail_accounts", "scopes", "TEXT"),  # which Google permissions were granted
     ("gmail_accounts", "synced_at", "TIMESTAMPTZ"),  # last conversation sync
+    ("campaigns", "worker_id", "VARCHAR(64)"),  # which server process is sending it
+    ("campaigns", "lease_until", "TIMESTAMPTZ"),  # ...and until when
+    ("emails", "attempted_at", "TIMESTAMPTZ"),  # handed to Gmail, not yet confirmed
 ]
 
 # Run once, right after a column is added, to give existing rows a sensible value.
