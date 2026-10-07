@@ -256,7 +256,11 @@ cd frontend && npm run lint && npm run typecheck && npx vitest run --coverage &&
 - **Stored token**: the Gmail login is encrypted with Fernet when `TOKEN_ENCRYPTION_KEY` is set (always when deployed). A login saved before encryption is encrypted on first use.
 - **Plain-http sign-in**: `OAUTHLIB_INSECURE_TRANSPORT` is set **only** when local.
 - **Weekly reconnect**: while the Google Cloud app is in "Testing" mode, the login expires every 7 days, so he reconnects weekly. Publishing it may need Google verification because of the Gmail read scope.
-- **Errors**: `gmail.is_auth_error` catches 401s and insufficient-scope 403s. A batch pauses as `interrupted` with a reconnect message.
+- **Errors**: `gmail.is_auth_error` catches 401s, insufficient-scope 403s and `RefreshError` (Google refusing to renew the login). A batch pauses as `interrupted` with a reconnect message.
+- **No internet is not an expired login.** Renewing the login can fail just because the network is down (`TransportError`, e.g. DNS `NameResolutionError`). `load_credentials` raises `GmailUnreachable` for that and `GmailNotConnected` only for a `RefreshError`.
+  - `gmail.is_network_error` lists only errors where the request **certainly never reached Google** (DNS failure, connection refused, `TransportError`). A timeout or dropped connection mid-request is *not* in it, because the email may have gone out.
+  - A batch that hits one waits as `waiting` ("Can't reach Gmail right now…"), gives back the email's slot in the daily limit (clears `attempted_at`), and retries the same email every 60 s (`OFFLINE_RETRY`).
+  - Meet returns 503 and the Inbox check shows `gmail.UNREACHABLE` ("Couldn't reach Google. Check your internet connection…").
 
 ### 7.4 Inbox / conversations (`conversations.py`, `routers/conversations.py`, `components/conversations`)
 - **Sync**: `POST /api/conversations/sync` claims a sync on the Gmail account row (`sync_started_at`; stale after 10 min), runs it **in a background thread**, and returns immediately. The page polls `GET /api/conversations/sync`.
