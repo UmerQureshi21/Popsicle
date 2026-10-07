@@ -3,7 +3,7 @@
 import re
 
 PLACEHOLDER = re.compile(r"\{\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}\}")
-EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+from .safety import EMAIL  # noqa: F401 (kept here for existing imports)
 
 
 def placeholders(*texts: str) -> list[str]:

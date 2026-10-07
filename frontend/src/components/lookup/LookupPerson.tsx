@@ -1,5 +1,6 @@
 "use client";
 
+import { safeHref } from "@/lib/safeUrl";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { AtSign, Check, Copy, ExternalLink, Loader2, Plus, Search, Send, X } from "lucide-react";
@@ -192,8 +193,8 @@ export default function LookupPerson() {
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="font-semibold text-ink">{p?.full_name || l.name || l.linkedin}</p>
-                      {p?.linkedin_url && (
-                        <a href={p.linkedin_url} target="_blank" rel="noreferrer" className="text-steel hover:text-ink" aria-label="LinkedIn profile">
+                      {safeHref(p?.linkedin_url) && (
+                        <a href={safeHref(p?.linkedin_url)} target="_blank" rel="noreferrer" className="text-steel hover:text-ink" aria-label="LinkedIn profile">
                           <ExternalLink className="size-3.5" />
                         </a>
                       )}

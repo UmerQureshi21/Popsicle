@@ -102,7 +102,7 @@ class TestSync:
         ]
         m2 = db.scalars(select(ConversationMessage).where(ConversationMessage.gmail_message_id == "m2")).one()
         assert (m2.from_name, m2.rfc_message_id, m2.gmail_thread_id, m2.sent_at) == ("Douglas Quan", "<m2@mail.gmail.com>", "t1", at(2))
-        assert gmail.searches == ["from:(douglas@harvey.ai) OR to:(douglas@harvey.ai) OR cc:(douglas@harvey.ai)"]
+        assert gmail.searches == ['from:("douglas@harvey.ai") OR to:("douglas@harvey.ai") OR cc:("douglas@harvey.ai")']
         db.refresh(harvey)
         assert harvey.status == "replied"
 

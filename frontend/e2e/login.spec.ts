@@ -58,7 +58,7 @@ test("pages carry the security headers", async ({ page }) => {
   const res = await page.goto("/compose");
   const headers = res!.headers();
   expect(headers["x-frame-options"]).toBe("DENY");
-  expect(headers["content-security-policy"]).toBe("frame-ancestors 'none'");
+  expect(headers["content-security-policy"]).toBe("frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'");
   expect(headers["referrer-policy"]).toBe("strict-origin-when-cross-origin");
   expect(headers["x-powered-by"]).toBeUndefined();
 });

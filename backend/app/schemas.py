@@ -3,6 +3,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from .safety import has_line_break, link_field
+
 
 class ORM(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -156,6 +158,11 @@ class CompanyIn(BaseModel):
     notes: str | None = None
     status: CompanyStatusName = "not_started"
 
+    @field_validator("linkedin_url")
+    @classmethod
+    def _safe_link(cls, v: str | None) -> str | None:
+        return link_field(v)
+
 
 class CompanyPatch(BaseModel):
     name: str | None = None
@@ -163,6 +170,11 @@ class CompanyPatch(BaseModel):
     linkedin_url: str | None = None
     notes: str | None = None
     status: CompanyStatusName | None = None
+
+    @field_validator("linkedin_url")
+    @classmethod
+    def _safe_link(cls, v: str | None) -> str | None:
+        return link_field(v)
 
 
 class CompaniesBulkIn(BaseModel):
@@ -203,6 +215,11 @@ class ContactPatch(BaseModel):
     linkedin_url: str | None = None
     notes: str | None = None
     company_id: int | None = None
+
+    @field_validator("linkedin_url")
+    @classmethod
+    def _safe_link(cls, v: str | None) -> str | None:
+        return link_field(v)
 
 
 class ContactOut(ORM):
@@ -399,6 +416,13 @@ class MeetingIn(BaseModel):
     time_zone: str  # IANA name, e.g. America/Toronto
     message: str = Field(min_length=1, max_length=20_000)  # {{meet_link}} is replaced with the link
     calendar_invite: bool = True  # also send them a Google Calendar invite
+
+    @field_validator("title")
+    @classmethod
+    def one_line_title(cls, v: str) -> str:
+        if has_line_break(v):
+            raise ValueError("The title can't contain a line break.")
+        return v
 
     @field_validator("time_zone")
     @classmethod

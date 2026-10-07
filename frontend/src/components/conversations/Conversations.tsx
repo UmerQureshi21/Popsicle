@@ -1,5 +1,6 @@
 "use client";
 
+import { safeHref } from "@/lib/safeUrl";
 import { useCallback, useEffect, useState } from "react";
 import { CalendarDays, Check, ChevronLeft, Copy, ExternalLink, Link2, MessagesSquare, RefreshCw, Search, Video, X } from "lucide-react";
 import {
@@ -57,14 +58,14 @@ function MeetingCard({ m }: { m: Meeting }) {
         </p>
       </div>
       <div className="flex items-center gap-1">
-        <a href={m.meet_url} target="_blank" rel="noreferrer" className="rounded-lg px-2 py-1 text-xs font-medium text-crimson hover:bg-white">
+        <a href={safeHref(m.meet_url)} target="_blank" rel="noreferrer" className="rounded-lg px-2 py-1 text-xs font-medium text-crimson hover:bg-white">
           {m.meet_url.replace(/^https:\/\//, "")}
         </a>
         <button onClick={copy} aria-label="Copy Meet link" className="rounded-lg p-1.5 text-steel hover:bg-white hover:text-ink">
           {copied ? <Check className="size-4 text-crimson" /> : <Copy className="size-4" />}
         </button>
-        {m.calendar_url && (
-          <a href={m.calendar_url} target="_blank" rel="noreferrer" aria-label="Open in Google Calendar" className="rounded-lg p-1.5 text-steel hover:bg-white hover:text-ink">
+        {safeHref(m.calendar_url) && (
+          <a href={safeHref(m.calendar_url)} target="_blank" rel="noreferrer" aria-label="Open in Google Calendar" className="rounded-lg p-1.5 text-steel hover:bg-white hover:text-ink">
             <CalendarDays className="size-4" />
           </a>
         )}
@@ -338,8 +339,8 @@ export default function Conversations() {
                   <div className="min-w-0 flex-1">
                     <p className="flex items-center gap-2 truncate font-semibold text-ink">
                       {nameOf(selected)}
-                      {selected.linkedin_url && (
-                        <a href={selected.linkedin_url} target="_blank" rel="noreferrer" aria-label="LinkedIn profile" className="text-steel hover:text-ink">
+                      {safeHref(selected.linkedin_url) && (
+                        <a href={safeHref(selected.linkedin_url)} target="_blank" rel="noreferrer" aria-label="LinkedIn profile" className="text-steel hover:text-ink">
                           <Link2 className="size-4" />
                         </a>
                       )}

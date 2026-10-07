@@ -203,6 +203,17 @@ describe("Conversations: one person", () => {
     expect(screen.getByText("Pick someone to see your conversation.")).toBeInTheDocument();
   });
 
+  it("dangerous links from data are never clickable", async () => {
+    api("get", "/api/conversations/3", detail({ linkedin_url: "javascript:alert(1)",
+      meetings: [meeting({ meet_url: "javascript:alert(1)", calendar_url: "javascript:alert(2)" })] }));
+    const { user } = setup({ people: [person({ linkedin_url: "javascript:alert(1)" })] });
+    await user.click(await screen.findByRole("button", { name: /Douglas Quan/ }));
+    await screen.findByText("Coffee chat with Douglas");
+    expect(screen.queryByRole("link", { name: "LinkedIn profile" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Open in Google Calendar" })).not.toBeInTheDocument();
+    expect(document.querySelector('a[href^="javascript"]')).toBeNull();
+  });
+
   it("says when they haven't replied, and why it might be", async () => {
     api("get", "/api/conversations/4", detail({ ...PEOPLE[1], messages: [msg({ subject: "" })], replied: false }));
     const { user } = setup();

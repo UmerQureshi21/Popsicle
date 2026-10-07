@@ -76,7 +76,7 @@ class TestCreate:
         pdf = f.attachment(db)
         t = f.template(db)
         rows = [
-            {"full_name": "Jane Doe", "email": "jane@stripe.com", "role": "Engineer", "linkedin": "in/jane"},
+            {"full_name": "Jane Doe", "email": "jane@stripe.com", "role": "Engineer", "linkedin": "linkedin.com/in/jane"},
             {"full_name": "Sam Lee", "email": "sam@stripe.com"},
         ]
         r = client.post(
@@ -95,7 +95,7 @@ class TestCreate:
 
         jane = db.scalars(select(Contact).where(Contact.email == "jane@stripe.com")).one()
         assert (jane.full_name, jane.first_name, jane.last_name, jane.title, jane.linkedin_url) == (
-            "Jane Doe", "Jane", "Doe", "Engineer", "in/jane",
+            "Jane Doe", "Jane", "Doe", "Engineer", "https://linkedin.com/in/jane",
         )
         assert jane.company.name == "Stripe"
         assert db.get(Campaign, c["id"]).template_id == t.id

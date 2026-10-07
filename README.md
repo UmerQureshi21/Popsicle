@@ -193,6 +193,18 @@ Popsicle counts as local only when its addresses and its database are all on you
 
 **Sending safely across restarts.** Each batch is claimed in the database by the server process sending it, and the claim is renewed while it works. During a redeploy, when the old and new servers overlap, a batch is only ever sent by one of them. An email that was being handed to Gmail when a server stopped is marked failed ("may have gone out, check Gmail's Sent folder") rather than resent. Waiting and scheduled batches whose server stopped are picked up again within a minute. The daily limit holds even when several batches send at once (it's checked and taken in one locked step), and Google Meet link emails count toward it. A Gmail connection in progress is kept in the database, so it finishes even if a redeploy happens in the middle.
 
+## Security
+
+Popsicle shows data it doesn't control: replies from strangers, Hunter's people data, pasted tables, Google's links. It's handled as follows:
+
+- **Shown as text, never as code.** Every name, subject and reply is displayed as plain text (React escapes it). Replies' HTML is turned into text on the backend and never rendered.
+- **Links are web addresses only.** Links from data (LinkedIn, Meet, Calendar) are only made clickable if they're `http(s)`; a `javascript:` or `data:` link is refused when saved and dropped when shown.
+- **One recipient per email.** Addresses must be ordinary email addresses (no commas, quotes or brackets), so a value can't add hidden recipients. Subjects and meeting titles can't contain line breaks, so values can't add email headers.
+- **Gmail searches can't be changed by data.** Only well-formed addresses go into the Inbox's Gmail search, each in quotes.
+- **Other websites can't act for you.** The login cookie isn't sent to other sites, and changes coming from another website (by the browser's `Origin`) are refused.
+- **Pages can't be framed** by other sites, and links out don't reveal which page you were on.
+- **Prompt injection:** Popsicle has no AI features, so nothing it reads (replies, profiles, Hunter data) is ever given to a model as instructions. If an AI feature is added later, treat those as untrusted data.
+
 ## Testing
 
 None of the tests reach Hunter or Gmail: Hunter calls and sends are faked, so no credits are spent and no email goes out. Each suite fails if coverage drops below 90%. GitHub Actions runs all of them on every push (`.github/workflows/test.yml`).

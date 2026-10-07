@@ -1,6 +1,7 @@
 """Templates, attachments, Gmail connection and stats."""
 
 import mimetypes
+from urllib.parse import quote
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
@@ -119,7 +120,7 @@ def gmail_callback(request: Request, state: str = "", error: str | None = None, 
     back = settings.frontend_url + gmail.return_path(db, state)
     if error:
         gmail.forget_state(db, state)
-        return RedirectResponse(f"{back}?gmail_error={error}")
+        return RedirectResponse(f"{back}?gmail_error={quote(error[:100])}")
     try:
         # Rebuilt from the public address: behind the frontend's /api forwarding, request.url is
         # the backend's internal (http) address, which Google's sign-in library rejects.
