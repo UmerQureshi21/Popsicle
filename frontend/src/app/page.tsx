@@ -2,6 +2,7 @@ import Image from "next/image";
 import { Inbox, Video, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import Reveal from "@/components/landing/Reveal";
+import FeatureBeams from "@/components/landing/FeatureBeams";
 import HowItWorks from "@/components/landing/HowItWorks";
 import TemplateDemo from "@/components/landing/TemplateDemo";
 
@@ -192,7 +193,7 @@ export default function LandingPage() {
             <p className="mx-auto mt-4 max-w-xl text-lg text-balance text-steel">Five steps from a company name to a coffee chat on your calendar.</p>
           </Reveal>
 
-          <HowItWorks />
+          <HowItWorks theme="light" />
         </div>
       </section>
 
@@ -214,25 +215,30 @@ export default function LandingPage() {
       {/* Features */}
       <section className="relative flex min-h-screen flex-col justify-center bg-cloud px-6 py-32">
         <div className="mx-auto w-full max-w-7xl">
-          <div className="grid auto-rows-fr gap-6 sm:grid-cols-2">
-            {FEATURES.map(({ image, icon: Icon, title, text }, n) => {
-              // A checkerboard: the dark cards sit diagonally from each other.
-              const dark = n % 4 === 1 || n % 4 === 2;
-              return (
-                <Reveal key={title} delay={n * 120} direction={n % 2 === 0 ? "left" : "right"}>
-                  <div className={`h-full min-h-[320px] rounded-[2rem] border p-10 shadow-sm transition-all duration-300 sm:p-12 hover:-translate-y-1 hover:shadow-[0_30px_60px_-30px_rgba(43,45,66,0.4)] ${dark ? "border-ink bg-ink" : "border-white bg-white"}`}>
-                    {image ? (
-                      <Image src={image} alt="" width={64} height={64} className={`size-16 object-contain ${dark ? "brightness-0 invert" : ""}`} />
-                    ) : (
-                      Icon && <Icon className={`size-16 ${dark ? "text-white" : "text-crimson"}`} strokeWidth={1.5} />
-                    )}
-                    <h3 className={`mt-7 text-2xl font-semibold tracking-tight text-balance ${dark ? "text-white" : "text-ink"}`}>{title}</h3>
-                    <p className={`mt-3 text-lg leading-relaxed text-pretty ${dark ? "text-white/60" : "text-steel"}`}>{text}</p>
-                  </div>
-                </Reveal>
-              );
-            })}
-          </div>
+          <FeatureBeams theme="light">
+            <div className="grid auto-rows-fr gap-6 sm:grid-cols-2 sm:gap-x-16">
+              {FEATURES.map(({ image, icon: Icon, title, text }, n) => {
+                // A checkerboard: the dark cards sit diagonally from each other.
+                const dark = n % 4 === 1 || n % 4 === 2;
+                return (
+                  <Reveal key={title} delay={n * 120} direction={n % 2 === 0 ? "left" : "right"}>
+                    <div
+                      data-beam-card
+                      className={`h-full min-h-[320px] rounded-[2rem] border p-10 shadow-sm ring-0 ring-crimson/20 transition-all duration-500 sm:p-12 hover:-translate-y-1 hover:shadow-[0_30px_60px_-30px_rgba(43,45,66,0.4)] data-lit:ring-2 data-lit:shadow-[0_30px_70px_-34px_rgba(217,4,41,0.55)] ${dark ? "border-ink bg-ink" : "border-white bg-white"}`}
+                    >
+                      {image ? (
+                        <Image src={image} alt="" width={64} height={64} className={`size-16 object-contain ${dark ? "brightness-0 invert" : ""}`} />
+                      ) : (
+                        Icon && <Icon className={`size-16 ${dark ? "text-white" : "text-crimson"}`} strokeWidth={1.5} />
+                      )}
+                      <h3 className={`mt-7 text-2xl font-semibold tracking-tight text-balance ${dark ? "text-white" : "text-ink"}`}>{title}</h3>
+                      <p className={`mt-3 text-lg leading-relaxed text-pretty ${dark ? "text-white/60" : "text-steel"}`}>{text}</p>
+                    </div>
+                  </Reveal>
+                );
+              })}
+            </div>
+          </FeatureBeams>
         </div>
       </section>
 
