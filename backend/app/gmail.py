@@ -3,9 +3,12 @@
 import base64
 import json
 import os
+import socket
 from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
 
+import httplib2
+from google.auth.exceptions import RefreshError, TransportError
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
@@ -39,6 +42,14 @@ class GmailNotConnected(Exception):
     pass
 
 
+class GmailUnreachable(Exception):
+    """Google couldn't be reached at all (no internet, Wi-Fi dropped, DNS down). Nothing is
+    wrong with the login, so reconnecting won't help: try again once the connection is back."""
+
+
+UNREACHABLE = "Couldn't reach Google. Check your internet connection and try again."
+
+
 class MissingSendPermission(Exception):
     """Google's consent screen lets people untick "Send email on your behalf"."""
 
@@ -57,9 +68,22 @@ def can(acct: GmailAccount | None, scope: str) -> bool:
 
 
 def is_auth_error(e: Exception) -> bool:
-    """Errors that mean the login itself is unusable, so every send would fail the same way."""
+    """Errors that mean the login itself is unusable, so every send would fail the same way.
+    A RefreshError is Google refusing to renew the login (revoked, or the weekly expiry)."""
+    if isinstance(e, RefreshError):
+        return True
     return isinstance(e, HttpError) and e.resp.status in (401, 403) and (
         e.resp.status == 401 or "insufficient" in str(e).lower() or "scope" in str(e).lower()
+    )
+
+
+def is_network_error(e: Exception) -> bool:
+    """Errors that mean the request never reached Google, so nothing was sent and it's safe to
+    try again: the address couldn't be looked up, the connection was refused, or renewing the
+    login (which happens before the request) couldn't connect. A timeout or a dropped
+    connection mid-request isn't here: the email may have gone out."""
+    return isinstance(
+        e, (GmailUnreachable, TransportError, httplib2.ServerNotFoundError, socket.gaierror, ConnectionRefusedError)
     )
 
 
@@ -153,8 +177,11 @@ def load_credentials(db: Session) -> Credentials:
             raise GmailNotConnected("Gmail login expired. Reconnect Gmail.")
         try:
             creds.refresh(Request())
-        except Exception as e:
-            raise GmailNotConnected(f"Gmail login expired ({e}). Reconnect Gmail.") from e
+        except RefreshError as e:
+            raise GmailNotConnected("Gmail login expired. Reconnect Gmail.") from e
+        except TransportError as e:
+            # No internet, not a bad login: say so, rather than asking for a reconnect that can't help.
+            raise GmailUnreachable(UNREACHABLE) from e
         acct.token_json = secrets_box.seal(creds.to_json())
         db.commit()
     return creds

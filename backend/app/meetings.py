@@ -130,6 +130,8 @@ def schedule(
         creds = gmail.load_credentials(db)
     except gmail.GmailNotConnected as e:
         raise MeetingError(409, str(e)) from e
+    except gmail.GmailUnreachable as e:
+        raise MeetingError(503, gmail.UNREACHABLE) from e
 
     cal = calendar_service(creds)
     end = start + timedelta(minutes=minutes)
@@ -137,6 +139,10 @@ def schedule(
         event = create_event(cal, title=title, start=start, end=end, time_zone=time_zone, attendee=contact.email, invite=invite)
     except HttpError as e:
         raise _calendar_error(e) from e
+    except Exception as e:
+        if not gmail.is_network_error(e):
+            raise
+        raise MeetingError(503, gmail.UNREACHABLE) from e
     link = meet_link(event)
     if not link:
         _delete_event(cal, event["id"], invite)

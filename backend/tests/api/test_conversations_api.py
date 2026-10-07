@@ -2,6 +2,7 @@
 
 from datetime import datetime, timedelta, timezone
 
+import httplib2
 import pytest
 
 from app import gmail
@@ -161,6 +162,14 @@ class TestSync:
         assert r.status_code == 403
         assert "Reconnect Gmail" in r.json()["detail"]
 
+    def test_no_internet_is_not_an_expired_login(self, client, account, monkeypatch, inline):
+        def offline(db):
+            raise gmail.GmailUnreachable(gmail.UNREACHABLE)
+
+        monkeypatch.setattr(gmail, "load_credentials", offline)
+        client.post("/api/conversations/sync")
+        assert client.get("/api/conversations/sync").json()["error"] == gmail.UNREACHABLE
+
     def test_expired_login(self, client, account, monkeypatch, inline):
         def expired(db):
             raise gmail.GmailNotConnected("Gmail login expired. Reconnect Gmail.")
@@ -175,6 +184,7 @@ class TestSync:
             (http_error(403, "Request had insufficient authentication scopes."), "Reconnect Gmail"),
             (http_error(500, "Backend Error"), "Gmail error"),
             (RuntimeError("boom"), "failed unexpectedly"),
+            (httplib2.ServerNotFoundError("Unable to find the server at gmail.googleapis.com"), "internet connection"),
         ],
     )
     def test_gmail_errors(self, client, db, account, fake_gmail, inline, error, message):

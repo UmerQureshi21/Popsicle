@@ -2,6 +2,7 @@
 
 from datetime import datetime, timedelta, timezone
 
+import httplib2
 import pytest
 from sqlalchemy import select
 
@@ -216,6 +217,27 @@ class TestSchedule:
         with pytest.raises(meetings.MeetingError, match="manage your calendar") as e:
             schedule(db, douglas(db))
         assert e.value.status == 403
+
+    def test_no_internet(self, db, google, monkeypatch):
+        def offline(db):
+            raise gmail.GmailUnreachable(gmail.UNREACHABLE)
+
+        monkeypatch.setattr(gmail, "load_credentials", offline)
+        with pytest.raises(meetings.MeetingError, match="internet connection") as e:
+            schedule(db, douglas(db))
+        assert e.value.status == 503
+
+    def test_no_internet_when_creating_the_event(self, db, google):
+        google.calendar.error = httplib2.ServerNotFoundError("Unable to find the server at www.googleapis.com")
+        with pytest.raises(meetings.MeetingError, match="internet connection") as e:
+            schedule(db, douglas(db))
+        assert e.value.status == 503
+        assert google.sent == []
+
+    def test_other_errors_creating_the_event_are_not_hidden(self, db, google):
+        google.calendar.error = RuntimeError("boom")
+        with pytest.raises(RuntimeError, match="boom"):
+            schedule(db, douglas(db))
 
     def test_expired_login(self, db, google, monkeypatch):
         def expired(db):
