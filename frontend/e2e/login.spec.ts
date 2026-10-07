@@ -52,3 +52,13 @@ test("signing up with an email that wasn't invited is refused", async ({ page })
   await page.getByRole("button", { name: "Create account" }).click();
   await expect(page.locator("p[role=alert]")).toContainText("invite-only");
 });
+
+test("pages carry the security headers", async ({ page }) => {
+  await new FakeApi().install(page);
+  const res = await page.goto("/compose");
+  const headers = res!.headers();
+  expect(headers["x-frame-options"]).toBe("DENY");
+  expect(headers["content-security-policy"]).toBe("frame-ancestors 'none'");
+  expect(headers["referrer-policy"]).toBe("strict-origin-when-cross-origin");
+  expect(headers["x-powered-by"]).toBeUndefined();
+});

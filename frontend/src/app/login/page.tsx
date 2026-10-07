@@ -13,7 +13,14 @@ const subscribe = () => () => {};
 /** Where to go after logging in: ?next=/find, but only paths inside this app. */
 function nextPath(): string {
   const next = new URLSearchParams(window.location.search).get("next") ?? "";
-  return next.startsWith("/") && !next.startsWith("//") && next !== "/login" ? next : "/compose";
+  // Resolve it the way the browser would: "/\\evil.com" and "//evil.com" both point off-site.
+  try {
+    const url = new URL(next, window.location.origin);
+    if (next.startsWith("/") && url.origin === window.location.origin && url.pathname !== "/login") {
+      return url.pathname + url.search + url.hash;
+    }
+  } catch {}
+  return "/compose";
 }
 
 export default function LoginPage() {

@@ -220,7 +220,7 @@ describe("Login page", () => {
     expect(login[0].body).toEqual({ email: "me@x.com", password: "correct horse" });
   });
 
-  it.each(["https://evil.example", "//evil.example", "/login"])("never redirects to %s", async (next) => {
+  it.each(["https://evil.example", "//evil.example", "/\\evil.example", "/\\/evil.example", "/login", "/login?x=1", "find", "http://["])("never redirects to %s", async (next) => {
     window.history.replaceState(null, "", `/login?next=${encodeURIComponent(next)}`);
     api("post", "/api/auth/login", { email: "me@x.com", name: null });
     const user = renderLogin();
