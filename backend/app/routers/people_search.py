@@ -2,18 +2,21 @@
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from .. import hunter, verification
 from ..campaigns import last_sent_by_address
 from ..db import get_db
-from ..models import Company
+from ..models import Company, SeenPerson
 from ..schemas import (
     CompanySuggestion,
     EmailFinderIn,
     EmailFinderOut,
     FoundPerson,
     HunterStatus,
+    NewPeopleIn,
+    NewPeopleOut,
     PeopleCount,
     PeopleSearchIn,
     PeopleSearchOut,
@@ -145,8 +148,65 @@ def search_company(body: PeopleSearchIn, db: Session = Depends(get_db)):
         total=meta.get("results") or len(people),
         offset=meta.get("offset", body.offset),
         limit=meta.get("limit", body.limit),
-        people=_mark_already_emailed(db, people),
+        people=_remember_people(db, people),
         cached=cached,
+    )
+
+
+def _remember_people(db: Session, people: list[FoundPerson]) -> list[FoundPerson]:
+    _remember_seen(db, people)
+    return _mark_already_emailed(db, people)
+
+
+def _remember_seen(db: Session, people: list[FoundPerson]) -> None:
+    """Note everyone shown, for "Hide people I've already seen"."""
+    emails = sorted({p.email.lower() for p in people})
+    if emails:
+        db.execute(pg_insert(SeenPerson).values([{"email": e} for e in emails]).on_conflict_do_nothing())
+        db.commit()
+
+
+NEW_PAGE = 10  # Hunter charges per page of up to 10 people found, so walk 10 at a time
+NEW_MAX_PAGES = 10  # per click: bounds the cost and how long the request takes
+
+
+@router.post("/company/new", response_model=NewPeopleOut)
+def new_people(body: NewPeopleIn, db: Session = Depends(get_db)):
+    """The next people at a company you haven't emailed yet (and, with hide_seen, haven't been
+    shown before). Walks Hunter's results from the top: pages fetched in the last 30 days are
+    saved, so going back over people you already have costs nothing; only new pages use credits."""
+    location = [loc.model_dump(exclude_none=True) for loc in body.location] if body.location else None
+    hidden = set(db.scalars(select(SeenPerson.email))) if body.hide_seen else set()
+    found: list[FoundPerson] = []
+    taken: set[str] = set()
+    data: dict = {}
+    offset = total = pages = paid = 0
+    reached_end = False
+    while len(found) < body.want and pages < NEW_MAX_PAGES:
+        res, cached = _call(
+            hunter.domain_search, db, body.query, limit=NEW_PAGE, offset=offset, department=body.department,
+            seniority=body.seniority, job_titles=body.job_titles, location=location,
+        )
+        pages += 1
+        paid += 0 if cached else 1
+        data, meta = res.get("data") or {}, res.get("meta") or {}
+        total = meta.get("results") or 0
+        page = _mark_already_emailed(db, [p for p in (_person(e, "value") for e in data.get("emails") or []) if p])
+        for p in page:
+            if p.already_emailed_at or p.email in taken or p.email.lower() in hidden:
+                continue
+            taken.add(p.email)
+            found.append(p)
+            if len(found) == body.want:
+                break
+        offset += NEW_PAGE
+        if not page or offset >= total:
+            reached_end = True
+            break
+    _remember_seen(db, found)
+    return NewPeopleOut(
+        domain=data.get("domain"), organization=data.get("organization"), pattern=data.get("pattern"), total=total,
+        people=found, reached_end=reached_end, pages_checked=pages, pages_paid=paid,
     )
 
 
