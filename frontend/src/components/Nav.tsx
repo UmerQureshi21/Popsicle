@@ -9,6 +9,7 @@ import { Avatar, Popover, Tooltip } from "@/components/ui";
 import { useAuth } from "@/lib/auth";
 import { useHunterStatus } from "@/lib/credits";
 import { formatDate } from "@/lib/format";
+import { ThemeToggle } from "@/components/Theme";
 
 const TABS = [
   { href: "/compose", label: "Compose", short: "Compose", icon: Mail },
@@ -123,6 +124,7 @@ export default function Nav() {
               })}
             </ul>
             <AccountMenu />
+            <ThemeToggle />
           </div>
         </nav>
       </header>

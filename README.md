@@ -168,6 +168,12 @@ The **Look up** tab finds a single person's email. Either paste their **LinkedIn
 
 Recent lookups stay on the page so you can come back to them.
 
+### Light and dark
+
+The sun/moon button at the top right of the app switches between the light and dark palettes. Your choice is remembered in this browser and applied before the page is drawn, so there's no flash. The landing page stays light for now.
+
+Colours are defined once in `frontend/src/app/globals.css`, each with one job (`paper` for surfaces, `cloud` for the background, `ink` for text, `steel` for secondary text, `night` for dark accents, plus the brand reds); the dark palette swaps their values.
+
 ## Deploying
 
 Popsicle is built to run as one site: the frontend (e.g. on Vercel) forwards `/api/*` to the backend (e.g. on Railway), so the browser only ever talks to the frontend's address and login cookies work in every browser.
@@ -197,7 +203,7 @@ Popsicle counts as local only when its addresses and its database are all on you
 
 Popsicle shows data it doesn't control: replies from strangers, Hunter's people data, pasted tables, Google's links. It's handled as follows:
 
-- **Shown as text, never as code.** Every name, subject and reply is displayed as plain text (React escapes it). Replies' HTML is turned into text on the backend and never rendered.
+- **Shown as text, never as code.** Every name, subject and reply is displayed as plain text (React escapes it). Replies' HTML is turned into text on the backend and never rendered. The one raw script on the page is a fixed snippet that applies your saved theme before the page is drawn; no data ever goes into it.
 - **Links are web addresses only.** Links from data (LinkedIn, Meet, Calendar) are only made clickable if they're `http(s)`; a `javascript:` or `data:` link is refused when saved and dropped when shown.
 - **One recipient per email.** Addresses must be ordinary email addresses (no commas, quotes or brackets), so a value can't add hidden recipients. Subjects and meeting titles can't contain line breaks, so values can't add email headers.
 - **Gmail searches can't be changed by data.** Only well-formed addresses go into the Inbox's Gmail search, each in quotes.

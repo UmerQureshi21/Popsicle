@@ -62,3 +62,23 @@ test("pages carry the security headers", async ({ page }) => {
   expect(headers["referrer-policy"]).toBe("strict-origin-when-cross-origin");
   expect(headers["x-powered-by"]).toBeUndefined();
 });
+
+test("the theme switch: one click to dark, remembered, and the landing page stays light", async ({ page }) => {
+  await new FakeApi().install(page);
+  await page.goto("/sent");
+  const html = page.locator("html");
+  await expect(html).toHaveAttribute("data-theme", "light");
+  await page.getByRole("button", { name: "Switch to dark mode" }).click();
+  await expect(html).toHaveAttribute("data-theme", "dark");
+  await expect(page.locator("body")).toHaveCSS("background-color", "rgb(23, 25, 37)");
+
+  // Remembered, and applied before the page is drawn (no light flash).
+  await page.reload();
+  expect(await page.evaluate(() => document.documentElement.dataset.theme)).toBe("dark");
+  await expect(page.getByRole("button", { name: "Switch to light mode" })).toBeVisible();
+
+  await page.goto("/");
+  await expect(html).toHaveAttribute("data-theme", "light");
+  await page.goto("/compose");
+  await expect(html).toHaveAttribute("data-theme", "dark");
+});
