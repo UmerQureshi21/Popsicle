@@ -21,6 +21,8 @@ test("How it works lights up step by step as you scroll, and back again", async 
   await page.goto("/");
   await page.locator("#how").scrollIntoViewIfNeeded();
   await expect(page.locator("[data-beam-step]")).toHaveCount(5);
+  // Three strands from each source, then a single path through the steps.
+  await expect(page.locator("#how [data-lit-path]")).toHaveCount(7);
 
   // Two particles leave Hunter and Gmail; nothing is lit before they reach step 1.
   await scrollTo(page, '[data-source-block="hunter"]', 0, 160); // just below the source, on the way down
@@ -88,7 +90,7 @@ test("on a phone the cards stack plainly, without trails", async ({ browser }) =
   await context.close();
 });
 
-test("the hero shows the pitch and the three example emails, at every screen size", async ({ browser }) => {
+test("the hero shows the pitch and the three example cards, at every screen size", async ({ browser }) => {
   for (const width of [390, 768, 1024, 1280, 1772]) {
     const context = await browser.newContext({ viewport: { width, height: 900 } });
     const page = await context.newPage();
@@ -98,12 +100,13 @@ test("the hero shows the pitch and the three example emails, at every screen siz
     await expect(page.getByText("Cold email, simplified")).toHaveCount(0);
     await expect(page.getByText(/Powered by/)).toHaveCount(0);
     await expect(page.getByRole("link", { name: /Get started/ }).first()).toBeVisible();
-    // Sent, Replied, Booked: each name sits clear of its badge.
-    const cards = page.locator("[data-hero-email]");
+    await expect(page.getByText("From cold email to")).toHaveCount(0);
+    // Found (Hunter), sent (Gmail), booked (Meet): each title sits clear of its badge.
+    const cards = page.locator("[data-hero-card]");
     await expect(cards).toHaveCount(3);
-    await expect(cards.locator("[data-badge]")).toHaveText(["Sent", "Replied", "Booked"]);
+    await expect(cards.locator("[data-title]")).toHaveText(["Email found", "10 emails sent", "Meet link sent"]);
     const gaps = await cards.evaluateAll((els) =>
-      els.map((c) => c.querySelector("[data-badge]")!.getBoundingClientRect().left - c.querySelector("[data-name]")!.getBoundingClientRect().right),
+      els.map((c) => c.querySelector("[data-badge]")!.getBoundingClientRect().left - c.querySelector("[data-title]")!.getBoundingClientRect().right),
     );
     expect(Math.min(...gaps)).toBeGreaterThanOrEqual(0);
     // Nothing pushes the page sideways.

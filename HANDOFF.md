@@ -347,13 +347,12 @@ Keep that pattern for anything new that might take long.
 
 ### 7.10 Landing page (`app/page.tsx`, `components/landing/*`)
 - **Hero**:
-  - The left side has the headline "**Pop** into their inbox" ("Pop" in crimson), "From cold email to coffee chat", the description, and Get started.
-  - The right side is `HeroVisual`: a 7:5 canvas with one tilted popsicle, three email cards (Sent / Replied / Booked), dashed SVG arrows (viewBox 1000×714 matching the canvas), and the envelope.
+  - The left side has the headline "**Pop** into their inbox" ("Pop" in crimson), the description, and Get started. The "From cold email to coffee chat" subtitle was removed on purpose.
+  - The right side is `HeroVisual`: a 7:5 canvas with one tilted popsicle, three cards for the app's main parts (Email found with Hunter's logo and a made-up `umer.qureshi@acme.com`, 10 emails sent with Gmail's, Meet link sent with `public/meet-icon.png`), dashed SVG arrows (viewBox 1000×714 matching the canvas), and the envelope.
   - Positions are percentages taken from his mockup. If you move something, keep the arrows' viewBox coordinates in sync.
 - **How it works** (`HowItWorks.tsx`):
-  - Scroll-driven light trails: Hunter and Gmail particles fan in, merge at step 1, and run down a trunk.
+  - Scroll-driven light trails: Hunter and Gmail particles fan in, merge at step 1, and run down a single trunk line (no side strands) through every step.
   - Progress follows a "reading line" 62% down the viewport.
-  - Side strands bulge at most 0.75 × bow, so they stay behind the step circles.
 - **Feature cards** (`FeatureBeams.tsx`):
   - All 6 appear together when the section comes into view.
   - Then a particle zigzags through them once (~4 s): row 1 left→right, down the right column, row 2 right→left, and so on.
