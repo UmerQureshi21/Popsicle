@@ -1,5 +1,6 @@
 "use client";
 
+import { safeHref } from "@/lib/safeUrl";
 import { ExternalLink, TriangleAlert } from "lucide-react";
 import type { FoundPerson } from "@/lib/api";
 import { formatDate } from "@/lib/format";
@@ -53,9 +54,9 @@ export default function PersonRow({
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-2">
           <span className="truncate text-sm font-semibold text-ink">{p.full_name || p.email}</span>
-          {p.linkedin_url && (
+          {safeHref(p.linkedin_url) && (
             <a
-              href={p.linkedin_url}
+              href={safeHref(p.linkedin_url)}
               target="_blank"
               rel="noreferrer"
               onClick={(e) => e.stopPropagation()}

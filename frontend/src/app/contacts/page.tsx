@@ -1,5 +1,6 @@
 "use client";
 
+import { safeHref } from "@/lib/safeUrl";
 import { useEffect, useState } from "react";
 import { Link2, Search, Trash2, Users } from "lucide-react";
 import { api, type Company, type Contact } from "@/lib/api";
@@ -79,8 +80,8 @@ export default function ContactsPage() {
                       <div className="min-w-0">
                         <div className="flex items-center gap-1.5 font-medium text-ink">
                           {c.full_name || <span className="text-steel">Unknown name</span>}
-                          {c.linkedin_url && (
-                            <a href={c.linkedin_url} target="_blank" rel="noreferrer" className="text-steel hover:text-ink">
+                          {safeHref(c.linkedin_url) && (
+                            <a href={safeHref(c.linkedin_url)} target="_blank" rel="noreferrer" className="text-steel hover:text-ink">
                               <Link2 className="size-3.5" />
                             </a>
                           )}

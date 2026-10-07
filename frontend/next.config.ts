@@ -14,7 +14,8 @@ export function apiRewrites(backendOrigin: string | undefined) {
 export const SECURITY_HEADERS = [
   // No other site can show Popsicle inside a frame (to trick you into clicking things).
   { key: "X-Frame-Options", value: "DENY" },
-  { key: "Content-Security-Policy", value: "frame-ancestors 'none'" },
+  // No plugins, no hijacking relative links with a <base> tag, forms only post to Popsicle.
+  { key: "Content-Security-Policy", value: "frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'" },
   { key: "X-Content-Type-Options", value: "nosniff" },
   // Links out (LinkedIn, Meet, Gmail) see only popsicle's address, never the page or person you were on.
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },

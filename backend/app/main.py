@@ -55,6 +55,20 @@ async def only_through_the_frontend(request: Request, call_next):
     return JSONResponse({"detail": "Use Popsicle through its website."}, status_code=403)
 
 
+UNSAFE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
+
+
+@app.middleware("http")
+async def same_site_only(request: Request, call_next):
+    """Changes can only be made from Popsicle's own pages. Browsers say which site a request
+    comes from (Origin); one from any other website is refused, on top of the session cookie
+    already not being sent to other sites."""
+    origin = request.headers.get("origin")
+    if request.method in UNSAFE_METHODS and origin and origin.rstrip("/") != settings.frontend_url.rstrip("/"):
+        return JSONResponse({"detail": "Requests from other websites aren't allowed."}, status_code=403)
+    return await call_next(request)
+
+
 app.include_router(auth_routes.router)
 # Everything else needs a session when AUTH_REQUIRED is on (see app/auth.py).
 protected = [Depends(require_user)]

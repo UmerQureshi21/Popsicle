@@ -15,7 +15,8 @@ from sqlalchemy.orm import Session
 from . import gmail, sending, verification
 from .db import SessionLocal
 from .models import Attachment, Campaign, CampaignStatus, Company, CompanyStatus, Contact, Email, EmailStatus
-from .rendering import EMAIL, enrich, render
+from . import safety
+from .rendering import enrich, render
 from .schemas import CampaignDraft, PreviewItem, PreviewOut, SendingQuota, Verification
 
 log = logging.getLogger(__name__)
@@ -53,13 +54,15 @@ def prepare(db: Session, draft: CampaignDraft) -> PreviewOut:
         issues: list[str] = []
         if not to:
             issues.append("missing email")
-        elif not EMAIL.match(to):
+        elif not safety.is_email(to):
             issues.append(f'"{to}" is not a valid email')
         elif to in seen:
             issues.append("duplicate of an earlier row")
         missing = sorted(set(miss_s + miss_b))
         if missing:
             issues.append("no value for " + ", ".join(missing))
+        if safety.has_line_break(subject):
+            issues.append("the subject can't contain a line break (check the values used in it)")
         seen.add(to)
 
         v = verdicts.get(to)
@@ -122,6 +125,8 @@ def upsert_contact(db: Session, values: dict[str, str], company: Company | None)
         "linkedin_url": ("linkedin_url", "linkedin"),
     }.items():
         val = next((values[k] for k in keys if values.get(k)), None)
+        if field == "linkedin_url":
+            val = safety.safe_url(val)  # never store a link that could run code when clicked
         if val:
             setattr(contact, field, val)
     if company is not None:

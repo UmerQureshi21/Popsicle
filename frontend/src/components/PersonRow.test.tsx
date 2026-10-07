@@ -35,6 +35,16 @@ describe("EmailedCount", () => {
 });
 
 describe("PersonRow", () => {
+  it.each(["javascript:alert(document.cookie)", "data:text/html,<script>alert(1)</script>"])(
+    "never turns a dangerous link into something clickable: %s",
+    (link) => {
+      render(<PersonRow person={person({ linkedin_url: link })} selected={false} onToggle={() => {}} />);
+      expect(screen.getByText("Jane Doe")).toBeInTheDocument();
+      expect(screen.queryByRole("link")).not.toBeInTheDocument();
+      expect(document.querySelector('a[href^="javascript"], a[href^="data"]')).toBeNull();
+    },
+  );
+
   it("shows the person and toggles when clicked", async () => {
     const onToggle = vi.fn();
     render(

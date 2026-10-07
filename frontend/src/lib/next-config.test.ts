@@ -24,7 +24,7 @@ describe("next.config", () => {
     expect(headers).toEqual([{ source: "/:path*", headers: SECURITY_HEADERS }]);
     const byName = Object.fromEntries(SECURITY_HEADERS.map((h) => [h.key, h.value]));
     expect(byName["X-Frame-Options"]).toBe("DENY");
-    expect(byName["Content-Security-Policy"]).toBe("frame-ancestors 'none'");
+    expect(byName["Content-Security-Policy"]).toBe("frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'");
     expect(nextConfig.poweredByHeader).toBe(false);
   });
 });

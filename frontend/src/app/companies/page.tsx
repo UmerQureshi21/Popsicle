@@ -1,5 +1,6 @@
 "use client";
 
+import { safeHref } from "@/lib/safeUrl";
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Building2, ExternalLink, ImageDown, Plus, Trash2, UserSearch, X } from "lucide-react";
@@ -344,8 +345,8 @@ export default function CompaniesPage() {
           <span className="flex items-center gap-2">
             <CompanyLogo domain={selected?.domain} size={24} />
             {selected?.name}
-            {selected?.linkedin_url && (
-              <a href={selected.linkedin_url} target="_blank" rel="noreferrer" className="text-steel hover:text-ink">
+            {safeHref(selected?.linkedin_url) && (
+              <a href={safeHref(selected?.linkedin_url)} target="_blank" rel="noreferrer" className="text-steel hover:text-ink">
                 <ExternalLink className="size-4" />
               </a>
             )}

@@ -15,6 +15,7 @@ from email.utils import getaddresses, parseaddr
 from sqlalchemy import or_, select, update
 from sqlalchemy.orm import Session
 
+from .safety import is_email
 from .models import (
     CompanyStatus,
     Contact,
@@ -151,7 +152,9 @@ def _search(service, query: str) -> list[dict]:
 
 
 def _query(addresses: list[str]) -> str:
-    any_of = " OR ".join(addresses)
+    # Only well-formed addresses, quoted, so an odd stored address can't change the search
+    # (Gmail treats ( ) { } OR - and spaces as search operators).
+    any_of = " OR ".join(f'"{a}"' for a in addresses if is_email(a))
     return f"from:({any_of}) OR to:({any_of}) OR cc:({any_of})"
 
 
