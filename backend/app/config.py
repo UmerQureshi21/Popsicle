@@ -35,6 +35,9 @@ class Settings(BaseSettings):
     # Encrypts the Gmail login stored in the database. Required when deployed. Make one with:
     # python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
     token_encryption_key: str | None = None
+    # Shared with the frontend, which adds it to every /api call it forwards. Deployed, calls
+    # without it (e.g. straight to the backend's own address) are refused. Any long random string.
+    proxy_secret: str | None = None
 
     @property
     def is_local(self) -> bool:
@@ -62,6 +65,8 @@ class Settings(BaseSettings):
                 raise ValueError("AUTH_REQUIRED can only be false on localhost.")
             if not self.token_encryption_key:
                 raise ValueError("Set TOKEN_ENCRYPTION_KEY when deployed (see app/config.py for how to make one).")
+            if not self.proxy_secret or len(self.proxy_secret) < 32:
+                raise ValueError("Set PROXY_SECRET (32+ random characters, the same on the frontend) when deployed.")
         if self.token_encryption_key:
             from cryptography.fernet import Fernet
 

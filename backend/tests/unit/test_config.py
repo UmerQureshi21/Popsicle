@@ -12,7 +12,10 @@ KEY = Fernet.generate_key().decode()
 
 LOCAL_DB = "postgresql+psycopg://localhost:5442/cold_emailer"
 HOSTED_DB = "postgresql+psycopg://postgres:pw@postgres.railway.internal:5432/railway"
-DEPLOYED = dict(backend_url="https://popsicle.vercel.app", frontend_url="https://popsicle.vercel.app", database_url=HOSTED_DB)
+DEPLOYED = dict(
+    backend_url="https://popsicle.vercel.app", frontend_url="https://popsicle.vercel.app", database_url=HOSTED_DB,
+    proxy_secret="p" * 40,
+)
 
 
 def make(**values) -> Settings:
@@ -24,7 +27,7 @@ def make(**values) -> Settings:
 
 @pytest.fixture(autouse=True)
 def clean_env(monkeypatch):
-    for name in ("AUTH_REQUIRED", "COOKIE_SECURE", "BACKEND_URL", "FRONTEND_URL", "DATABASE_URL", "TOKEN_ENCRYPTION_KEY", "COOKIE_SAMESITE"):
+    for name in ("AUTH_REQUIRED", "COOKIE_SECURE", "BACKEND_URL", "FRONTEND_URL", "DATABASE_URL", "TOKEN_ENCRYPTION_KEY", "COOKIE_SAMESITE", "PROXY_SECRET"):
         monkeypatch.delenv(name, raising=False)
 
 
@@ -90,3 +93,38 @@ def test_api_docs_only_locally():
 
 def test_the_test_app_runs_as_local(client):
     assert client.get("/openapi.json").status_code == 200
+
+
+class TestProxySecret:
+    def test_required_when_deployed(self):
+        without = {k: v for k, v in DEPLOYED.items() if k != "proxy_secret"}
+        with pytest.raises(ValidationError, match="Set PROXY_SECRET"):
+            make(**without, token_encryption_key=KEY)
+        with pytest.raises(ValidationError, match="Set PROXY_SECRET"):
+            make(**without, token_encryption_key=KEY, proxy_secret="short")
+        assert make(**without, token_encryption_key=KEY, proxy_secret="x" * 32).proxy_secret
+
+
+class TestOnlyThroughTheFrontend:
+    """Deployed, the API refuses calls that didn't come through the frontend's forwarding."""
+
+    @pytest.fixture
+    def deployed(self, settings, monkeypatch):
+        from app.config import Settings
+
+        monkeypatch.setattr(Settings, "is_local", property(lambda self: False))
+        settings(proxy_secret="s" * 40)
+
+    def test_direct_calls_are_refused(self, client, deployed):
+        r = client.get("/api/companies")
+        assert (r.status_code, r.json()) == (403, {"detail": "Use Popsicle through its website."})
+        assert client.get("/api/companies", headers={"x-popsicle-proxy": "guess"}).status_code == 403
+
+    def test_forwarded_calls_get_through(self, client, deployed):
+        assert client.get("/api/auth/me", headers={"x-popsicle-proxy": "s" * 40}).status_code == 200
+
+    def test_the_health_check_is_always_open(self, client, deployed):
+        assert client.get("/api/health").status_code == 200
+
+    def test_locally_nothing_is_needed(self, client):
+        assert client.get("/api/auth/me").status_code == 200

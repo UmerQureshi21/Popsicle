@@ -228,6 +228,17 @@ class AuthSession(Base):
     created_at: Mapped[datetime] = _created_at()
 
 
+class TrustedDevice(Base):
+    """A browser you've logged in from before. Guessing passwords elsewhere can't lock it out."""
+
+    __tablename__ = "trusted_devices"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)  # sha256 of the cookie value
+    created_at: Mapped[datetime] = _created_at()
+
+
 class SendingSettings(Base):
     """One row (id=1): how much may be sent, to keep the Gmail account in good standing."""
 

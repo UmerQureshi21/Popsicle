@@ -1,6 +1,10 @@
+import pytest  # noqa: F401
 from sqlalchemy import select
 
+from fastapi.testclient import TestClient
+
 from app import auth
+from app.db import SessionLocal
 from app.models import AuthSession, User
 from tests import factories as f
 
@@ -46,11 +50,54 @@ class TestLogin:
             assert login(client, password="nope").status_code == 401
         assert login(client).status_code == 429  # even with the right password
 
-    def test_locked_out_visitors_dont_lock_out_the_owner(self, client, db):
+    def test_a_made_up_address_doesnt_get_around_the_limit(self, client, db):
         f.user(db)
-        for _ in range(auth.MAX_FAILURES):
-            client.post("/api/auth/login", json={"email": "me@example.com", "password": "nope"}, headers={"x-forwarded-for": "6.6.6.6"})
-        assert login(client).status_code == 200  # the owner, from elsewhere
+        for n in range(auth.MAX_FAILURES):
+            client.post("/api/auth/login", json={"email": "me@example.com", "password": "nope"}, headers={"x-forwarded-for": f"6.6.6.{n}"})
+        assert login(client).status_code == 429  # every attempt counted against the real caller
+
+    def test_guesses_from_everywhere_cant_lock_out_your_browser(self, client, db, settings):
+        settings(proxy_secret="s" * 40)
+        f.user(db)
+        assert login(client).status_code == 200  # you, earlier: this browser is now trusted
+        assert client.cookies.get(auth.DEVICE_COOKIE)
+        client.post("/api/auth/logout")
+        attacker = TestClient(client.app)
+        for n in range(auth.MAX_FAILURES_PER_ACCOUNT):
+            r = attacker.post(
+                "/api/auth/login", json={"email": "me@example.com", "password": "nope"},
+                headers={auth.PROXY_HEADER: "s" * 40, auth.CLIENT_IP_HEADER: f"10.0.0.{n}"},
+            )
+            assert r.status_code == 401
+        new_browser = attacker.post(
+            "/api/auth/login", json={"email": "me@example.com", "password": "correct horse"},
+            headers={auth.PROXY_HEADER: "s" * 40, auth.CLIENT_IP_HEADER: "10.9.9.9"},
+        )
+        assert new_browser.status_code == 429  # the account limit still stops guessing
+        assert login(client).status_code == 200  # but your own browser gets in
+
+    def test_logging_in_again_doesnt_pile_up_trusted_devices(self, client, db):
+        from app.models import TrustedDevice
+
+        f.user(db)
+        login(client)
+        login(client)
+        assert len(db.scalars(select(TrustedDevice)).all()) == 1
+
+    def test_a_device_trusted_for_someone_else_doesnt_count(self, client, db):
+        f.user(db, email="other@example.com")
+        f.user(db)
+        assert client.post("/api/auth/login", json={"email": "other@example.com", "password": "correct horse"}).status_code == 200
+        client.post("/api/auth/logout")
+        from app.routers import auth as routes  # noqa: F401
+
+        with SessionLocal() as s:
+            from starlette.requests import Request
+
+            req = Request({"type": "http", "headers": [(b"cookie", f"{auth.DEVICE_COOKIE}={client.cookies.get(auth.DEVICE_COOKIE)}".encode())]})
+            me = s.scalars(select(User).where(User.email == "me@example.com")).one()
+            assert not auth.is_trusted_device(s, req, me)
+            assert not auth.is_trusted_device(s, req, None)
 
     def test_success_clears_earlier_failures(self, client, db):
         f.user(db)

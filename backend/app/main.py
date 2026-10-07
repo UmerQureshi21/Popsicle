@@ -1,10 +1,11 @@
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
-from .auth import require_user
+from .auth import from_proxy, require_user
 from . import migrations
 from .campaigns import mark_interrupted_on_startup, resume_on_startup, start_sweeper
 from .config import settings
@@ -42,6 +43,18 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def only_through_the_frontend(request: Request, call_next):
+    """Deployed, the backend's own address is public too. Every call must come through the
+    frontend's forwarding (which adds the shared secret), so nobody can reach the API directly,
+    or fake their address to get around the login limits."""
+    if settings.is_local or request.url.path == "/api/health" or from_proxy(request):
+        return await call_next(request)
+    return JSONResponse({"detail": "Use Popsicle through its website."}, status_code=403)
+
+
 app.include_router(auth_routes.router)
 # Everything else needs a session when AUTH_REQUIRED is on (see app/auth.py).
 protected = [Depends(require_user)]
