@@ -228,6 +228,30 @@ class AuthSession(Base):
     created_at: Mapped[datetime] = _created_at()
 
 
+class OAuthState(Base):
+    """A Gmail connection in progress, between leaving for Google's consent screen and coming
+    back. In the database (not memory) so it survives a restart and works whichever server
+    process Google's redirect reaches."""
+
+    __tablename__ = "oauth_states"
+
+    state: Mapped[str] = mapped_column(String(200), primary_key=True)
+    code_verifier: Mapped[str | None] = mapped_column(Text)  # PKCE: proves the redirect is ours
+    return_to: Mapped[str] = mapped_column(String(500))
+    created_at: Mapped[datetime] = _created_at()
+
+
+class TrustedDevice(Base):
+    """A browser you've logged in from before. Guessing passwords elsewhere can't lock it out."""
+
+    __tablename__ = "trusted_devices"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)  # sha256 of the cookie value
+    created_at: Mapped[datetime] = _created_at()
+
+
 class SendingSettings(Base):
     """One row (id=1): how much may be sent, to keep the Gmail account in good standing."""
 
@@ -260,6 +284,9 @@ class GmailAccount(Base):
     token_json: Mapped[str] = mapped_column(Text)
     scopes: Mapped[str | None] = mapped_column(Text)  # space-separated scopes Google granted
     synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))  # last conversation sync
+    # A sync in progress (in the background) and how the last one went; see conversations.py.
+    sync_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    sync_result: Mapped[dict | None] = mapped_column(JSONB)
     connected_at: Mapped[datetime] = _created_at()
 
 

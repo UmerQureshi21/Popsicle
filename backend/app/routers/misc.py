@@ -107,17 +107,18 @@ def gmail_status(db: Session = Depends(get_db)):
 
 
 @router.get("/gmail/connect", tags=["gmail"])
-def gmail_connect(next: str = "/compose"):
+def gmail_connect(next: str = "/compose", db: Session = Depends(get_db)):
     """Browser navigates here; we bounce it to Google's consent screen, then back to `next`."""
     if not gmail.credentials_file_present():
         raise HTTPException(400, "backend/credentials.json is missing. See README for Gmail setup.")
-    return RedirectResponse(gmail.start_auth(next))
+    return RedirectResponse(gmail.start_auth(db, next))
 
 
 @router.get("/gmail/callback", tags=["gmail"])
 def gmail_callback(request: Request, state: str = "", error: str | None = None, db: Session = Depends(get_db)):
-    back = settings.frontend_url + gmail.pop_return_path(state)
+    back = settings.frontend_url + gmail.return_path(db, state)
     if error:
+        gmail.forget_state(db, state)
         return RedirectResponse(f"{back}?gmail_error={error}")
     try:
         # Rebuilt from the public address: behind the frontend's /api forwarding, request.url is

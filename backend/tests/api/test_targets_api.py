@@ -79,8 +79,8 @@ class TestBulkAdd:
         body = client.post("/api/companies/bulk", json={"lines": ["boom"]}).json()
         assert [(c["name"], c["domain"]) for c in body["added"]] == [("boom", None)]
 
-    def test_at_most_100_at_once(self, client):
-        assert client.post("/api/companies/bulk", json={"lines": ["x"] * 101}).status_code == 422
+    def test_at_most_25_at_once(self, client):
+        assert client.post("/api/companies/bulk", json={"lines": ["x"] * 26}).status_code == 422
 
 
 class TestFillDomains:
@@ -88,7 +88,7 @@ class TestFillDomains:
         f.company(db, name="Meta")
         f.company(db, name="Harvey")
         f.company(db, name="Stripe", domain="stripe.com")
-        assert client.post("/api/companies/fill-domains").json() == {"filled": 1, "missing": 1}
+        assert client.post("/api/companies/fill-domains").json() == {"filled": 1, "missing": 1, "next_after": None}
         assert {c["name"]: c["domain"] for c in client.get("/api/companies").json()} == {
             "Meta": "meta.com", "Harvey": None, "Stripe": "stripe.com",
         }
@@ -97,16 +97,20 @@ class TestFillDomains:
     def test_never_gives_two_companies_the_same_domain(self, client, db, suggestions):
         f.company(db, name="Facebook", domain="meta.com")
         f.company(db, name="Meta")
-        assert client.post("/api/companies/fill-domains").json() == {"filled": 0, "missing": 1}
+        assert client.post("/api/companies/fill-domains").json() == {"filled": 0, "missing": 1, "next_after": None}
 
-    def test_looks_up_at_most_a_batch_at_a_time(self, client, db, suggestions, monkeypatch):
+    def test_a_few_at_a_time_carrying_on_where_it_stopped(self, client, db, suggestions, monkeypatch):
         from app import targets
 
         monkeypatch.setattr(targets, "FILL_LIMIT", 1)
-        f.company(db, name="Meta")
+        harvey = f.company(db, name="Harvey")  # Hunter doesn't know it
         f.company(db, name="Shopify")
-        assert client.post("/api/companies/fill-domains").json() == {"filled": 1, "missing": 1}
-        assert suggestions == ["Meta"]
+        first = client.post("/api/companies/fill-domains").json()
+        assert first == {"filled": 0, "missing": 2, "next_after": harvey.id}
+        # The next piece skips Harvey instead of asking about it again.
+        second = client.post(f"/api/companies/fill-domains?after_id={first['next_after']}").json()
+        assert second == {"filled": 1, "missing": 1, "next_after": None}
+        assert suggestions == ["Harvey", "Shopify"]
 
     def test_needs_hunter(self, client, settings):
         settings(hunter_api_key=None)

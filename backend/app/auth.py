@@ -18,10 +18,14 @@ from sqlalchemy.orm import Session
 
 from .config import settings
 from .db import get_db
-from .models import AuthSession, User
+from .models import AuthSession, TrustedDevice, User
 
 COOKIE_NAME = "popsicle_session"
+DEVICE_COOKIE = "popsicle_device"
 SESSION_TTL = timedelta(days=30)
+DEVICE_TTL = timedelta(days=365)
+PROXY_HEADER = "x-popsicle-proxy"  # the shared secret the frontend adds when forwarding
+CLIENT_IP_HEADER = "x-popsicle-client-ip"  # the visitor's address, as the frontend saw it
 
 # Requests that must work without a session: Google redirects here at the end of Gmail sign-in,
 # and that flow is already tied to a session-protected /api/gmail/connect call by its state value.
@@ -63,45 +67,79 @@ def verify_password(password: str, stored: str | None) -> bool:
 
 # ---- Brute-force protection -------------------------------------------------
 
-# Wrong passwords are limited per visitor (by IP address), so one person guessing can't lock
-# you out of your own account; and, more loosely, per account, so guesses spread over many
-# addresses still run out. Kept in memory: a restart resets the counts.
+# Wrong passwords are limited per visitor (by IP address); and, more loosely, per account, so
+# guesses spread over many addresses still run out. The per-account limit doesn't apply to a
+# browser that has logged in to that account before (a "trusted device"), so someone guessing
+# can't lock you out of your own browser. Kept in memory: a restart resets the counts.
 MAX_FAILURES = 5  # per visitor
 MAX_FAILURES_PER_ACCOUNT = 20
 LOCKOUT_SECONDS = 15 * 60
 _failures: dict[str, list[float]] = {}
 
 
+def from_proxy(request: Request) -> bool:
+    """Forwarded by Popsicle's own frontend (it carries the shared secret)."""
+    given = request.headers.get(PROXY_HEADER, "")
+    return bool(settings.proxy_secret) and hmac.compare_digest(given.encode(), settings.proxy_secret.encode())
+
+
 def client_ip(request: Request) -> str:
-    """The visitor's address. Behind the frontend's forwarding, the proxy puts it first in
-    X-Forwarded-For (someone calling the backend directly can fake that header, which is why
-    the per-account limit exists too)."""
-    forwarded = request.headers.get("x-forwarded-for", "")
-    first = forwarded.split(",")[0].strip()
-    return first or (request.client.host if request.client else "unknown")
+    """The visitor's address. Only the frontend's own forwarding is believed about it; any
+    X-Forwarded-For a caller sends is ignored, since anyone can make one up."""
+    if from_proxy(request) and request.headers.get(CLIENT_IP_HEADER):
+        return request.headers[CLIENT_IP_HEADER]
+    return request.client.host if request.client else "unknown"
 
 
-def _limits(email: str, ip: str) -> list[tuple[str, int]]:
-    return [(f"ip:{ip}", MAX_FAILURES), (f"email:{email}", MAX_FAILURES_PER_ACCOUNT)]
+def _limits(email: str, ip: str, trusted: bool) -> list[tuple[str, int]]:
+    limits = [(f"ip:{ip}", MAX_FAILURES)]
+    if not trusted:
+        limits.append((f"email:{email}", MAX_FAILURES_PER_ACCOUNT))
+    return limits
 
 
-def check_not_locked(email: str, ip: str) -> None:
+def check_not_locked(email: str, ip: str, trusted: bool = False) -> None:
     now = time.monotonic()
-    for key, limit in _limits(email, ip):
+    for key, limit in _limits(email, ip, trusted):
         recent = [t for t in _failures.get(key, []) if now - t < LOCKOUT_SECONDS]
         _failures[key] = recent
         if len(recent) >= limit:
             raise HTTPException(429, "Too many attempts. Try again in 15 minutes.")
 
 
-def record_failure(email: str, ip: str) -> None:
-    for key, _ in _limits(email, ip):
+def record_failure(email: str, ip: str, trusted: bool = False) -> None:
+    for key, _ in _limits(email, ip, trusted):
         _failures.setdefault(key, []).append(time.monotonic())
 
 
 def clear_failures(email: str, ip: str) -> None:
-    for key, _ in _limits(email, ip):
+    for key, _ in _limits(email, ip, trusted=False):
         _failures.pop(key, None)
+
+
+def is_trusted_device(db: Session, request: Request, user: User | None) -> bool:
+    token = request.cookies.get(DEVICE_COOKIE)
+    if not token or user is None:
+        return False
+    d = db.scalars(select(TrustedDevice).where(TrustedDevice.token_hash == _token_hash(token))).first()
+    return d is not None and d.user_id == user.id
+
+
+def remember_device(db: Session, request: Request, user: User, response: Response) -> None:
+    if is_trusted_device(db, request, user):
+        return
+    token = secrets.token_urlsafe(32)
+    db.add(TrustedDevice(user_id=user.id, token_hash=_token_hash(token)))
+    db.commit()
+    response.set_cookie(
+        DEVICE_COOKIE,
+        token,
+        max_age=int(DEVICE_TTL.total_seconds()),
+        httponly=True,
+        secure=settings.cookie_secure,
+        samesite=settings.cookie_samesite,
+        path="/api/auth",
+    )
 
 
 # ---- Sessions ---------------------------------------------------------------

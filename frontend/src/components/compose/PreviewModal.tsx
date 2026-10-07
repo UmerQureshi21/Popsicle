@@ -14,6 +14,7 @@ import {
 } from "@/lib/api";
 import { creditsChanged, useHunterStatus } from "@/lib/credits";
 import { formatDate, formatDateTime } from "@/lib/format";
+import { VERIFY_PIECE, inPieces } from "@/lib/pieces";
 import { quickPicks, timezoneName, toLocalInput } from "@/lib/schedule";
 import { Avatar, Button, Modal, Popover, StatusBadge } from "@/components/ui";
 
@@ -74,8 +75,12 @@ export default function PreviewModal({ draft, attachments, gmail, onClose, onSen
     setVerifying(true);
     setVerifyNote(null);
     try {
-      const res = await api.post<{ results: Verification[] }>("/api/people-search/verify", { emails: unchecked.slice(0, 100) });
-      const pending = res.results.filter((r) => r.status === "pending").length;
+      // A few at a time, so no request runs long; verdicts already back are kept if one fails.
+      let pending = 0;
+      for (const piece of inPieces(unchecked, VERIFY_PIECE)) {
+        const res = await api.post<{ results: Verification[] }>("/api/people-search/verify", { emails: piece });
+        pending += res.results.filter((r) => r.status === "pending").length;
+      }
       if (pending) setVerifyNote(`Hunter is still checking ${pending} address${pending === 1 ? "" : "es"}. Try again in a minute.`);
       setVersion((v) => v + 1);
     } catch (e) {

@@ -4,7 +4,6 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from app import conversations as conv
 from app import gmail
 from app.models import ConversationMessage, GmailAccount
 from tests import factories as f
@@ -110,24 +109,46 @@ class TestDetail:
         assert client.get(f"/api/conversations/{c.id}").status_code == 404
 
 
+@pytest.fixture
+def inline(monkeypatch):
+    """Run the background half of a Gmail check right away, instead of on a thread."""
+    from app.routers import conversations as routes
+
+    jobs = []
+    monkeypatch.setattr(routes, "in_background", lambda fn, *args: jobs.append(args) or fn(*args))
+    return jobs
+
+
 class TestSync:
-    def test_syncs_everyone(self, client, db, account, fake_gmail):
+    def test_runs_in_the_background_and_reports_when_done(self, client, db, account, fake_gmail, inline):
         emailed(db, "douglas@harvey.ai", "Douglas Quan")
         fake_gmail.add("t1", message("m1", ME, "douglas@harvey.ai", sent=True),
                        message("m2", "douglas@harvey.ai", ME, "Yes!", at=at(2)))
         r = client.post("/api/conversations/sync")
-        assert r.status_code == 200
-        body = r.json()
-        assert (body["threads_checked"], body["threads_downloaded"], body["new_messages"]) == (1, 1, 2)
+        assert r.status_code == 202
+        assert inline == [(account.id,)]
+        body = client.get("/api/conversations/sync").json()
+        assert body["running"] is False
+        assert (body["threads_checked"], body["threads_downloaded"], body["new_messages"], body["error"]) == (1, 1, 2, None)
         assert body["synced_at"] is not None
         assert client.get("/api/conversations").json()[0]["replied"] is True
 
-    def test_syncs_one_person(self, client, db, account, fake_gmail):
-        jane, _ = emailed(db, "jane@stripe.com")
-        emailed(db, "sam@stripe.com")
-        fake_gmail.add("t1", message("m1", "sam@stripe.com", ME))
-        assert client.post(f"/api/conversations/sync?contact_id={jane.id}").json()["new_messages"] == 0
-        assert fake_gmail.searches == ["from:(jane@stripe.com) OR to:(jane@stripe.com) OR cc:(jane@stripe.com)"]
+    def test_answers_straight_away_while_it_runs(self, client, db, account, monkeypatch):
+        from app.routers import conversations as routes
+
+        started = []
+        monkeypatch.setattr(routes, "in_background", lambda fn, *args: started.append(args))
+        body = client.post("/api/conversations/sync").json()
+        assert body["running"] is True and started == [(account.id,)]
+        assert client.get("/api/conversations/sync").json()["running"] is True
+        # Asking again joins the check already running instead of starting another.
+        assert client.post("/api/conversations/sync").json()["running"] is True
+        assert started == [(account.id,)]
+
+    def test_status_without_gmail(self, client):
+        assert client.get("/api/conversations/sync").json() == {
+            "running": False, "threads_checked": 0, "threads_downloaded": 0, "new_messages": 0, "synced_at": None, "error": None,
+        }
 
     def test_needs_gmail(self, client):
         r = client.post("/api/conversations/sync")
@@ -140,32 +161,48 @@ class TestSync:
         assert r.status_code == 403
         assert "Reconnect Gmail" in r.json()["detail"]
 
-    def test_already_syncing(self, client, account, fake_gmail):
-        conv._lock.acquire()
-        try:
-            r = client.post("/api/conversations/sync")
-        finally:
-            conv._lock.release()
-        assert r.status_code == 409
-        assert "Already checking" in r.json()["detail"]
-
-    def test_expired_login(self, client, account, monkeypatch):
+    def test_expired_login(self, client, account, monkeypatch, inline):
         def expired(db):
             raise gmail.GmailNotConnected("Gmail login expired. Reconnect Gmail.")
 
         monkeypatch.setattr(gmail, "load_credentials", expired)
-        r = client.post("/api/conversations/sync")
-        assert (r.status_code, r.json()["detail"]) == (409, "Gmail login expired. Reconnect Gmail.")
+        client.post("/api/conversations/sync")
+        assert client.get("/api/conversations/sync").json()["error"] == "Gmail login expired. Reconnect Gmail."
 
     @pytest.mark.parametrize(
-        "error, status",
-        [(http_error(403, "Request had insufficient authentication scopes."), 403), (http_error(500, "Backend Error"), 502)],
+        "error, message",
+        [
+            (http_error(403, "Request had insufficient authentication scopes."), "Reconnect Gmail"),
+            (http_error(500, "Backend Error"), "Gmail error"),
+            (RuntimeError("boom"), "failed unexpectedly"),
+        ],
     )
-    def test_gmail_errors(self, client, db, account, fake_gmail, error, status):
+    def test_gmail_errors(self, client, db, account, fake_gmail, inline, error, message):
         emailed(db, "jane@stripe.com")
         fake_gmail.error = error
-        r = client.post("/api/conversations/sync")
-        assert r.status_code == status
+        client.post("/api/conversations/sync")
+        status = client.get("/api/conversations/sync").json()
+        assert message in status["error"] and status["running"] is False
+        # Free to try again.
+        fake_gmail.error = None
+        client.post("/api/conversations/sync")
+        assert client.get("/api/conversations/sync").json()["error"] is None
+
+    def test_in_background_starts_a_thread(self, monkeypatch):
+        from app.routers import conversations as routes
+
+        made = []
+
+        class Thread:
+            def __init__(self, target, args, daemon, name):
+                made.append((target, args, daemon, name))
+
+            def start(self):
+                made.append("started")
+
+        monkeypatch.setattr(routes.threading, "Thread", Thread)
+        routes.in_background(print, 1)
+        assert made == [(print, (1,), True, "gmail-sync"), "started"]
 
 
 class TestMeetings:

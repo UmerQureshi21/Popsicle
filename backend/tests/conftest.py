@@ -16,7 +16,7 @@ os.environ["HUNTER_API_KEY"] = "test-hunter-key"
 os.environ["AUTH_REQUIRED"] = "false"
 os.environ["COOKIE_SECURE"] = "false"
 os.environ["GOOGLE_CLIENT_SECRETS"] = str(Path(__file__).parent / "does-not-exist.json")
-os.environ["FRONTEND_URL"] = "http://frontend.test"
+os.environ["FRONTEND_URL"] = "http://localhost:3000"
 os.environ["BACKEND_URL"] = "http://localhost:8000"
 
 import pytest  # noqa: E402
@@ -52,8 +52,6 @@ def _clean_state():
     with engine.begin() as conn:
         conn.execute(text(f"TRUNCATE {tables} RESTART IDENTITY CASCADE"))
     auth._failures.clear()
-    gmail._pending_flows.clear()
-    gmail._return_to.clear()
     campaigns._running.clear()
     campaigns._cancel_requested.clear()
     campaigns._wake_requested.clear()

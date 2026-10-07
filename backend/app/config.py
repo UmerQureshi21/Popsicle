@@ -3,6 +3,7 @@ from typing import Literal
 from urllib.parse import urlparse
 
 from pydantic import model_validator
+from sqlalchemy import make_url
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
@@ -34,10 +35,19 @@ class Settings(BaseSettings):
     # Encrypts the Gmail login stored in the database. Required when deployed. Make one with:
     # python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
     token_encryption_key: str | None = None
+    # Shared with the frontend, which adds it to every /api call it forwards. Deployed, calls
+    # without it (e.g. straight to the backend's own address) are refused. Any long random string.
+    proxy_secret: str | None = None
 
     @property
     def is_local(self) -> bool:
-        return urlparse(self.backend_url).hostname in LOCAL_HOSTS
+        """Running on your own machine: the app's addresses and the database all are. Anything
+        else (say, a hosted database with BACKEND_URL forgotten) gets the deployed rules."""
+        return (
+            _is_local_url(self.backend_url)
+            and _is_local_url(self.frontend_url)
+            and _database_is_local(self.database_url)
+        )
 
     @model_validator(mode="after")
     def _safe_defaults(self) -> "Settings":
@@ -47,11 +57,16 @@ class Settings(BaseSettings):
             self.cookie_secure = not self.is_local
         if not self.is_local:
             # Refuse to start a deployed copy that would be open to anyone, or would store the
-            # Gmail login unencrypted.
+            # Gmail login unencrypted, or that still has a localhost address (forgotten setting).
+            for name in ("backend_url", "frontend_url"):
+                if _is_local_url(getattr(self, name)):
+                    raise ValueError(f"Set {name.upper()} to the app's public address when deployed.")
             if not self.auth_required:
                 raise ValueError("AUTH_REQUIRED can only be false on localhost.")
             if not self.token_encryption_key:
                 raise ValueError("Set TOKEN_ENCRYPTION_KEY when deployed (see app/config.py for how to make one).")
+            if not self.proxy_secret or len(self.proxy_secret) < 32:
+                raise ValueError("Set PROXY_SECRET (32+ random characters, the same on the frontend) when deployed.")
         if self.token_encryption_key:
             from cryptography.fernet import Fernet
 
@@ -60,6 +75,18 @@ class Settings(BaseSettings):
             except Exception as e:
                 raise ValueError("TOKEN_ENCRYPTION_KEY isn't a valid key (see app/config.py for how to make one).") from e
         return self
+
+
+def _is_local_url(url: str) -> bool:
+    return urlparse(url).hostname in LOCAL_HOSTS
+
+
+def _database_is_local(url: str) -> bool:
+    try:
+        host = make_url(url).host
+    except Exception:
+        return False
+    return host is None or host in LOCAL_HOSTS  # no host: a local socket
 
 
 settings = Settings()

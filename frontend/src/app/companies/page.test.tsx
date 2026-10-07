@@ -149,6 +149,26 @@ describe("Companies page", () => {
     expect(screen.queryByText("Found 1 domain.")).not.toBeInTheDocument();
   });
 
+  it("looks up missing logos a few at a time, carrying on where each piece stopped", async () => {
+    api("get", "/api/companies", [company({ id: 3, name: "Acme", domain: null }), company({ id: 4, name: "Zed", domain: null })]);
+    const calls = api("post", "/api/companies/fill-domains", (call) =>
+      call.url.searchParams.get("after_id") === "0" ? { filled: 1, missing: 1, next_after: 3 } : { filled: 0, missing: 1, next_after: null },
+    );
+    render(<CompaniesPage />);
+    await userEvent.setup().click(await screen.findByRole("button", { name: "Find 2 missing logos" }));
+    expect(await screen.findByText("Found 1 domain. Hunter didn’t know 1; add those by hand.")).toBeInTheDocument();
+    expect(calls.map((c) => c.url.searchParams.get("after_id"))).toEqual(["0", "3"]);
+  });
+
+  it("stops if the backend doesn't move forward", async () => {
+    api("get", "/api/companies", [company({ id: 3, name: "Acme", domain: null })]);
+    const calls = api("post", "/api/companies/fill-domains", { filled: 0, missing: 1, next_after: 0 });
+    render(<CompaniesPage />);
+    await userEvent.setup().click(await screen.findByRole("button", { name: "Find 1 missing logo" }));
+    await screen.findByText(/Hunter didn’t recognise/);
+    expect(calls).toHaveLength(1);
+  });
+
   it("says when Hunter only knew some, or none, of the missing domains", async () => {
     const two = [company({ id: 3, name: "Acme", domain: null }), company({ id: 4, name: "Zed", domain: null }), company({ id: 5, name: "Qux", domain: null })];
     api("get", "/api/companies", two);
@@ -304,6 +324,23 @@ describe("Companies page: adding", () => {
     fail = false;
     await user.click(within(dialog).getByRole("button", { name: "Add 1" }));
     expect(await screen.findByText("Added 1 company; Stripe was already on your list.")).toBeInTheDocument();
+  });
+
+  it("adds a long pasted list a piece at a time", async () => {
+    api("get", "/api/companies", []);
+    api("get", "/api/people-search/suggest", []);
+    const bulk = api("post", "/api/companies/bulk", (call) => ({
+      added: (call.body as { lines: string[] }).lines.map((name, i) => company({ id: i + 1, name })),
+      skipped: [],
+    }));
+    render(<CompaniesPage />);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: /Add companies/ }));
+    await user.click(within(screen.getByRole("dialog")).getByRole("combobox", { name: "Company name or domain" }));
+    await user.paste(Array.from({ length: 30 }, (_, i) => `Co${i}`).join("\n"));
+    await user.click(screen.getByRole("button", { name: "Add 30" }));
+    expect(await screen.findByText("Added 30 companies.")).toBeInTheDocument();
+    expect(bulk.map((c) => (c.body as { lines: string[] }).lines.length)).toEqual([25, 5]);
   });
 
   it("just says how many were added when none were skipped", async () => {

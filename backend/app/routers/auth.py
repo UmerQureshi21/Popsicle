@@ -48,14 +48,16 @@ def me(user: User | None = Depends(auth.current_user)):
 def login(body: Credentials, request: Request, response: Response, db: Session = Depends(get_db)):
     email = body.email.strip().lower()
     ip = auth.client_ip(request)
-    auth.check_not_locked(email, ip)
     user = _find(db, email)
+    trusted = auth.is_trusted_device(db, request, user)
+    auth.check_not_locked(email, ip, trusted)
     if not auth.verify_password(body.password, user.password_hash if user else None):
-        auth.record_failure(email, ip)
+        auth.record_failure(email, ip, trusted)
         # Same message whether the email or the password is wrong, so emails can't be probed.
         raise HTTPException(401, "That email and password don't match an account.")
     auth.clear_failures(email, ip)
     auth.start_session(db, user, response)
+    auth.remember_device(db, request, user, response)
     return _out(user)
 
 
@@ -76,6 +78,7 @@ def signup(body: Credentials, request: Request, response: Response, db: Session 
     user.password_hash = auth.hash_password(body.password)
     db.commit()
     auth.start_session(db, user, response)
+    auth.remember_device(db, request, user, response)
     return _out(user)
 
 

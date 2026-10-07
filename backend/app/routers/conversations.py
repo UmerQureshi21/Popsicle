@@ -1,5 +1,7 @@
 """Conversations: each person you've emailed and everything said since, synced from Gmail."""
 
+import logging
+import threading
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -9,8 +11,8 @@ from sqlalchemy.orm import Session, selectinload
 
 from .. import conversations as svc
 from .. import gmail, meetings
-from ..db import get_db
-from ..models import Contact, ConversationMessage, Email, EmailStatus, Meeting
+from ..db import SessionLocal, get_db
+from ..models import Contact, ConversationMessage, Email, EmailStatus, GmailAccount, Meeting
 from ..schemas import (
     ConversationDetail,
     ConversationMessageOut,
@@ -21,6 +23,7 @@ from ..schemas import (
 )
 
 router = APIRouter(prefix="/api/conversations", tags=["conversations"])
+log = logging.getLogger(__name__)
 
 NEEDS_READ = "Popsicle can't read your Gmail yet. Reconnect Gmail and allow “Read your email” to see replies."
 
@@ -109,6 +112,61 @@ def list_conversations(db: Session = Depends(get_db)):
     return sorted(rows, key=lambda r: r.last_message_at.timestamp() if r.last_message_at else 0, reverse=True)
 
 
+def _status(acct) -> ConversationSyncOut:
+    last = (acct.sync_result or {}) if acct else {}
+    return ConversationSyncOut(
+        running=bool(acct) and svc.sync_running(acct),
+        threads_checked=last.get("threads_checked", 0),
+        threads_downloaded=last.get("threads_downloaded", 0),
+        new_messages=last.get("new_messages", 0),
+        synced_at=acct.synced_at if acct else None,
+        error=last.get("error"),
+    )
+
+
+def _run_sync(account_id: int) -> None:
+    """The background half of a Gmail check: does the work and records how it went."""
+    with SessionLocal() as db:
+        acct = db.get(GmailAccount, account_id)
+        result, error = None, None
+        try:
+            result = svc.sync(db, gmail.gmail_service(gmail.load_credentials(db)), acct)
+        except gmail.GmailNotConnected as e:
+            error = str(e)
+        except HttpError as e:
+            error = NEEDS_READ if gmail.is_auth_error(e) else f"Gmail error: {e.reason}"
+        except Exception:
+            log.exception("gmail sync failed")
+            error = "Checking Gmail failed unexpectedly. Try again."
+        db.rollback()
+        svc.finish_sync(db, acct, result, error)
+
+
+def in_background(fn, *args) -> None:
+    threading.Thread(target=fn, args=args, daemon=True, name="gmail-sync").start()
+
+
+@router.post("/sync", response_model=ConversationSyncOut, status_code=202)
+def sync(db: Session = Depends(get_db)):
+    """Start checking Gmail for new replies (in the background, it can take a while), or join
+    the check already running. Poll GET /sync for when it's done."""
+    acct = gmail.current_account(db)
+    if acct is None:
+        raise HTTPException(409, "Connect Gmail first.")
+    if not gmail.can(acct, gmail.READ_SCOPE):
+        raise HTTPException(403, NEEDS_READ)
+    if svc.claim_sync(db, acct):
+        in_background(_run_sync, acct.id)
+    db.refresh(acct)
+    return _status(acct)
+
+
+@router.get("/sync", response_model=ConversationSyncOut)
+def sync_status(db: Session = Depends(get_db)):
+    """Whether a Gmail check is running, and how the last one went."""
+    return _status(gmail.current_account(db))
+
+
 @router.get("/{contact_id}", response_model=ConversationDetail)
 def get_conversation(contact_id: int, db: Session = Depends(get_db)):
     people = _people(db, contact_id)
@@ -139,25 +197,3 @@ def schedule_meeting(contact_id: int, body: MeetingIn, db: Session = Depends(get
     except meetings.MeetingError as e:
         raise HTTPException(e.status, str(e)) from e
     return MeetingOut.model_validate(meeting)
-
-
-@router.post("/sync", response_model=ConversationSyncOut)
-def sync(contact_id: int | None = None, db: Session = Depends(get_db)):
-    """Fetch new replies from Gmail, for everyone or one person."""
-    acct = gmail.current_account(db)
-    if acct is None:
-        raise HTTPException(409, "Connect Gmail first.")
-    if not gmail.can(acct, gmail.READ_SCOPE):
-        raise HTTPException(403, NEEDS_READ)
-    try:
-        service = gmail.gmail_service(gmail.load_credentials(db))
-        result = svc.sync(db, service, acct, None if contact_id is None else [contact_id])
-    except svc.AlreadySyncing as e:
-        raise HTTPException(409, "Already checking Gmail. Try again in a moment.") from e
-    except gmail.GmailNotConnected as e:
-        raise HTTPException(409, str(e)) from e
-    except HttpError as e:
-        if gmail.is_auth_error(e):
-            raise HTTPException(403, NEEDS_READ) from e
-        raise HTTPException(502, f"Gmail error: {e.reason}") from e
-    return ConversationSyncOut(**result.__dict__, synced_at=acct.synced_at)

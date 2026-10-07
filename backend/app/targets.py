@@ -57,21 +57,30 @@ def add_many(db: Session, lines: list[str]) -> tuple[list[Company], list[str]]:
     return added, skipped
 
 
-FILL_LIMIT = 30  # suggestions per request, to stay well under Hunter's rate limit
+FILL_LIMIT = 10  # lookups per request, so each finishes quickly; the page asks for the next piece
 
 
-def fill_domains(db: Session) -> tuple[int, int]:
-    """Look up a domain for companies without one. Returns (filled, still missing)."""
+def fill_domains(db: Session, after_id: int = 0) -> tuple[int, int, int | None]:
+    """Look up domains for the next few companies without one (ids after `after_id`).
+    Returns (filled, still missing overall, id to continue after or None when done). Going by id
+    means names Hunter doesn't know are looked up once, not again in every piece."""
     if not hunter.configured():
         raise hunter.HunterError(400, "Hunter isn't set up. Add HUNTER_API_KEY to backend/.env and restart the backend.")
     taken = set(db.scalars(select(Company.domain).where(Company.domain.is_not(None))))
-    missing = list(db.scalars(select(Company).where(Company.domain.is_(None)).order_by(Company.id)))
+    piece = list(
+        db.scalars(
+            select(Company).where(Company.domain.is_(None), Company.id > after_id).order_by(Company.id).limit(FILL_LIMIT + 1)
+        )
+    )
+    more = len(piece) > FILL_LIMIT
+    piece = piece[:FILL_LIMIT]
     filled = 0
-    for company in missing[:FILL_LIMIT]:
+    for company in piece:
         _, domain = resolve(company.name)
         if domain and domain not in taken:
             company.domain = domain
             taken.add(domain)
             filled += 1
     db.commit()
-    return filled, len(missing) - filled
+    missing = db.scalar(select(func.count()).select_from(Company).where(Company.domain.is_(None))) or 0
+    return filled, missing, (piece[-1].id if more else None)

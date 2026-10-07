@@ -326,22 +326,26 @@ def _wait_for_schedule(db: Session, campaign: Campaign) -> bool:
     return True
 
 
-def _wait_for_quota(db: Session, campaign: Campaign) -> bool:
-    """If the daily limit is used up, mark the batch as waiting and sleep until there's room.
-    Returns False if it was cancelled while waiting."""
-    q = sending.quota(db)
-    if q.remaining > 0:
-        return True
-    campaign.status = CampaignStatus.WAITING
-    campaign.error = f"Paused at your daily limit of {q.daily_limit} emails. It carries on by itself when the limit resets."
-    db.commit()
-    while q.remaining <= 0:
-        if not _wait(campaign.id, max(1.0, (q.next_slot_at - now()).total_seconds())):
+def _reserve_slot(db: Session, campaign: Campaign, email: Email) -> bool:
+    """Take a slot in the daily limit for this email (marking it as being sent). If the limit is
+    used up, mark the batch as waiting and sleep until there's room. Returns False if it was
+    cancelled or stopped while waiting."""
+    waiting = False
+    while (retry_at := sending.reserve(db, email)) is not None:
+        if not waiting:
+            campaign.status = CampaignStatus.WAITING
+            campaign.error = (
+                f"Paused at your daily limit of {sending.get_settings(db).daily_limit} emails. "
+                "It carries on by itself when the limit resets."
+            )
+            db.commit()
+            waiting = True
+        if not _wait(campaign.id, max(1.0, (retry_at - now()).total_seconds())):
             return False
-        q = sending.quota(db)
-    campaign.status = CampaignStatus.SENDING
-    campaign.error = None
-    db.commit()
+    if waiting:
+        campaign.status = CampaignStatus.SENDING
+        campaign.error = None
+        db.commit()
     return True
 
 
@@ -383,12 +387,11 @@ def _run(campaign_id: int) -> None:
                 db.refresh(email)
                 if email.status != EmailStatus.PENDING:
                     continue
-                if not _wait_for_quota(db, campaign):
-                    break
                 if not _renew(campaign_id):
                     return  # lost the batch, or it was cancelled or stopped elsewhere
-                email.attempted_at = now()
-                db.commit()
+                # Also marks the email as being sent, atomically with the limit check.
+                if not _reserve_slot(db, campaign, email):
+                    break
                 try:
                     res = gmail.send(service, email.to_email, email.subject, email.body, attachments)
                     email.status = EmailStatus.SENT

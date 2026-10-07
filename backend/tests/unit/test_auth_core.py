@@ -64,6 +64,14 @@ class TestLockout:
         assert locked("me@x.com", "1.1.1.1")
         assert not locked("other@x.com", "1.1.1.1")
 
+    def test_but_never_your_own_trusted_browser(self):
+        for n in range(auth.MAX_FAILURES_PER_ACCOUNT):
+            auth.record_failure("me@x.com", f"10.0.0.{n}")
+        auth.check_not_locked("me@x.com", "1.1.1.1", trusted=True)  # no 429
+        # Wrong passwords from a trusted browser only count against that visitor.
+        auth.record_failure("me@x.com", "1.1.1.1", trusted=True)
+        assert len(auth._failures["email:me@x.com"]) == auth.MAX_FAILURES_PER_ACCOUNT
+
     def test_old_failures_expire(self, monkeypatch):
         clock = [1000.0]
         monkeypatch.setattr(auth.time, "monotonic", lambda: clock[0])
@@ -81,6 +89,9 @@ class TestLockout:
         auth.clear_failures("never-failed@x.com", "2.2.2.2")
 
 
+SECRET = "s" * 40
+
+
 class TestClientIp:
     def request(self, headers=None, client=("9.9.9.9", 1)):
         from starlette.requests import Request
@@ -88,12 +99,22 @@ class TestClientIp:
         scope = {"type": "http", "headers": [(k.encode(), v.encode()) for k, v in (headers or {}).items()], "client": client}
         return Request(scope)
 
-    def test_first_forwarded_address(self):
-        assert auth.client_ip(self.request({"x-forwarded-for": "1.2.3.4, 76.76.21.21"})) == "1.2.3.4"
+    def test_believed_only_from_the_frontend(self, settings):
+        settings(proxy_secret=SECRET)
+        forwarded = {auth.PROXY_HEADER: SECRET, auth.CLIENT_IP_HEADER: "1.2.3.4"}
+        assert auth.client_ip(self.request(forwarded)) == "1.2.3.4"
+        assert auth.from_proxy(self.request(forwarded))
 
-    def test_direct_connection(self):
-        assert auth.client_ip(self.request()) == "9.9.9.9"
-        assert auth.client_ip(self.request({"x-forwarded-for": " "})) == "9.9.9.9"
+    def test_made_up_addresses_are_ignored(self, settings):
+        settings(proxy_secret=SECRET)
+        assert auth.client_ip(self.request({"x-forwarded-for": "1.2.3.4"})) == "9.9.9.9"
+        wrong = {auth.PROXY_HEADER: "guess", auth.CLIENT_IP_HEADER: "1.2.3.4"}
+        assert auth.client_ip(self.request(wrong)) == "9.9.9.9"
+        assert auth.client_ip(self.request({auth.PROXY_HEADER: SECRET})) == "9.9.9.9"  # no address given
+
+    def test_no_secret_configured_trusts_nothing(self, settings):
+        settings(proxy_secret=None)
+        assert not auth.from_proxy(self.request({auth.PROXY_HEADER: ""}))
 
     def test_unknown(self):
         assert auth.client_ip(self.request(client=None)) == "unknown"

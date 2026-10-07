@@ -230,6 +230,20 @@ describe("PreviewModal: checking addresses exist", () => {
     return userEvent.setup();
   }
 
+  it("verifies a long list a few addresses at a time", async () => {
+    const people = Array.from({ length: 12 }, (_, i) =>
+      ok({ index: i, to_email: `p${i}@stripe.com`, values: { full_name: `P ${i}`, email: `p${i}@stripe.com` } }),
+    );
+    api("post", "/api/campaigns/preview", preview(people));
+    const checks = api("post", "/api/people-search/verify", (call) => ({
+      results: (call.body as { emails: string[] }).emails.map((e) => verdict(e, "valid")),
+    }));
+    const user = open();
+    await user.click(await screen.findByRole("button", { name: "Verify 12" }));
+    await waitFor(() => expect(checks).toHaveLength(2));
+    expect(checks.map((c) => (c.body as { emails: string[] }).emails.length)).toEqual([10, 2]);
+  });
+
   it("offers to verify unchecked addresses, then shows each verdict", async () => {
     const jane = ok();
     const gone = ok({ index: 1, to_email: "gone@stripe.com", values: { full_name: "Gone Person", email: "gone@stripe.com" } });

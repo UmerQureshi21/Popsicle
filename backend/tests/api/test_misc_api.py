@@ -124,31 +124,44 @@ class TestGmail:
         secrets.write_text("{}")
         settings(google_client_secrets=secrets)
         seen = []
-        monkeypatch.setattr(gmail, "start_auth", lambda next: seen.append(next) or "https://accounts.google.com/consent")
+        monkeypatch.setattr(gmail, "start_auth", lambda db, next: seen.append(next) or "https://accounts.google.com/consent")
         r = client.get("/api/gmail/connect", follow_redirects=False)
         assert r.status_code == 307
         assert r.headers["location"] == "https://accounts.google.com/consent"
         client.get("/api/gmail/connect?next=/conversations", follow_redirects=False)
         assert seen == ["/compose", "/conversations"]
 
-    def test_callback_returns_to_the_page_that_asked(self, client, monkeypatch):
-        gmail._return_to["s2"] = "/conversations"
+    def test_callback_returns_to_the_page_that_asked(self, client, db, monkeypatch):
+        from app.models import OAuthState
+
+        db.add(OAuthState(state="s2", code_verifier=None, return_to="/conversations"))
+        db.commit()
         monkeypatch.setattr(gmail, "finish_auth", lambda db, state, url: None)
         r = client.get("/api/gmail/callback?state=s2&code=c", follow_redirects=False)
-        assert r.headers["location"] == "http://frontend.test/conversations?gmail=connected"
+        assert r.headers["location"] == "http://localhost:3000/conversations?gmail=connected"
 
     def test_callback_success(self, client, monkeypatch):
         seen = {}
         monkeypatch.setattr(gmail, "finish_auth", lambda db, state, url: seen.update(state=state, url=url))
         r = client.get("/api/gmail/callback?state=s1&code=c", follow_redirects=False)
-        assert r.headers["location"] == "http://frontend.test/compose?gmail=connected"
+        assert r.headers["location"] == "http://localhost:3000/compose?gmail=connected"
         assert seen["state"] == "s1"
         # Built from the public address, not the backend's internal one behind the forwarding.
         assert seen["url"] == "http://localhost:8000/api/gmail/callback?state=s1&code=c"
 
     def test_callback_when_the_user_declined(self, client):
         r = client.get("/api/gmail/callback?error=access_denied", follow_redirects=False)
-        assert r.headers["location"] == "http://frontend.test/compose?gmail_error=access_denied"
+        assert r.headers["location"] == "http://localhost:3000/compose?gmail_error=access_denied"
+
+    def test_a_declined_attempt_is_forgotten(self, client, db):
+        from app.models import OAuthState
+
+        db.add(OAuthState(state="s3", code_verifier="v", return_to="/conversations"))
+        db.commit()
+        r = client.get("/api/gmail/callback?state=s3&error=access_denied", follow_redirects=False)
+        assert r.headers["location"] == "http://localhost:3000/conversations?gmail_error=access_denied"
+        db.expire_all()
+        assert db.get(OAuthState, "s3") is None
 
     def test_callback_missing_send_permission(self, client, monkeypatch):
         def finish(db, state, url):
@@ -156,11 +169,11 @@ class TestGmail:
 
         monkeypatch.setattr(gmail, "finish_auth", finish)
         r = client.get("/api/gmail/callback?state=s", follow_redirects=False)
-        assert r.headers["location"] == "http://frontend.test/compose?gmail_error=missing_send_permission"
+        assert r.headers["location"] == "http://localhost:3000/compose?gmail_error=missing_send_permission"
 
     def test_callback_other_failure(self, client):
         r = client.get("/api/gmail/callback?state=unknown", follow_redirects=False)
-        assert r.headers["location"] == "http://frontend.test/compose?gmail_error=ValueError"
+        assert r.headers["location"] == "http://localhost:3000/compose?gmail_error=ValueError"
 
     def test_disconnect(self, client, db):
         db.add(GmailAccount(email="me@gmail.com", token_json="{}"))

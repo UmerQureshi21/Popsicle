@@ -6,10 +6,10 @@ into spam, so batches that hit the cap wait and carry on later instead of failin
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import select
+from sqlalchemy import select, union_all
 from sqlalchemy.orm import Session
 
-from .models import Email, EmailStatus, SendingSettings
+from .models import Email, EmailStatus, Meeting, SendingSettings
 
 WINDOW = timedelta(hours=24)
 DEFAULT_DAILY_LIMIT = 40
@@ -49,16 +49,23 @@ class Quota:
         return (self.oldest_sent_at or now()) + WINDOW if sends_now else self.next_slot_at
 
 
+def _send_times(at: datetime):
+    """Every email that counts toward the limit: sent ones, ones being handed to Gmail right
+    now (not confirmed yet), and Google Meet link emails."""
+    since = at - WINDOW
+    sent = select(Email.sent_at.label("t")).where(Email.status == EmailStatus.SENT, Email.sent_at > since)
+    in_flight = select(Email.attempted_at.label("t")).where(
+        Email.status == EmailStatus.PENDING, Email.attempted_at.is_not(None), Email.attempted_at > since
+    )
+    meet = select(Meeting.created_at.label("t")).where(Meeting.created_at > since)
+    both = union_all(sent, in_flight, meet).subquery()
+    return select(both.c.t).order_by(both.c.t)
+
+
 def quota(db: Session) -> Quota:
     s = get_settings(db)
     at = now()
-    times = list(
-        db.scalars(
-            select(Email.sent_at)
-            .where(Email.status == EmailStatus.SENT, Email.sent_at > at - WINDOW)
-            .order_by(Email.sent_at)
-        )
-    )
+    times = list(db.scalars(_send_times(at)))
     remaining = max(0, s.daily_limit - len(times))
     # With n sends in the window and a limit of L, the (n - L)th oldest must age out (0-based).
     next_slot = at if remaining > 0 else times[len(times) - s.daily_limit] + WINDOW
@@ -70,3 +77,21 @@ def quota(db: Session) -> Quota:
         next_slot_at=next_slot,
         oldest_sent_at=times[0] if times else None,
     )
+
+
+def reserve(db: Session, email: Email) -> datetime | None:
+    """Take one send from the daily limit for `email`, or say when to try again.
+
+    Several batches can be sending at once, so checking the limit and marking the email as
+    being sent happen together while holding a lock on the settings row: no two batches can
+    both take the last slot. Returns None when the email may be sent now (it's marked as
+    being sent), else when room opens up."""
+    get_settings(db)  # make sure the row exists before locking it
+    db.execute(select(SendingSettings).where(SendingSettings.id == 1).with_for_update()).one()
+    q = quota(db)
+    if q.remaining <= 0:
+        db.rollback()  # releases the lock
+        return q.next_slot_at
+    email.attempted_at = now()
+    db.commit()
+    return None

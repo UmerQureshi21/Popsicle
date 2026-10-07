@@ -237,7 +237,14 @@ export type Meeting = {
 
 export type ConversationDetail = ConversationSummary & { messages: ConversationMessage[]; meetings: Meeting[] };
 
-export type ConversationSync = { threads_checked: number; threads_downloaded: number; new_messages: number; synced_at: string | null };
+export type ConversationSync = {
+  running?: boolean; // the check runs in the background; poll until false
+  threads_checked: number;
+  threads_downloaded: number;
+  new_messages: number;
+  synced_at: string | null;
+  error?: string | null;
+};
 
 export type Stats = {
   sent_total: number;

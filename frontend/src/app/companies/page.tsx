@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Building2, ExternalLink, ImageDown, Plus, Trash2, UserSearch, X } from "lucide-react";
 import { api, type CompaniesAdded, type Company, type CompanyStatus, type Contact } from "@/lib/api";
 import { textChip, textToChips, type Chip } from "@/lib/chips";
+import { COMPANIES_PIECE, inPieces } from "@/lib/pieces";
 import { formatDate, timeAgo } from "@/lib/format";
 import { Avatar, Button, EmptyState, Modal, StatusBadge } from "@/components/ui";
 import CompanyAutocomplete, { CompanyLogo } from "@/components/CompanyAutocomplete";
@@ -85,7 +86,13 @@ export default function CompaniesPage() {
     setSaving(true);
     setError(null);
     try {
-      const res = await api.post<CompaniesAdded>("/api/companies/bulk", { lines });
+      // A long pasted list goes in pieces, so no request runs long.
+      const res: CompaniesAdded = { added: [], skipped: [] };
+      for (const piece of inPieces(lines, COMPANIES_PIECE)) {
+        const part = await api.post<CompaniesAdded>("/api/companies/bulk", { lines: piece });
+        res.added.push(...part.added);
+        res.skipped.push(...part.skipped);
+      }
       const n = res.added.length;
       setNotice(
         `Added ${n} compan${n === 1 ? "y" : "ies"}` +
@@ -105,10 +112,22 @@ export default function CompaniesPage() {
     setFilling(true);
     setError(null);
     try {
-      const res = await api.post<{ filled: number; missing: number }>("/api/companies/fill-domains");
+      // The backend looks up a few at a time and says where to carry on.
+      let filled = 0;
+      let missing = 0;
+      let after: number | null = 0;
+      while (after !== null) {
+        const res: { filled: number; missing: number; next_after?: number | null } = await api.post(
+          `/api/companies/fill-domains?after_id=${after}`,
+        );
+        filled += res.filled;
+        missing = res.missing;
+        // Only carry on when the backend names a later starting point (never loop on the same piece).
+        after = typeof res.next_after === "number" && res.next_after > after ? res.next_after : null;
+      }
       setNotice(
-        res.filled
-          ? `Found ${res.filled} domain${res.filled === 1 ? "" : "s"}.` + (res.missing ? ` Hunter didn’t know ${res.missing}; add those by hand.` : "")
+        filled
+          ? `Found ${filled} domain${filled === 1 ? "" : "s"}.` + (missing ? ` Hunter didn’t know ${missing}; add those by hand.` : "")
           : "Hunter didn’t recognise any of those names. Add their domains by hand.",
       );
       refresh();

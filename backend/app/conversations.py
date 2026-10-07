@@ -8,12 +8,11 @@ downloads only threads that changed since the last sync.
 import base64
 import html
 import re
-import threading
-from dataclasses import dataclass
-from datetime import datetime, timezone
+from dataclasses import asdict, dataclass
+from datetime import datetime, timedelta, timezone
 from email.utils import getaddresses, parseaddr
 
-from sqlalchemy import select
+from sqlalchemy import or_, select, update
 from sqlalchemy.orm import Session
 
 from .models import (
@@ -29,11 +28,10 @@ from .models import (
 ADDRESSES_PER_SEARCH = 15  # Gmail search queries have a length limit
 MAX_THREADS_PER_SEARCH = 300
 
-_lock = threading.Lock()
-
-
-class AlreadySyncing(Exception):
-    pass
+# A sync runs in the background (it can take a while), one at a time across every server
+# process: it's claimed on the Gmail account's row. A claim older than this belonged to a
+# process that died, and can be taken over.
+SYNC_STALE = timedelta(minutes=10)
 
 
 @dataclass
@@ -45,6 +43,34 @@ class SyncResult:
 
 def now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def sync_running(account: GmailAccount) -> bool:
+    return account.sync_started_at is not None and account.sync_started_at > now() - SYNC_STALE
+
+
+def claim_sync(db: Session, account: GmailAccount) -> bool:
+    """Start a sync for this account, unless one is already running (anywhere)."""
+    got = db.execute(
+        update(GmailAccount)
+        .where(
+            GmailAccount.id == account.id,
+            or_(GmailAccount.sync_started_at.is_(None), GmailAccount.sync_started_at < now() - SYNC_STALE),
+        )
+        .values(sync_started_at=now())
+        .returning(GmailAccount.id)
+    ).first()
+    db.commit()
+    db.refresh(account)
+    return got is not None
+
+
+def finish_sync(db: Session, account: GmailAccount, result: "SyncResult | None", error: str | None = None) -> None:
+    account.sync_started_at = None
+    account.sync_result = {**asdict(result or SyncResult()), "error": error}
+    if result is not None:
+        account.synced_at = now()
+    db.commit()
 
 
 # ---- Reading Gmail's message format ------------------------------------
@@ -176,40 +202,34 @@ def _store_thread(db: Session, thread: dict, me: str, people: dict[str, Contact]
 
 
 def sync(db: Session, service, account: GmailAccount, contact_ids: list[int] | None = None) -> SyncResult:
-    """Bring conversations up to date with Gmail, for everyone emailed (or just `contact_ids`)."""
-    if not _lock.acquire(blocking=False):
-        raise AlreadySyncing()
-    try:
-        people = people_emailed(db, contact_ids)
-        me = account.email.lower()
-        result = SyncResult()
-        addresses = sorted(people)
-        seen: set[str] = set()
-        for i in range(0, len(addresses), ADDRESSES_PER_SEARCH):
-            for t in _search(service, _query(addresses[i : i + ADDRESSES_PER_SEARCH])):
-                if t["id"] in seen:
-                    continue
-                seen.add(t["id"])
-                result.threads_checked += 1
-                stored = db.get(MailThread, t["id"])
-                if stored and stored.history_id == t.get("historyId"):
-                    continue
-                thread = service.users().threads().get(userId="me", id=t["id"], format="full").execute()
-                result.new_messages += _store_thread(db, thread, me, people)
-                result.threads_downloaded += 1
-                # Only a full sync records the thread as done: a sync for some people may have
-                # skipped messages to others on the same thread.
-                if contact_ids is None:
-                    history = thread.get("historyId") or t.get("historyId", "")
-                    if stored is None:
-                        db.add(MailThread(gmail_thread_id=t["id"], history_id=history))
-                    else:
-                        stored.history_id = history
-                db.commit()
-        if contact_ids is None:
-            account.synced_at = now()
-        db.commit()
-        return result
-    finally:
-        _lock.release()
+    """Bring conversations up to date with Gmail, for everyone emailed (or just `contact_ids`).
+    The caller holds the sync claim (claim_sync)."""
+    people = people_emailed(db, contact_ids)
+    me = account.email.lower()
+    result = SyncResult()
+    addresses = sorted(people)
+    seen: set[str] = set()
+    for i in range(0, len(addresses), ADDRESSES_PER_SEARCH):
+        for t in _search(service, _query(addresses[i : i + ADDRESSES_PER_SEARCH])):
+            if t["id"] in seen:
+                continue
+            seen.add(t["id"])
+            result.threads_checked += 1
+            stored = db.get(MailThread, t["id"])
+            if stored and stored.history_id == t.get("historyId"):
+                continue
+            thread = service.users().threads().get(userId="me", id=t["id"], format="full").execute()
+            result.new_messages += _store_thread(db, thread, me, people)
+            result.threads_downloaded += 1
+            # Only a full sync records the thread as done: a sync for some people may have
+            # skipped messages to others on the same thread.
+            if contact_ids is None:
+                history = thread.get("historyId") or t.get("historyId", "")
+                if stored is None:
+                    db.add(MailThread(gmail_thread_id=t["id"], history_id=history))
+                else:
+                    stored.history_id = history
+            db.commit()
+    db.commit()
+    return result
 
