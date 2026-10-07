@@ -85,3 +85,22 @@ test("the theme switch: one click to dark, remembered; the landing page is alway
   await page.goto("/compose");
   await expect(html).toHaveAttribute("data-theme", "light");
 });
+
+test("the theme switch sits in the screen's top-right corner on wide screens, in the bar otherwise", async ({ browser }) => {
+  for (const [width, inCorner] of [[1440, true], [1024, false]] as const) {
+    const context = await browser.newContext({ viewport: { width, height: 900 } });
+    const page = await context.newPage();
+    await new FakeApi().install(page);
+    await page.goto("/sent");
+    const toggle = page.getByRole("button", { name: "Switch to dark mode" });
+    await expect(toggle).toHaveCount(1); // only one is ever shown
+    const box = (await toggle.boundingBox())!;
+    const insideBar = await toggle.evaluate((el) => !!el.closest("nav"));
+    expect(insideBar).toBe(!inCorner);
+    if (inCorner) {
+      expect(width - (box.x + box.width)).toBeLessThan(40);
+      expect(box.y).toBeLessThan(40);
+    }
+    await context.close();
+  }
+});
