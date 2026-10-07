@@ -27,7 +27,10 @@ test("find people at a company and take them to Compose", async ({ page }) => {
   await expect(page.locator("label[data-already-emailed]")).toContainText("Sam Lee");
   await expect(page.getByText(/Already emailed · Mar 1/)).toBeVisible();
   await expect(page.getByText("· 1 already emailed")).toBeVisible();
-  expect(api.called("POST /api/people-search/company")[0].body).toMatchObject({ query: "stripe.com", job_titles: "software engineer" });
+  const sent = api.called("POST /api/people-search/company")[0].body as { query: string; job_titles: string };
+  expect(sent.query).toBe("stripe.com");
+  // The default searches every software and data title, not just "software engineer".
+  for (const title of ["software engineer", "software developer", "data scientist", "machine learning engineer"]) expect(sent.job_titles).toContain(title);
   // Sam was already emailed, so only Jane is picked.
   await page.getByRole("button", { name: /Email 1 person/ }).click();
 

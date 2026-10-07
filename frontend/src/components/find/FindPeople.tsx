@@ -7,6 +7,7 @@ import { api, type FoundPerson, type NewPeople, type PeopleSearch } from "@/lib/
 import { creditsChanged, creditsText, searchCost, useHunterStatus } from "@/lib/credits";
 import { formatDate } from "@/lib/format";
 import { DEFAULT_LOCATION, LOCATIONS, locationById, type LocationId } from "@/lib/locations";
+import { DEFAULT_TITLES, ROLES, roleOf, roleTitles, titleLabel, type RoleId } from "@/lib/roles";
 import { textChip, textToChips, type Chip } from "@/lib/chips";
 import { saveHandoff } from "@/lib/people";
 import { Button, EmptyState } from "@/components/ui";
@@ -44,7 +45,7 @@ const STORAGE_KEY = "popsicle:find-people:v1";
 const PER_COMPANY = [5, 10, 25];
 const DEFAULTS: Saved = {
   chips: [],
-  jobTitle: "software engineer",
+  jobTitle: DEFAULT_TITLES,
   location: DEFAULT_LOCATION,
   perCompany: 10,
   hideSeen: false,
@@ -80,6 +81,8 @@ function load(): Saved {
     if (raw) {
       const { companiesText, ...rest } = JSON.parse(raw);
       const saved: Saved = { ...DEFAULTS, ...rest };
+      // The old default was just "software engineer"; it's now the full software & data list.
+      if (saved.jobTitle.trim().toLowerCase() === "software engineer") saved.jobTitle = DEFAULT_TITLES;
       // Searches saved before chips stored companies as text, one per line.
       if (!rest.chips && companiesText) saved.chips = textToChips(companiesText);
       // A search interrupted by leaving the page can't finish; show it as failed instead of spinning.
@@ -146,7 +149,7 @@ export default function FindPeople() {
           fresh: false,
           note: undefined,
           filters,
-          filterLabel: [filters.jobTitle.trim() && `matching “${filters.jobTitle.trim()}”`, locationById(filters.location).short]
+          filterLabel: [titleLabel(filters.jobTitle), locationById(filters.location).short]
             .filter(Boolean)
             .join(" "),
           people: [...base, ...fresh],
@@ -286,15 +289,31 @@ export default function FindPeople() {
             </div>
           </div>
           <div className="space-y-4">
+            <div>
+              <span className="text-sm font-semibold text-ink">Role</span>
+              <Select
+                ariaLabel="Role"
+                value={roleOf(jobTitle)?.id ?? "custom"}
+                onChange={(id) => id !== "custom" && setJobTitle(roleTitles(id))}
+                options={[
+                  ...ROLES.map((r) => ({ value: r.id as RoleId | "custom", label: r.label, hint: `${r.titles.length} titles` })),
+                  { value: "custom", label: "Custom titles" },
+                ]}
+                className="mt-2 w-full"
+              />
+            </div>
             <label className="block">
-              <span className="text-sm font-semibold text-ink">Job title</span>
-              <input
+              <span className="text-sm font-semibold text-ink">Job titles</span>
+              <textarea
                 value={jobTitle}
                 onChange={(e) => setJobTitle(e.target.value)}
-                placeholder="software engineer"
-                className="mt-2 w-full rounded-xl border border-steel/25 px-3 py-2.5 text-sm text-ink outline-none focus:border-scarlet focus:ring-4 focus:ring-scarlet/10"
+                placeholder="e.g. recruiter, talent acquisition"
+                rows={3}
+                className="mt-2 w-full resize-y rounded-xl border border-steel/25 px-3 py-2 text-sm leading-relaxed text-ink outline-none focus:border-scarlet focus:ring-4 focus:ring-scarlet/10"
               />
-              <span className="mt-1 block text-xs text-steel">Any seniority. Separate several titles with commas.</span>
+              <span className="mt-1 block text-xs text-steel">
+                Any seniority. Separate titles with commas; whole words match, so “engineer” also finds “Engineering”. Leave empty for everyone.
+              </span>
             </label>
             <label className="block">
               <span className="text-sm font-semibold text-ink">Location</span>
