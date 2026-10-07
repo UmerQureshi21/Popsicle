@@ -87,3 +87,26 @@ test("on a phone the cards stack plainly, without trails", async ({ browser }) =
   await expect(page.locator("[data-beam-step]")).toHaveCount(5); // How it works still has its trail
   await context.close();
 });
+
+test("the hero shows the pitch and the three example emails, at every screen size", async ({ browser }) => {
+  for (const width of [390, 768, 1024, 1280, 1772]) {
+    const context = await browser.newContext({ viewport: { width, height: 900 } });
+    const page = await context.newPage();
+    await new FakeApi().install(page);
+    await page.goto("/");
+    await expect(page.getByRole("heading", { name: "Popsicle" })).toBeVisible();
+    await expect(page.getByText("Cold email, simplified")).toBeVisible();
+    await expect(page.getByRole("link", { name: /Get started/ }).first()).toBeVisible();
+    // Sent, Replied, Booked: each name sits clear of its badge.
+    const cards = page.locator("[data-hero-email]");
+    await expect(cards).toHaveCount(3);
+    await expect(cards.locator("[data-badge]")).toHaveText(["Sent", "Replied", "Booked"]);
+    const gaps = await cards.evaluateAll((els) =>
+      els.map((c) => c.querySelector("[data-badge]")!.getBoundingClientRect().left - c.querySelector("[data-name]")!.getBoundingClientRect().right),
+    );
+    expect(Math.min(...gaps)).toBeGreaterThanOrEqual(0);
+    // Nothing pushes the page sideways.
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+    await context.close();
+  }
+});

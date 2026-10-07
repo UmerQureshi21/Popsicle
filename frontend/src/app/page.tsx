@@ -3,6 +3,7 @@ import { Inbox, Video, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import Reveal from "@/components/landing/Reveal";
 import FeatureBeams from "@/components/landing/FeatureBeams";
+import HeroVisual from "@/components/landing/HeroVisual";
 import HowItWorks from "@/components/landing/HowItWorks";
 import TemplateDemo from "@/components/landing/TemplateDemo";
 
@@ -104,66 +105,39 @@ export default function LandingPage() {
         </Link>
       </header>
 
-      {/* Hero */}
-      <section className="relative mx-auto flex min-h-[calc(100vh-88px)] max-w-6xl flex-col items-center justify-center px-6 pt-10 pb-24 text-center">
-        <div
-          aria-hidden
-          className="animate-pop-in absolute top-[18%] left-[-6%] hidden w-[clamp(200px,24vw,340px)] md:block"
-          style={{ "--r": "-16deg", animationDelay: "250ms" } as React.CSSProperties}
-        >
-          <Image src="/left-pop.png" alt="" width={500} height={500} priority />
-        </div>
-        <div
-          aria-hidden
-          className="animate-pop-in absolute top-[24%] right-[-6%] hidden w-[clamp(200px,24vw,340px)] md:block"
-          style={{ "--r": "14deg", animationDelay: "450ms" } as React.CSSProperties}
-        >
-          <Image src="/right-pop.png" alt="" width={500} height={500} priority />
-        </div>
-
-        <div className="relative z-10 flex flex-col items-center">
-
+      {/* Hero: the pitch on the left, the pipeline in one picture on the right */}
+      <section className="relative mx-auto grid min-h-[calc(100vh-88px)] max-w-7xl items-center gap-12 px-6 pt-10 pb-24 sm:px-14 lg:grid-cols-[1fr_1.1fr] lg:gap-6">
+        <div className="relative z-10">
+          <p className="animate-fade-in text-sm font-semibold tracking-[0.2em] text-[#8b95e0] uppercase" style={{ animationDelay: "100ms" }}>
+            Cold email, simplified
+          </p>
           <h1
-            className="animate-fade-in flex items-center gap-[0.12em] text-[clamp(3.25rem,13vw,9.5rem)] leading-[0.9] font-extrabold tracking-[-0.05em] text-ink"
+            className="animate-fade-in mt-5 text-[clamp(3.5rem,9vw,7.5rem)] leading-[0.9] font-extrabold tracking-[-0.05em] text-ink"
             style={{ animationDelay: "200ms" }}
           >
-            {/* Sized in em so the logo always matches the title's letters */}
-            <span
-              className="animate-pop-in inline-block"
-              style={{ "--r": "-8deg", animationDelay: "450ms" } as React.CSSProperties}
-            >
-              <Image
-                src="/cold-emailer-logo.png"
-                alt=""
-                width={527}
-                height={474}
-                priority
-                className="h-[0.78em] w-auto drop-shadow-[0_16px_24px_rgba(43,45,66,0.25)]"
-              />
-            </span>
             Popsicle
           </h1>
-
           <p
-            className="animate-fade-in mt-6 text-[clamp(1.5rem,3.4vw,2.5rem)] font-semibold tracking-tight text-balance text-ink"
+            className="animate-fade-in mt-7 text-[clamp(2.1rem,4.4vw,3.5rem)] leading-[1.05] font-bold tracking-tight text-ink"
             style={{ animationDelay: "350ms" }}
           >
-            From cold email to <span className="whitespace-nowrap text-crimson">coffee chat</span>
+            From cold email to
+            <br />
+            <span className="text-crimson">coffee chat</span>
           </p>
-
-          <p className="animate-fade-in mt-5 max-w-xl text-lg leading-relaxed text-balance text-steel" style={{ animationDelay: "500ms" }}>
-            Find the people you want to reach and send each a personal email from your own Gmail. Then follow every reply
-            and book the call with a Google Meet link in one click.
+          <p className="animate-fade-in mt-7 max-w-xl text-lg leading-relaxed text-pretty text-ink/70" style={{ animationDelay: "500ms" }}>
+            Find the people you want to reach and send each a personal email from your own Gmail. Then follow every reply and book
+            the call with a Google Meet link in one click.
           </p>
-
-          <div className="animate-fade-in mt-10 flex flex-wrap items-center justify-center gap-3" style={{ animationDelay: "650ms" }}>
+          <div className="animate-fade-in mt-10" style={{ animationDelay: "650ms" }}>
             <PrimaryButton>Get started</PrimaryButton>
           </div>
-
-          <div className="animate-fade-in mt-8" style={{ animationDelay: "800ms" }}>
+          <div className="animate-fade-in mt-7" style={{ animationDelay: "800ms" }}>
             <PoweredByHunter />
           </div>
         </div>
+
+        <HeroVisual />
       </section>
 
       <div className="h-32 bg-paper sm:h-40" />
