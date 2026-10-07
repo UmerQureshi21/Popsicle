@@ -25,13 +25,13 @@ export default function TemplateDemo() {
   const p = PEOPLE[i];
 
   return (
-    <div className="grid items-stretch gap-4 md:grid-cols-[1fr_auto_1fr]">
-      <div className="rounded-3xl border border-cloud bg-paper p-7 text-left shadow-[0_30px_60px_-30px_rgba(43,45,66,0.35)]">
-        <p className="mb-5 text-xs font-semibold tracking-widest text-steel uppercase">Your template</p>
-        <p className="mb-4 text-lg font-semibold text-ink">
+    <div className="grid items-stretch gap-6 md:grid-cols-[1fr_auto_1fr]">
+      <div className="rounded-[2rem] border border-cloud bg-paper p-8 text-left sm:p-12 shadow-[0_30px_60px_-30px_rgba(43,45,66,0.35)]">
+        <p className="mb-7 text-sm font-semibold tracking-widest text-steel uppercase">Your template</p>
+        <p className="mb-6 text-2xl font-semibold tracking-tight text-ink">
           Quick question about <Chip>company</Chip>
         </p>
-        <div className="space-y-3 text-[15px] leading-7 text-ink/85">
+        <div className="space-y-4 text-lg leading-8 text-ink/85">
           <p>
             Hi <Chip>first_name</Chip>,
           </p>
@@ -44,14 +44,14 @@ export default function TemplateDemo() {
       </div>
 
       <div className="flex items-center justify-center">
-        <span className="grid size-12 rotate-90 place-items-center rounded-full bg-night text-white shadow-lg md:rotate-0">
-          <ArrowRight className="size-5" />
+        <span className="grid size-14 rotate-90 place-items-center rounded-full bg-night text-white shadow-lg md:rotate-0">
+          <ArrowRight className="size-6" />
         </span>
       </div>
 
-      <div className="relative rounded-3xl border border-cloud bg-paper p-7 text-left shadow-[0_30px_60px_-30px_rgba(43,45,66,0.35)]">
-        <div className="mb-5 flex items-center justify-between">
-          <p className="text-xs font-semibold tracking-widest text-steel uppercase">What they get</p>
+      <div className="relative rounded-[2rem] border border-cloud bg-paper p-8 text-left sm:p-12 shadow-[0_30px_60px_-30px_rgba(43,45,66,0.35)]">
+        <div className="mb-7 flex items-center justify-between">
+          <p className="text-sm font-semibold tracking-widest text-steel uppercase">What they get</p>
           <div className="flex gap-1.5">
             {PEOPLE.map((_, n) => (
               <span key={n} className={`h-1.5 rounded-full transition-all duration-500 ${n === i ? "w-5 bg-crimson" : "w-1.5 bg-cloud"}`} />
@@ -59,17 +59,17 @@ export default function TemplateDemo() {
           </div>
         </div>
         <div key={i} className="animate-fade-in">
-          <div className="mb-4 flex items-center gap-3">
-            <Avatar name={p.full_name} size={32} />
+          <div className="mb-6 flex items-center gap-3">
+            <Avatar name={p.full_name} size={44} />
             <div>
-              <p className="text-sm font-semibold text-ink">{p.full_name}</p>
-              <p className="text-xs text-steel">
+              <p className="text-base font-semibold text-ink">{p.full_name}</p>
+              <p className="text-sm text-steel">
                 {p.first_name.toLowerCase()}@{p.company.toLowerCase()}.com
               </p>
             </div>
           </div>
-          <p className="mb-4 text-lg font-semibold text-ink">Quick question about {p.company}</p>
-          <div className="space-y-3 text-[15px] leading-7 text-ink/85">
+          <p className="mb-6 text-2xl font-semibold tracking-tight text-ink">Quick question about {p.company}</p>
+          <div className="space-y-4 text-lg leading-8 text-ink/85">
             <p>Hi {p.first_name},</p>
             <p>
               I’ve been following what {p.company} is building, and the work the {p.team} team is doing really stood out.
