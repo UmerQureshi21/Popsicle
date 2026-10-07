@@ -47,23 +47,6 @@ const FEATURES: { image?: string; icon?: LucideIcon; title: string; text: React.
   },
 ];
 
-/** Popsicle's people and email data comes from Hunter.io. */
-function PoweredByHunter() {
-  return (
-    <a
-      href="https://hunter.io"
-      target="_blank"
-      rel="noreferrer"
-      className="inline-flex items-center gap-2.5 rounded-full border border-cloud bg-paper/80 py-1.5 pr-4 pl-1.5 text-sm text-ink/70 shadow-sm backdrop-blur transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md"
-    >
-      <Image src="/hunter-logo.png" alt="" width={24} height={24} className="size-6" />
-      <span>
-        Powered by <span className="font-semibold text-ink">Hunter</span>
-      </span>
-    </a>
-  );
-}
-
 const REPO_URL = "https://github.com/UmerQureshi21/Popsicle";
 
 /** GitHub's mark (lucide no longer ships brand icons). */
@@ -92,7 +75,7 @@ export default function LandingPage() {
     <main className="relative overflow-hidden bg-paper">
 
       {/* Header */}
-      <header className="animate-fade-in relative z-10 mx-auto flex max-w-7xl items-center justify-between px-10 pt-6 sm:px-14">
+      <header className="animate-fade-in relative z-10 mx-auto flex max-w-[1600px] items-center justify-between px-10 pt-6 sm:px-14">
         <Link href="/" className="flex items-center gap-2.5">
           <Image src="/cold-emailer-logo.png" alt="" width={40} height={36} priority />
           <span className="text-xl font-bold tracking-tight text-ink">Popsicle</span>
@@ -106,16 +89,13 @@ export default function LandingPage() {
       </header>
 
       {/* Hero: the pitch on the left, the pipeline in one picture on the right */}
-      <section className="relative mx-auto grid min-h-[calc(100vh-88px)] max-w-7xl items-center gap-12 px-6 pt-10 pb-24 sm:px-14 lg:grid-cols-[1fr_1.1fr] lg:gap-6">
+      <section className="relative mx-auto grid min-h-[calc(100vh-88px)] max-w-[1600px] items-center gap-12 px-6 pt-10 pb-24 sm:px-14 lg:grid-cols-[1fr_1.1fr] lg:gap-6">
         <div className="relative z-10">
-          <p className="animate-fade-in text-sm font-semibold tracking-[0.2em] text-[#8b95e0] uppercase" style={{ animationDelay: "100ms" }}>
-            Cold email, simplified
-          </p>
           <h1
-            className="animate-fade-in mt-5 text-[clamp(3.5rem,9vw,7.5rem)] leading-[0.9] font-extrabold tracking-[-0.05em] text-ink"
+            className="animate-fade-in text-[clamp(3rem,6.6vw,7rem)] leading-[0.95] font-extrabold tracking-[-0.045em] text-balance text-ink"
             style={{ animationDelay: "200ms" }}
           >
-            Popsicle
+            <span className="text-crimson">Pop</span> into their inbox
           </h1>
           <p
             className="animate-fade-in mt-7 text-[clamp(2.1rem,4.4vw,3.5rem)] leading-[1.05] font-bold tracking-tight text-ink"
@@ -132,9 +112,6 @@ export default function LandingPage() {
           <div className="animate-fade-in mt-10" style={{ animationDelay: "650ms" }}>
             <PrimaryButton>Get started</PrimaryButton>
           </div>
-          <div className="animate-fade-in mt-7" style={{ animationDelay: "800ms" }}>
-            <PoweredByHunter />
-          </div>
         </div>
 
         <HeroVisual />
@@ -144,7 +121,7 @@ export default function LandingPage() {
 
       {/* How it works */}
       <section id="how" className="relative flex min-h-screen scroll-mt-10 flex-col justify-center bg-cloud px-6 py-32">
-        <div className="mx-auto w-full max-w-6xl">
+        <div className="mx-auto w-full max-w-7xl">
           <Reveal className="mb-14 text-center">
             <p className="text-sm font-semibold tracking-widest text-crimson uppercase">How it works</p>
             <h2 className="mt-3 text-4xl font-bold tracking-tight text-balance text-ink sm:text-5xl">From first email to first call.</h2>
@@ -157,7 +134,7 @@ export default function LandingPage() {
 
       {/* Step 3 demo */}
       <section className="relative flex min-h-screen flex-col justify-center px-6 py-32">
-        <div className="mx-auto w-full max-w-6xl">
+        <div className="mx-auto w-full max-w-7xl">
           <Reveal className="mb-6 text-center">
             <p className="text-sm font-semibold text-ink">Step 2 in action</p>
             <p className="mt-1 text-sm text-steel">You write one template; each person gets their own version.</p>
@@ -172,7 +149,7 @@ export default function LandingPage() {
 
       {/* Features */}
       <section className="relative flex min-h-screen flex-col justify-center bg-cloud px-6 py-32">
-        <div className="mx-auto w-full max-w-7xl">
+        <div className="mx-auto w-full max-w-[1500px]">
           <FeatureBeams>
             <div className="grid auto-rows-fr gap-6 sm:grid-cols-2 sm:gap-x-16 sm:gap-y-14">
               {FEATURES.map(({ image, icon: Icon, title, text }, n) => {
@@ -233,12 +210,6 @@ export default function LandingPage() {
 
       <footer className="flex flex-wrap items-center justify-center gap-x-2 gap-y-3 border-t border-cloud px-6 py-8 text-sm text-steel">
         <span>© {new Date().getFullYear()} Popsicle</span>
-        <span aria-hidden>·</span>
-        <a href="https://hunter.io" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 hover:text-ink">
-          Powered by
-          <Image src="/hunter-logo.png" alt="" width={16} height={16} className="size-4" />
-          Hunter
-        </a>
         <span aria-hidden>·</span>
         <a
           href={REPO_URL}

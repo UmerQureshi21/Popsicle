@@ -16,7 +16,7 @@ const EMAILS = [
  */
 export default function HeroVisual() {
   return (
-    <div aria-hidden className="relative mx-auto aspect-[7/5] w-full max-w-[760px] select-none">
+    <div aria-hidden className="relative mx-auto aspect-[7/5] w-full max-w-[900px] select-none">
       {/* A soft light behind the popsicle */}
       <div className="absolute top-[22%] left-[8%] aspect-square w-[44%] rounded-full bg-[#3d5afe]/20 blur-3xl" />
 

@@ -94,8 +94,9 @@ test("the hero shows the pitch and the three example emails, at every screen siz
     const page = await context.newPage();
     await new FakeApi().install(page);
     await page.goto("/");
-    await expect(page.getByRole("heading", { name: "Popsicle" })).toBeVisible();
-    await expect(page.getByText("Cold email, simplified")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Pop into their inbox" })).toBeVisible();
+    await expect(page.getByText("Cold email, simplified")).toHaveCount(0);
+    await expect(page.getByText(/Powered by/)).toHaveCount(0);
     await expect(page.getByRole("link", { name: /Get started/ }).first()).toBeVisible();
     // Sent, Replied, Booked: each name sits clear of its badge.
     const cards = page.locator("[data-hero-email]");
