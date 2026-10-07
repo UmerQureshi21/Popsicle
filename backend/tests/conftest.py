@@ -16,7 +16,7 @@ os.environ["HUNTER_API_KEY"] = "test-hunter-key"
 os.environ["AUTH_REQUIRED"] = "false"
 os.environ["COOKIE_SECURE"] = "false"
 os.environ["GOOGLE_CLIENT_SECRETS"] = str(Path(__file__).parent / "does-not-exist.json")
-os.environ["FRONTEND_URL"] = "http://frontend.test"
+os.environ["FRONTEND_URL"] = "http://localhost:3000"
 os.environ["BACKEND_URL"] = "http://localhost:8000"
 
 import pytest  # noqa: E402
