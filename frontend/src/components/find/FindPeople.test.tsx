@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { readHandoff } from "@/lib/people";
+import { DEFAULT_TITLES, roleTitles } from "@/lib/roles";
 import { hunterStatus, person, search } from "@/test/fixtures";
 import { navigation } from "@/test/navigation";
 import { api, apiError } from "@/test/server";
@@ -31,7 +32,7 @@ describe("FindPeople", () => {
 
   it("starts with the default filters and shows the credits left", async () => {
     setup();
-    expect(screen.getByRole("textbox", { name: /Job title/ })).toHaveValue("software engineer");
+    expect(screen.getByRole("textbox", { name: /Job titles/ })).toHaveValue(DEFAULT_TITLES);
     expect(screen.getByRole("button", { name: "Location" })).toHaveTextContent("Greater Toronto Area");
     expect(await screen.findByText(/credits left/)).toHaveTextContent("40 of 50 credits left (resets Nov 2) ·");
     expect(screen.getByText(/1 credit per 10 people found ·/)).toBeInTheDocument();
@@ -79,14 +80,14 @@ describe("FindPeople", () => {
     await user.click(searchButton());
 
     const stripe = (await screen.findByText("Jane Doe")).closest("section")!;
-    expect(within(stripe).getByText(/2 of 2 matching “software engineer” in Canada/)).toBeInTheDocument();
+    expect(within(stripe).getByText(/2 of 2 software & data roles in Canada/)).toBeInTheDocument();
     // Early warning: Sam was emailed before, so his row is flagged and the header says so.
     expect(within(stripe).getByText("· 1 already emailed")).toBeInTheDocument();
     expect(within(stripe).getByText("Sam Lee").closest("label")).toHaveAttribute("data-already-emailed", "true");
     expect(within(stripe).getByText("Jane Doe").closest("label")).not.toHaveAttribute("data-already-emailed");
     expect(calls.map((c) => c.body)).toEqual([
-      { query: "stripe.com", limit: 25, offset: 0, job_titles: "software engineer", location: [{ country: "CA" }], refresh: false },
-      { query: "tiny.io", limit: 25, offset: 0, job_titles: "software engineer", location: [{ country: "CA" }], refresh: false },
+      { query: "stripe.com", limit: 25, offset: 0, job_titles: DEFAULT_TITLES, location: [{ country: "CA" }], refresh: false },
+      { query: "tiny.io", limit: 25, offset: 0, job_titles: DEFAULT_TITLES, location: [{ country: "CA" }], refresh: false },
     ]);
     expect(await screen.findByText(/Hunter has no people for tiny\.io yet/)).toBeInTheDocument();
     await waitFor(() => expect(status).toHaveLength(2)); // credits refreshed after each search
@@ -135,7 +136,7 @@ describe("FindPeople", () => {
     const user = setup({ saved: { chips: [{ query: "stripe.com", label: "stripe.com", domain: "stripe.com" }] } });
     await user.click(searchButton());
     await user.click(await screen.findByRole("button", { name: /Search anywhere/ }));
-    await waitFor(() => expect(calls[1]?.body).toMatchObject({ location: null, job_titles: "software engineer" }));
+    await waitFor(() => expect(calls[1]?.body).toMatchObject({ location: null, job_titles: DEFAULT_TITLES }));
     await user.click(await screen.findByRole("button", { name: /Remove the job title/ }));
     await waitFor(() => expect(calls[2]?.body).toMatchObject({ location: null, job_titles: null }));
     // With both filters gone there's nothing left to loosen.
@@ -182,7 +183,49 @@ describe("FindPeople", () => {
   it("ignores corrupted saved data", () => {
     localStorage.setItem(STORAGE_KEY, "{bad");
     setup();
-    expect(screen.getByRole("textbox", { name: /Job title/ })).toHaveValue("software engineer");
+    expect(screen.getByRole("textbox", { name: /Job titles/ })).toHaveValue(DEFAULT_TITLES);
+  });
+});
+
+describe("FindPeople: job title presets", () => {
+  it("picks a role to fill in its titles, and edits stay as custom titles", async () => {
+    const user = setup();
+    const titles = screen.getByRole("textbox", { name: /Job titles/ });
+    expect(screen.getByRole("button", { name: "Role" })).toHaveTextContent("Software & data");
+
+    await user.click(screen.getByRole("button", { name: "Role" }));
+    await user.click(screen.getByRole("option", { name: /Recruiting/ }));
+    expect(titles).toHaveValue(roleTitles("recruiting"));
+    expect(saved().jobTitle).toBe(roleTitles("recruiting"));
+
+    await user.clear(titles);
+    await user.type(titles, "barista");
+    expect(screen.getByRole("button", { name: "Role" })).toHaveTextContent("Custom titles");
+    // Choosing "Custom titles" keeps what you typed.
+    await user.click(screen.getByRole("button", { name: "Role" }));
+    await user.click(screen.getByRole("option", { name: "Custom titles" }));
+    expect(titles).toHaveValue("barista");
+  });
+
+  it("a search with a typed title is labelled with it", async () => {
+    api("post", "/api/people-search/company", search([JANE]));
+    const user = setup();
+    const titles = screen.getByRole("textbox", { name: /Job titles/ });
+    await user.clear(titles);
+    await user.type(titles, "recruiter");
+    await user.type(companyBox(), "stripe.com{Enter}");
+    await user.click(searchButton());
+    expect(await screen.findByText(/1 of 1 matching “recruiter”/)).toBeInTheDocument();
+  });
+
+  it("upgrades the old default of just “software engineer”", () => {
+    setup({ saved: { jobTitle: "Software Engineer " } });
+    expect(screen.getByRole("textbox", { name: /Job titles/ })).toHaveValue(DEFAULT_TITLES);
+  });
+
+  it("keeps any other saved titles", () => {
+    setup({ saved: { jobTitle: "recruiter" } });
+    expect(screen.getByRole("textbox", { name: /Job titles/ })).toHaveValue("recruiter");
   });
 });
 
@@ -214,7 +257,7 @@ describe("FindPeople: get new people", () => {
     expect(screen.getByRole("button", { name: /Email 2 people/ })).toBeEnabled();
     expect(screen.queryByRole("button", { name: /Load more/ })).not.toBeInTheDocument();
     expect(calls[0].body).toEqual({
-      query: "stripe.com", want: 10, job_titles: "software engineer",
+      query: "stripe.com", want: 10, job_titles: DEFAULT_TITLES,
       location: expect.any(Array), hide_seen: false,
     });
     // And again for the next batch.
