@@ -122,7 +122,7 @@ export default function RecipientsTable({ variables, onVariablesChange, rows, on
         </span>
       </div>
 
-      <div ref={tableRef} className="overflow-x-auto rounded-xl border border-steel/20 bg-white shadow-sm">
+      <div ref={tableRef} className="overflow-x-auto rounded-xl border border-steel/20 bg-paper shadow-sm">
         {/* Fixed column widths: extra variables widen the table and scroll, rather than squeezing columns. */}
         <table className="w-max min-w-full table-fixed border-collapse text-left text-sm">
           <thead>
@@ -221,7 +221,7 @@ export default function RecipientsTable({ variables, onVariablesChange, rows, on
       <div className="mt-3 flex items-center justify-between gap-4">
         <button
           onClick={() => addRow()}
-          className="flex shrink-0 items-center gap-1.5 rounded-xl px-3 py-1.5 text-sm font-medium whitespace-nowrap text-ink hover:bg-white"
+          className="flex shrink-0 items-center gap-1.5 rounded-xl px-3 py-1.5 text-sm font-medium whitespace-nowrap text-ink hover:bg-paper"
         >
           <Plus className="size-4" /> Add recipient
         </button>

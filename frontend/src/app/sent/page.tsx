@@ -11,7 +11,7 @@ import SendingSafety from "@/components/SendingSafety";
 
 function StatTile({ label, value, accent }: { label: string; value: number | string; accent?: boolean }) {
   return (
-    <div className="rounded-2xl border border-cloud bg-white p-5 shadow-sm">
+    <div className="rounded-2xl border border-cloud bg-paper p-5 shadow-sm">
       <p className="text-sm text-steel">{label}</p>
       <p className={`mt-1 text-3xl font-semibold tracking-tight ${accent ? "text-crimson" : "text-ink"}`}>{value}</p>
     </div>
@@ -85,7 +85,7 @@ export default function SentPage() {
           const toSend = c.counts.total - c.counts.skipped;
           const open = openId === c.id;
           return (
-            <div key={c.id} className="overflow-hidden rounded-2xl border border-cloud bg-white shadow-sm">
+            <div key={c.id} className="overflow-hidden rounded-2xl border border-cloud bg-paper shadow-sm">
               <button onClick={() => toggle(c.id)} className="flex w-full items-center gap-5 px-5 py-4 text-left hover:bg-cloud/30">
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
@@ -117,7 +117,7 @@ export default function SentPage() {
                     <p className="text-sm text-steel">Loading…</p>
                   ) : (
                     <div className="space-y-5">
-                      <div className="rounded-2xl border border-cloud bg-white p-5">
+                      <div className="rounded-2xl border border-cloud bg-paper p-5">
                         <p className="text-xs font-semibold tracking-wide text-steel uppercase">Template used</p>
                         <p className="mt-2 font-medium text-ink">{detail.subject_template}</p>
                         <p className="mt-2 line-clamp-4 text-sm whitespace-pre-wrap text-ink/80">{detail.body_template}</p>

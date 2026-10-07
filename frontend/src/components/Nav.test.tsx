@@ -29,8 +29,8 @@ describe("Nav", () => {
     api("get", "/api/people-search/status", hunterStatus());
     renderNav();
     const main = await screen.findByRole("navigation", { name: "Main" });
-    expect(within(main).getByRole("link", { name: "Find people" }).className).toContain("bg-ink");
-    expect(within(main).getByRole("link", { name: "Compose" }).className).not.toContain("bg-ink");
+    expect(within(main).getByRole("link", { name: "Find people" }).className).toContain("bg-night");
+    expect(within(main).getByRole("link", { name: "Compose" }).className).not.toContain("bg-night");
     const tabs = screen.getByRole("navigation", { name: "Tabs" });
     expect(within(tabs).getByRole("link", { name: "Find" })).toHaveAttribute("aria-current", "page");
   });

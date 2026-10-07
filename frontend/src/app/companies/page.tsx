@@ -193,7 +193,7 @@ export default function CompaniesPage() {
                   aria-selected={filter === t.value}
                   onClick={() => setFilter(t.value)}
                   className={`rounded-full px-3 py-1.5 text-sm font-medium transition ${
-                    filter === t.value ? "bg-ink text-white" : "bg-white text-steel ring-1 ring-cloud hover:text-ink"
+                    filter === t.value ? "bg-night text-white" : "bg-paper text-steel ring-1 ring-cloud hover:text-ink"
                   }`}
                 >
                   {t.label} <span className={filter === t.value ? "text-white/70" : "text-steel/70"}>{t.n}</span>
@@ -220,7 +220,7 @@ export default function CompaniesPage() {
       {error && !adding && <p className="mb-4 text-sm text-crimson">{error}</p>}
 
       {companies && companies.length > 0 && shown.length === 0 && (
-        <p className="rounded-2xl border border-dashed border-steel/40 bg-white px-6 py-10 text-center text-sm text-steel">
+        <p className="rounded-2xl border border-dashed border-steel/40 bg-paper px-6 py-10 text-center text-sm text-steel">
           No companies are {COMPANY_STATUSES.find((s) => s.value === filter)?.label.toLowerCase()}.
         </p>
       )}
@@ -229,7 +229,7 @@ export default function CompaniesPage() {
         {shown.map((c) => (
           <div
             key={c.id}
-            className={`flex flex-col rounded-2xl border bg-white p-5 shadow-sm transition hover:shadow-md ${
+            className={`flex flex-col rounded-2xl border bg-paper p-5 shadow-sm transition hover:shadow-md ${
               picked.has(c.id) ? "border-crimson ring-2 ring-crimson/15" : "border-cloud hover:border-steel/30"
             }`}
           >
@@ -268,7 +268,7 @@ export default function CompaniesPage() {
       </div>
 
       {pickedShown.length > 0 && (
-        <div className="fixed inset-x-4 bottom-20 z-30 mx-auto flex max-w-xl flex-wrap items-center justify-between gap-3 rounded-2xl bg-ink px-4 py-3 text-sm text-white shadow-xl md:bottom-6">
+        <div className="fixed inset-x-4 bottom-20 z-30 mx-auto flex max-w-xl flex-wrap items-center justify-between gap-3 rounded-2xl bg-night px-4 py-3 text-sm text-white shadow-xl md:bottom-6">
           <span>
             {pickedShown.length} selected
             <button onClick={() => setPicked(new Set())} className="ml-3 text-white/70 underline underline-offset-2 hover:text-white">
@@ -293,9 +293,9 @@ export default function CompaniesPage() {
             Type a name and pick it from the list, or paste a whole list (one per line, or separated by commas). Names and domains both work;
             Hunter fills in the rest for free.
           </p>
-          <div className="flex min-h-[7.5rem] flex-wrap content-start items-center gap-2 rounded-2xl border border-steel/25 bg-cloud/40 p-2.5 focus-within:border-scarlet focus-within:bg-white focus-within:ring-4 focus-within:ring-scarlet/10">
+          <div className="flex min-h-[7.5rem] flex-wrap content-start items-center gap-2 rounded-2xl border border-steel/25 bg-cloud/40 p-2.5 focus-within:border-scarlet focus-within:bg-paper focus-within:ring-4 focus-within:ring-scarlet/10">
             {newChips.map((c) => (
-              <span key={c.query} className="flex max-w-full items-center gap-2 rounded-xl border border-cloud bg-white py-1 pr-1.5 pl-1.5 text-sm shadow-sm">
+              <span key={c.query} className="flex max-w-full items-center gap-2 rounded-xl border border-cloud bg-paper py-1 pr-1.5 pl-1.5 text-sm shadow-sm">
                 <CompanyLogo domain={c.domain} size={22} />
                 <span className="truncate font-medium text-ink">{c.label}</span>
                 <button

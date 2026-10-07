@@ -160,7 +160,7 @@ export default function Compose() {
   return (
     <>
       {notice && (
-        <div className="animate-fade-up mx-auto flex max-w-3xl items-center justify-between gap-3 border-b border-cloud bg-cloud/60 px-5 py-3 text-sm text-ink sm:mb-4 sm:rounded-2xl sm:border-0 sm:bg-white/90 sm:px-4 sm:shadow-lg sm:backdrop-blur">
+        <div className="animate-fade-up mx-auto flex max-w-3xl items-center justify-between gap-3 border-b border-cloud bg-cloud/60 px-5 py-3 text-sm text-ink sm:mb-4 sm:rounded-2xl sm:border-0 sm:bg-paper/90 sm:px-4 sm:shadow-lg sm:backdrop-blur">
           {notice}
           <button className="text-steel hover:text-ink" onClick={() => setNotice(null)}>
             Dismiss
@@ -168,8 +168,8 @@ export default function Compose() {
         </div>
       )}
 
-      <div className="mx-auto max-w-3xl sm:rounded-[28px] sm:border sm:border-white/60 sm:bg-white/70 sm:p-2 sm:shadow-[0_40px_100px_-30px_rgba(43,45,66,0.55)] sm:backdrop-blur-2xl">
-        <div className="bg-white px-5 pt-5 pb-5 sm:rounded-[22px] sm:bg-white/95 sm:px-8 sm:pt-7 sm:pb-6 sm:shadow-sm">
+      <div className="mx-auto max-w-3xl sm:rounded-[28px] sm:border sm:border-paper/60 sm:bg-paper/70 sm:p-2 sm:shadow-[0_40px_100px_-30px_rgba(43,45,66,0.55)] sm:backdrop-blur-2xl">
+        <div className="bg-paper px-5 pt-5 pb-5 sm:rounded-[22px] sm:bg-paper/95 sm:px-8 sm:pt-7 sm:pb-6 sm:shadow-sm">
           {/* Header */}
           <div className="flex items-center justify-between gap-3">
             <h1 className="shrink-0 text-lg font-semibold text-ink">New email</h1>
@@ -221,7 +221,7 @@ export default function Compose() {
                 <span
                   key={i}
                   className={`flex max-w-full min-w-0 items-center gap-2 rounded-full border py-1 pr-3 pl-1 text-sm shadow-sm ${
-                    r.error ? "border-crimson/30 bg-crimson/5 text-crimson" : "border-cloud bg-white text-ink"
+                    r.error ? "border-crimson/30 bg-crimson/5 text-crimson" : "border-cloud bg-paper text-ink"
                   }`}
                 >
                   <Avatar name={r.values.full_name || r.values.name || r.values.email || "?"} size={24} />
@@ -237,7 +237,7 @@ export default function Compose() {
               <button
                 onClick={() => setPanelOpen(!panelOpen)}
                 className={`flex shrink-0 items-center gap-1.5 rounded-xl px-3 py-1.5 text-sm font-medium transition-colors ${
-                  panelOpen ? "bg-ink text-white" : "bg-cloud text-ink hover:bg-steel/20"
+                  panelOpen ? "bg-night text-white" : "bg-cloud text-ink hover:bg-steel/20"
                 }`}
               >
                 <Users className="size-4" />
@@ -294,7 +294,7 @@ export default function Compose() {
 
             {/* Variable toolbar */}
             <div className="sticky top-20 z-10 mt-4 flex justify-start">
-              <div className="flex max-w-full flex-wrap items-center gap-1 rounded-xl bg-ink p-1 shadow-lg">
+              <div className="flex max-w-full flex-wrap items-center gap-1 rounded-xl bg-night p-1 shadow-lg">
                 <span className="px-2 text-xs text-white/50">Insert</span>
                 {[...variables, ...derived].map((v) => (
                   <button
@@ -349,7 +349,7 @@ export default function Compose() {
               </p>
               <div className="flex flex-wrap gap-3">
                 {attachments.map((a) => (
-                  <div key={a.id} className="flex w-60 items-center gap-3 rounded-xl border border-cloud bg-white p-3 shadow-sm">
+                  <div key={a.id} className="flex w-60 items-center gap-3 rounded-xl border border-cloud bg-paper p-3 shadow-sm">
                     <span className="relative grid h-10 w-8 place-items-end rounded-md border border-cloud bg-cloud/50 pb-1">
                       <span className="rounded bg-crimson px-1 text-[8px] font-bold text-white uppercase">
                         {a.filename.split(".").pop()?.slice(0, 4)}
@@ -380,10 +380,10 @@ export default function Compose() {
         </div>
 
         {/* Footer toolbar: pinned above the tab bar on phones */}
-        <div className="sticky bottom-[calc(60px+env(safe-area-inset-bottom))] z-20 flex items-center justify-between border-t border-cloud bg-white/95 px-3 py-2.5 backdrop-blur-xl sm:static sm:border-0 sm:bg-transparent sm:px-4 sm:py-3 sm:backdrop-blur-none">
+        <div className="sticky bottom-[calc(60px+env(safe-area-inset-bottom))] z-20 flex items-center justify-between border-t border-cloud bg-paper/95 px-3 py-2.5 backdrop-blur-xl sm:static sm:border-0 sm:bg-transparent sm:px-4 sm:py-3 sm:backdrop-blur-none">
           <div className="flex items-center gap-1">
             <Tooltip label="Attach files">
-              <button onClick={() => fileInput.current?.click()} className="rounded-xl p-2.5 text-ink/60 hover:bg-white/80 hover:text-ink">
+              <button onClick={() => fileInput.current?.click()} className="rounded-xl p-2.5 text-ink/60 hover:bg-paper/80 hover:text-ink">
                 <Paperclip className="size-5" />
               </button>
             </Tooltip>
@@ -393,7 +393,7 @@ export default function Compose() {
               <Tooltip label="Spacing between emails">
                 <button
                   onClick={() => setMenu(menu === "delay" ? null : "delay")}
-                  className={`rounded-xl p-2.5 hover:bg-white/80 hover:text-ink ${menu === "delay" ? "bg-white text-ink" : "text-ink/60"}`}
+                  className={`rounded-xl p-2.5 hover:bg-paper/80 hover:text-ink ${menu === "delay" ? "bg-paper text-ink" : "text-ink/60"}`}
                 >
                   <Clock className="size-5" />
                 </button>
@@ -417,7 +417,7 @@ export default function Compose() {
               <Tooltip label="Already-emailed people">
                 <button
                   onClick={() => setMenu(menu === "skip" ? null : "skip")}
-                  className={`rounded-xl p-2.5 hover:bg-white/80 hover:text-ink ${menu === "skip" ? "bg-white text-ink" : "text-ink/60"}`}
+                  className={`rounded-xl p-2.5 hover:bg-paper/80 hover:text-ink ${menu === "skip" ? "bg-paper text-ink" : "text-ink/60"}`}
                 >
                   <UserCheck className="size-5" />
                 </button>

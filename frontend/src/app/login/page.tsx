@@ -26,7 +26,7 @@ function nextPath(): string {
 export default function LoginPage() {
   const mounted = useSyncExternalStore(subscribe, () => true, () => false);
   return (
-    <main className="grid min-h-screen bg-white lg:grid-cols-2">
+    <main className="grid min-h-screen bg-paper lg:grid-cols-2">
       {/* Left half: the form */}
       <section className="flex items-center justify-center px-6 py-12 sm:px-10">{mounted && <LoginCard />}</section>
 
@@ -90,7 +90,7 @@ function LoginCard() {
   };
 
   const input =
-    "mt-1.5 w-full rounded-xl border border-steel/30 bg-white px-3.5 py-3 text-sm text-ink outline-none transition placeholder:text-steel/60 focus:border-scarlet focus:ring-4 focus:ring-scarlet/10";
+    "mt-1.5 w-full rounded-xl border border-steel/30 bg-paper px-3.5 py-3 text-sm text-ink outline-none transition placeholder:text-steel/60 focus:border-scarlet focus:ring-4 focus:ring-scarlet/10";
 
   return (
     <div className="animate-fade-up w-full max-w-sm">
@@ -108,7 +108,7 @@ function LoginCard() {
                 role="tab"
                 aria-selected={mode === m}
                 onClick={() => switchMode(m)}
-                className={`rounded-lg py-2 transition-all ${mode === m ? "bg-white text-ink shadow-sm" : "text-steel hover:text-ink"}`}
+                className={`rounded-lg py-2 transition-all ${mode === m ? "bg-paper text-ink shadow-sm" : "text-steel hover:text-ink"}`}
               >
                 {m === "login" ? "Log in" : "Sign up"}
               </button>

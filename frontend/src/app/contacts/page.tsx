@@ -37,7 +37,7 @@ export default function ContactsPage() {
   return (
     <PageShell title="Contacts" subtitle="Everyone you’ve added through a batch. Contacts are matched by email address.">
       <div className="mb-4 flex flex-wrap gap-3">
-        <label className="flex min-w-64 flex-1 items-center gap-2 rounded-xl border border-steel/25 bg-white px-3 py-2 shadow-sm focus-within:border-scarlet">
+        <label className="flex min-w-64 flex-1 items-center gap-2 rounded-xl border border-steel/25 bg-paper px-3 py-2 shadow-sm focus-within:border-scarlet">
           <Search className="size-4 text-steel" />
           <input
             value={q}
@@ -60,7 +60,7 @@ export default function ContactsPage() {
           {q || companyId ? "Try a different search." : "People are added here automatically when you send a batch."}
         </EmptyState>
       ) : (
-        <div className="-mx-4 overflow-x-auto border-y border-cloud bg-white sm:mx-0 sm:rounded-2xl sm:border sm:shadow-sm">
+        <div className="-mx-4 overflow-x-auto border-y border-cloud bg-paper sm:mx-0 sm:rounded-2xl sm:border sm:shadow-sm">
           <table className="w-full text-left text-sm">
             <thead className="border-b border-cloud bg-cloud/40 text-xs text-steel">
               <tr>
@@ -108,7 +108,7 @@ export default function ContactsPage() {
                   <td className="px-3 py-3">
                     <button
                       onClick={() => remove(c)}
-                      className="rounded-lg p-1.5 text-steel opacity-0 group-hover:opacity-100 hover:bg-white hover:text-crimson"
+                      className="rounded-lg p-1.5 text-steel opacity-0 group-hover:opacity-100 hover:bg-paper hover:text-crimson"
                       aria-label="Remove contact"
                     >
                       <Trash2 className="size-4" />

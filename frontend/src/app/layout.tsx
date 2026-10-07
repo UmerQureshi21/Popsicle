@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import { Montserrat } from "next/font/google";
 import Nav from "@/components/Nav";
+import { ThemeSync } from "@/components/Theme";
+import { NO_FLASH_SCRIPT } from "@/lib/themeScript";
 import { AuthProvider } from "@/lib/auth";
 import "./globals.css";
 
@@ -22,8 +24,13 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`${montserrat.variable} h-full antialiased`}>
+    // The theme is set on <html> by the script below before React starts, hence suppressHydrationWarning.
+    <html lang="en" className={`${montserrat.variable} h-full antialiased`} suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: NO_FLASH_SCRIPT }} />
+      </head>
       <body className="min-h-full flex flex-col">
+        <ThemeSync />
         <AuthProvider>
           <Nav />
           {children}

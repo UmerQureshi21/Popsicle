@@ -180,7 +180,7 @@ export default function FindPeople() {
     <div className="space-y-6">
       {/* Search */}
       <form
-        className="-mx-4 border-y border-cloud bg-white p-5 sm:mx-0 sm:rounded-3xl sm:border sm:p-6 sm:shadow-sm"
+        className="-mx-4 border-y border-cloud bg-paper p-5 sm:mx-0 sm:rounded-3xl sm:border sm:p-6 sm:shadow-sm"
         onSubmit={(e) => {
           e.preventDefault();
           searchAll();
@@ -190,11 +190,11 @@ export default function FindPeople() {
           <div>
             <span className="text-sm font-semibold text-ink">Companies</span>
             <span className="ml-2 text-xs text-steel">type a name and pick from the list, or paste several</span>
-            <div className="mt-2 flex min-h-[7.5rem] flex-wrap content-start items-center gap-2 rounded-2xl border border-steel/25 bg-cloud/40 p-2.5 focus-within:border-scarlet focus-within:bg-white focus-within:ring-4 focus-within:ring-scarlet/10">
+            <div className="mt-2 flex min-h-[7.5rem] flex-wrap content-start items-center gap-2 rounded-2xl border border-steel/25 bg-cloud/40 p-2.5 focus-within:border-scarlet focus-within:bg-paper focus-within:ring-4 focus-within:ring-scarlet/10">
               {chips.map((c) => (
                 <span
                   key={c.query}
-                  className="flex max-w-full items-center gap-2 rounded-xl border border-cloud bg-white py-1 pr-1.5 pl-1.5 text-sm shadow-sm"
+                  className="flex max-w-full items-center gap-2 rounded-xl border border-cloud bg-paper py-1 pr-1.5 pl-1.5 text-sm shadow-sm"
                 >
                   <CompanyLogo domain={c.domain} size={22} />
                   <span className="truncate font-medium text-ink">{c.label}</span>
@@ -289,7 +289,7 @@ export default function FindPeople() {
         const hasMore = !!r.search && r.search.offset + r.search.limit < total;
         const allSelected = r.people.length > 0 && r.people.every((p) => r.selected.includes(p.email));
         return (
-          <section key={r.query} className="animate-fade-up -mx-4 overflow-hidden border-y border-cloud bg-white sm:mx-0 sm:rounded-3xl sm:border sm:shadow-sm">
+          <section key={r.query} className="animate-fade-up -mx-4 overflow-hidden border-y border-cloud bg-paper sm:mx-0 sm:rounded-3xl sm:border sm:shadow-sm">
             <header className="flex flex-wrap items-center justify-between gap-3 border-b border-cloud px-5 py-4">
               <div className="flex items-center gap-3">
                 <CompanyLogo domain={r.search?.domain ?? chips.find((c) => c.query === r.query)?.domain} size={40} />

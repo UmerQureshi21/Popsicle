@@ -1,12 +1,24 @@
 @import "tailwindcss";
 
+/* `dark:` classes apply when the page is switched to the dark palette. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
 @theme {
-  /* Palette: d90429 · ef233c · edf2f4 · 8d99ae · 2b2d42 */
+  /* Palette: d90429 · ef233c · edf2f4 · 8d99ae · 2b2d42. Each colour has one job, so the dark
+     palette below can swap them:
+       paper   surfaces: cards, inputs, the nav, modals
+       cloud   the page background and subtle fills, borders
+       ink     main text (and faint tints of it)
+       steel   secondary text
+       night   dark accents with white text: dark cards, pills, badges
+       crimson/scarlet  the brand red */
   --color-crimson: #d90429;
   --color-scarlet: #ef233c;
   --color-cloud: #edf2f4;
   --color-steel: #8d99ae;
   --color-ink: #2b2d42;
+  --color-paper: #ffffff;
+  --color-night: #2b2d42;
 
   /* Montserrat everywhere, including the variable chips and tuple box. */
   --font-sans: var(--font-montserrat), ui-sans-serif, system-ui, sans-serif;
@@ -15,11 +27,30 @@
 
 :root {
   color-scheme: light;
+  /* Landing page light trails */
+  --beam-track: rgba(141, 153, 174, 0.32);
+  --beam-core: #d90429;
+  --beam-halo: rgba(239, 35, 60, 0.45);
+}
+
+/* The dark palette: same roles, night-time values. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --color-paper: #171925; /* surfaces, a step up from the background */
+  --color-cloud: #0e0f17; /* page background */
+  --color-ink: #eceef5; /* main text */
+  --color-steel: #98a2b8; /* secondary text */
+  --color-night: #262a40; /* dark accents: still dark, a step above surfaces */
+  --color-crimson: #ff3358; /* brighter red, so it reads on dark */
+  --color-scarlet: #ff5a76;
+  --beam-track: rgba(255, 255, 255, 0.1);
+  --beam-core: #ffffff;
+  --beam-halo: rgba(255, 90, 118, 0.6);
 }
 
 body {
   font-family: var(--font-sans);
-  background: #ffffff;
+  background: var(--color-paper);
   color: var(--color-ink);
 }
 

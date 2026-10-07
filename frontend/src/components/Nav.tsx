@@ -9,6 +9,7 @@ import { Avatar, Popover, Tooltip } from "@/components/ui";
 import { useAuth } from "@/lib/auth";
 import { useHunterStatus } from "@/lib/credits";
 import { formatDate } from "@/lib/format";
+import { ThemeToggle } from "@/components/Theme";
 
 const TABS = [
   { href: "/compose", label: "Compose", short: "Compose", icon: Mail },
@@ -93,7 +94,7 @@ export default function Nav() {
         <nav
           aria-label="Main"
           className={`flex w-full items-center justify-between gap-2 border-b px-3 py-2 backdrop-blur-xl sm:max-w-5xl sm:rounded-2xl sm:border sm:px-3 sm:shadow-sm ${
-            onCompose ? "border-cloud bg-white/90 sm:border-white/50 sm:bg-white/70" : "border-cloud bg-white/90"
+            onCompose ? "border-cloud bg-paper/90 sm:border-paper/50 sm:bg-paper/70" : "border-cloud bg-paper/90"
           }`}
         >
           <Link href="/compose" className="flex shrink-0 items-center gap-2 px-1.5 sm:px-2" aria-label="Popsicle">
@@ -112,7 +113,7 @@ export default function Nav() {
                       aria-label={label}
                       title={label}
                       className={`flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium whitespace-nowrap transition-colors ${
-                        active ? "bg-ink text-white" : "text-ink/70 hover:bg-cloud hover:text-ink"
+                        active ? "bg-night text-white" : "text-ink/70 hover:bg-cloud hover:text-ink"
                       }`}
                     >
                       <Icon className="size-4" />
@@ -123,6 +124,7 @@ export default function Nav() {
               })}
             </ul>
             <AccountMenu />
+            <ThemeToggle />
           </div>
         </nav>
       </header>
@@ -130,7 +132,7 @@ export default function Nav() {
       {/* Phones: tabs live in a bottom bar, like a native app */}
       <nav
         aria-label="Tabs"
-        className="fixed inset-x-0 bottom-0 z-40 border-t border-cloud bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl sm:hidden"
+        className="fixed inset-x-0 bottom-0 z-40 border-t border-cloud bg-paper/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl sm:hidden"
       >
         <ul className="grid h-[60px] grid-cols-7">
           {TABS.map(({ href, short, icon: Icon }) => {
