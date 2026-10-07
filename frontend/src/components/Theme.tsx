@@ -22,7 +22,7 @@ export function ThemeToggle({ className = "" }: { className?: string }) {
       onClick={() => setTheme(next)}
       aria-label={`Switch to ${next} mode`}
       title={`Switch to ${next} mode`}
-      className={`grid size-9 place-items-center rounded-xl text-ink/70 transition-colors hover:bg-cloud hover:text-ink ${className}`}
+      className={`grid size-9 place-items-center rounded-full text-ink/70 transition-colors hover:bg-cloud hover:text-ink ${className}`}
     >
       {theme === "dark" ? <Sun className="size-[18px]" /> : <Moon className="size-[18px]" />}
     </button>

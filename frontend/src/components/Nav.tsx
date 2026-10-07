@@ -132,7 +132,7 @@ export default function Nav() {
 
       {/* Wide screens: the theme switch sits on its own in the top-right corner of the screen. */}
       <div className="fixed top-6 right-6 z-40 hidden xl:block">
-        <ThemeToggle className="size-11 rounded-2xl border border-ink/10 bg-paper/80 shadow-sm backdrop-blur-xl" />
+        <ThemeToggle className="size-11 border border-ink/10 bg-paper/80 shadow-sm backdrop-blur-xl" />
       </div>
 
       {/* Phones: tabs live in a bottom bar, like a native app */}
