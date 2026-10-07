@@ -74,8 +74,6 @@ function GitHubMark({ className = "" }: { className?: string }) {
   );
 }
 
-const POP_SHADOW = "drop-shadow(0 40px 45px rgba(43, 45, 66, 0.28))";
-
 function PrimaryButton({ children }: { children: React.ReactNode }) {
   return (
     <Link
@@ -91,12 +89,6 @@ function PrimaryButton({ children }: { children: React.ReactNode }) {
 export default function LandingPage() {
   return (
     <main className="relative overflow-hidden bg-paper">
-      {/* Soft glows that pick up the popsicle colours */}
-      <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-[900px]">
-        <div className="absolute top-32 -left-32 size-[520px] rounded-full bg-[#5aa9ff]/25 blur-3xl" />
-        <div className="absolute top-40 -right-32 size-[520px] rounded-full bg-[#c58cff]/25 blur-3xl" />
-        <div className="absolute inset-x-0 bottom-0 h-64 bg-gradient-to-b from-transparent to-paper" />
-      </div>
 
       {/* Header */}
       <header className="animate-fade-in relative z-10 mx-auto flex max-w-7xl items-center justify-between px-10 pt-6 sm:px-14">
@@ -119,22 +111,14 @@ export default function LandingPage() {
           className="animate-pop-in absolute top-[18%] left-[-6%] hidden w-[clamp(200px,24vw,340px)] md:block"
           style={{ "--r": "-16deg", animationDelay: "250ms" } as React.CSSProperties}
         >
-          <Image src="/left-pop.png" alt="" width={500} height={500} priority style={{ filter: POP_SHADOW }} />
+          <Image src="/left-pop.png" alt="" width={500} height={500} priority />
         </div>
         <div
           aria-hidden
           className="animate-pop-in absolute top-[24%] right-[-6%] hidden w-[clamp(200px,24vw,340px)] md:block"
           style={{ "--r": "14deg", animationDelay: "450ms" } as React.CSSProperties}
         >
-          <Image
-            src="/right-pop.png"
-            alt=""
-            width={500}
-            height={500}
-            priority
-            className=""
-            style={{ filter: POP_SHADOW }}
-          />
+          <Image src="/right-pop.png" alt="" width={500} height={500} priority />
         </div>
 
         <div className="relative z-10 flex flex-col items-center">

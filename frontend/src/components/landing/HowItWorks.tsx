@@ -69,7 +69,9 @@ function fan(from: Pt, to: Pt, name: "hunter" | "gmail", w: number): Track[] {
 }
 
 function tracks(g: Geo): Track[] {
-  const bow = g.w < 640 ? 9 : Math.min(46, g.w * 0.05); // tighter on phones, where the trunk hugs the text
+  // The side strands bulge most halfway down (0.75 × bow), so keep that inside the step circles'
+  // radius (32px; 28px on phones) and they pass behind every circle, not around it.
+  const bow = g.w < 640 ? 9 : 28;
   return [
     ...fan(g.hunter, g.merge, "hunter", g.w),
     ...fan(g.gmail, g.merge, "gmail", g.w),
