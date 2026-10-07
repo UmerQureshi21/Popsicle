@@ -46,11 +46,17 @@ class TestLogin:
             assert login(client, password="nope").status_code == 401
         assert login(client).status_code == 429  # even with the right password
 
+    def test_locked_out_visitors_dont_lock_out_the_owner(self, client, db):
+        f.user(db)
+        for _ in range(auth.MAX_FAILURES):
+            client.post("/api/auth/login", json={"email": "me@example.com", "password": "nope"}, headers={"x-forwarded-for": "6.6.6.6"})
+        assert login(client).status_code == 200  # the owner, from elsewhere
+
     def test_success_clears_earlier_failures(self, client, db):
         f.user(db)
         login(client, password="nope")
         login(client)
-        assert "me@example.com" not in auth._failures
+        assert "email:me@example.com" not in auth._failures
 
 
 class TestSignup:
@@ -68,7 +74,7 @@ class TestSignup:
         r = self.signup(client)
         assert r.status_code == 403
         assert "invite-only" in r.json()["detail"]
-        assert len(auth._failures["friend@example.com"]) == 1
+        assert len(auth._failures["email:friend@example.com"]) == 1
 
     def test_already_has_a_password(self, client, db):
         f.user(db, email="friend@example.com")

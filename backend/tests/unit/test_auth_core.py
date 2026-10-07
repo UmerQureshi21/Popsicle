@@ -34,32 +34,69 @@ class TestPasswords:
         assert not auth.verify_password("pw", stored)
 
 
+def locked(email: str, ip: str) -> bool:
+    try:
+        auth.check_not_locked(email, ip)
+    except HTTPException as e:
+        assert e.status_code == 429
+        return True
+    return False
+
+
 class TestLockout:
-    def test_locks_after_max_failures(self):
+    def test_a_visitor_is_locked_after_max_failures(self):
         for _ in range(auth.MAX_FAILURES - 1):
-            auth.record_failure("a@x.com")
-        auth.check_not_locked("a@x.com")  # still allowed
-        auth.record_failure("a@x.com")
-        with pytest.raises(HTTPException) as e:
-            auth.check_not_locked("a@x.com")
-        assert e.value.status_code == 429
-        auth.check_not_locked("b@x.com")  # other emails unaffected
+            auth.record_failure("a@x.com", "1.1.1.1")
+        assert not locked("a@x.com", "1.1.1.1")
+        auth.record_failure("a@x.com", "1.1.1.1")
+        assert locked("a@x.com", "1.1.1.1")
+        assert locked("b@x.com", "1.1.1.1")  # the same visitor trying another account
+
+    def test_someone_else_guessing_doesnt_lock_you_out(self):
+        for _ in range(auth.MAX_FAILURES):
+            auth.record_failure("me@x.com", "6.6.6.6")
+        assert locked("me@x.com", "6.6.6.6")
+        assert not locked("me@x.com", "1.1.1.1")  # you, from your own connection
+
+    def test_an_account_is_locked_after_guesses_from_many_places(self):
+        for n in range(auth.MAX_FAILURES_PER_ACCOUNT):
+            auth.record_failure("me@x.com", f"10.0.0.{n}")
+        assert locked("me@x.com", "1.1.1.1")
+        assert not locked("other@x.com", "1.1.1.1")
 
     def test_old_failures_expire(self, monkeypatch):
         clock = [1000.0]
         monkeypatch.setattr(auth.time, "monotonic", lambda: clock[0])
         for _ in range(auth.MAX_FAILURES):
-            auth.record_failure("a@x.com")
+            auth.record_failure("a@x.com", "1.1.1.1")
         clock[0] += auth.LOCKOUT_SECONDS + 1
-        auth.check_not_locked("a@x.com")
-        assert auth._failures["a@x.com"] == []
+        assert not locked("a@x.com", "1.1.1.1")
+        assert auth._failures["ip:1.1.1.1"] == []
 
     def test_clear_failures(self):
         for _ in range(auth.MAX_FAILURES):
-            auth.record_failure("a@x.com")
-        auth.clear_failures("a@x.com")
-        auth.check_not_locked("a@x.com")
-        auth.clear_failures("never-failed@x.com")
+            auth.record_failure("a@x.com", "1.1.1.1")
+        auth.clear_failures("a@x.com", "1.1.1.1")
+        assert not locked("a@x.com", "1.1.1.1")
+        auth.clear_failures("never-failed@x.com", "2.2.2.2")
+
+
+class TestClientIp:
+    def request(self, headers=None, client=("9.9.9.9", 1)):
+        from starlette.requests import Request
+
+        scope = {"type": "http", "headers": [(k.encode(), v.encode()) for k, v in (headers or {}).items()], "client": client}
+        return Request(scope)
+
+    def test_first_forwarded_address(self):
+        assert auth.client_ip(self.request({"x-forwarded-for": "1.2.3.4, 76.76.21.21"})) == "1.2.3.4"
+
+    def test_direct_connection(self):
+        assert auth.client_ip(self.request()) == "9.9.9.9"
+        assert auth.client_ip(self.request({"x-forwarded-for": " "})) == "9.9.9.9"
+
+    def test_unknown(self):
+        assert auth.client_ip(self.request(client=None)) == "unknown"
 
 
 class TestSessions:

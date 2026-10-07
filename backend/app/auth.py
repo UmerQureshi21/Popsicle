@@ -63,25 +63,45 @@ def verify_password(password: str, stored: str | None) -> bool:
 
 # ---- Brute-force protection -------------------------------------------------
 
-MAX_FAILURES = 5
+# Wrong passwords are limited per visitor (by IP address), so one person guessing can't lock
+# you out of your own account; and, more loosely, per account, so guesses spread over many
+# addresses still run out. Kept in memory: a restart resets the counts.
+MAX_FAILURES = 5  # per visitor
+MAX_FAILURES_PER_ACCOUNT = 20
 LOCKOUT_SECONDS = 15 * 60
 _failures: dict[str, list[float]] = {}
 
 
-def check_not_locked(email: str) -> None:
+def client_ip(request: Request) -> str:
+    """The visitor's address. Behind the frontend's forwarding, the proxy puts it first in
+    X-Forwarded-For (someone calling the backend directly can fake that header, which is why
+    the per-account limit exists too)."""
+    forwarded = request.headers.get("x-forwarded-for", "")
+    first = forwarded.split(",")[0].strip()
+    return first or (request.client.host if request.client else "unknown")
+
+
+def _limits(email: str, ip: str) -> list[tuple[str, int]]:
+    return [(f"ip:{ip}", MAX_FAILURES), (f"email:{email}", MAX_FAILURES_PER_ACCOUNT)]
+
+
+def check_not_locked(email: str, ip: str) -> None:
     now = time.monotonic()
-    recent = [t for t in _failures.get(email, []) if now - t < LOCKOUT_SECONDS]
-    _failures[email] = recent
-    if len(recent) >= MAX_FAILURES:
-        raise HTTPException(429, "Too many attempts. Try again in 15 minutes.")
+    for key, limit in _limits(email, ip):
+        recent = [t for t in _failures.get(key, []) if now - t < LOCKOUT_SECONDS]
+        _failures[key] = recent
+        if len(recent) >= limit:
+            raise HTTPException(429, "Too many attempts. Try again in 15 minutes.")
 
 
-def record_failure(email: str) -> None:
-    _failures.setdefault(email, []).append(time.monotonic())
+def record_failure(email: str, ip: str) -> None:
+    for key, _ in _limits(email, ip):
+        _failures.setdefault(key, []).append(time.monotonic())
 
 
-def clear_failures(email: str) -> None:
-    _failures.pop(email, None)
+def clear_failures(email: str, ip: str) -> None:
+    for key, _ in _limits(email, ip):
+        _failures.pop(key, None)
 
 
 # ---- Sessions ---------------------------------------------------------------

@@ -75,6 +75,29 @@ class TestAttachments:
         r = client.post("/api/attachments", files={"file": ("big.bin", b"12345", "application/pdf")})
         assert r.status_code == 413
 
+    def test_read_in_pieces_and_stopped_early(self, client, db, monkeypatch):
+        from starlette.datastructures import UploadFile
+
+        reads = []
+        real = UploadFile.read
+
+        async def counting(self, size=-1):
+            reads.append(size)
+            return await real(self, size)
+
+        monkeypatch.setattr(UploadFile, "read", counting)
+        monkeypatch.setattr(misc, "MAX_ATTACHMENT_BYTES", 1024 * 1024)
+        r = client.post("/api/attachments", files={"file": ("big.bin", b"x" * (3 * 1024 * 1024), "application/pdf")})
+        assert r.status_code == 413
+        assert reads == [1024 * 1024, 1024 * 1024]  # never the whole file at once
+        assert db.scalars(select(Attachment)).all() == []
+
+    def test_a_file_bigger_than_one_piece_is_kept_whole(self, client, db):
+        data = bytes(range(256)) * 5000  # ~1.2 MB
+        r = client.post("/api/attachments", files={"file": ("doc.pdf", data, "application/pdf")})
+        assert r.json()["size_bytes"] == len(data)
+        assert db.get(Attachment, r.json()["id"]).data == data
+
 
 class TestGmail:
     def test_status(self, client, db):
