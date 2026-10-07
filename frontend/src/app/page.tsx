@@ -97,14 +97,6 @@ export default function LandingPage() {
           >
             <span className="text-crimson">Pop</span> into their inbox
           </h1>
-          <p
-            className="animate-fade-in mt-7 text-[clamp(2.1rem,4.4vw,3.5rem)] leading-[1.05] font-bold tracking-tight text-ink"
-            style={{ animationDelay: "350ms" }}
-          >
-            From cold email to
-            <br />
-            <span className="text-crimson">coffee chat</span>
-          </p>
           <p className="animate-fade-in mt-7 max-w-xl text-lg leading-relaxed text-pretty text-ink/70" style={{ animationDelay: "500ms" }}>
             Find the people you want to reach and send each a personal email from your own Gmail. Then follow every reply and book
             the call with a Google Meet link in one click.
@@ -135,9 +127,9 @@ export default function LandingPage() {
       {/* Step 3 demo */}
       <section className="relative flex min-h-screen flex-col justify-center px-6 py-32">
         <div className="mx-auto w-full max-w-7xl">
-          <Reveal className="mb-6 text-center">
-            <p className="text-sm font-semibold text-ink">Step 2 in action</p>
-            <p className="mt-1 text-sm text-steel">You write one template; each person gets their own version.</p>
+          <Reveal className="mb-14 text-center">
+            <h2 className="text-4xl font-bold tracking-tight text-balance text-ink sm:text-5xl">Step 2 in action</h2>
+            <p className="mx-auto mt-4 max-w-xl text-lg text-balance text-steel">You write one template; each person gets their own version.</p>
           </Reveal>
           <Reveal delay={150}>
             <TemplateDemo />

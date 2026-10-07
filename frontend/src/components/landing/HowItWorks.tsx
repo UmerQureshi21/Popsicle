@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { useCallback, useId, useRef, useState } from "react";
 import { Inbox, PenLine, Send, UserSearch, Video } from "lucide-react";
-import { boxIn, bowed, clamp, curve, lengthAtY, lightUp, line, useMeasure, useReadingLine, type Pt } from "./beams";
+import { boxIn, clamp, curve, lengthAtY, lightUp, line, useMeasure, useReadingLine, type Pt } from "./beams";
 
 const STEPS = [
   {
@@ -69,16 +69,11 @@ function fan(from: Pt, to: Pt, name: "hunter" | "gmail", w: number): Track[] {
 }
 
 function tracks(g: Geo): Track[] {
-  // The side strands bulge most halfway down (0.75 × bow), so keep that inside the step circles'
-  // radius (32px; 28px on phones) and they pass behind every circle, not around it.
-  const bow = g.w < 640 ? 9 : 28;
   return [
     ...fan(g.hunter, g.merge, "hunter", g.w),
     ...fan(g.gmail, g.merge, "gmail", g.w),
+    // From step 1 on, one path through every step.
     { d: line(g.merge, g.end), gradient: "trunk", main: "trunk", width: 2 },
-    // A faint lens of lines alongside the trunk, like strands of the same pipeline.
-    { d: bowed(g.merge, g.end, -bow), gradient: "trunk", width: 1 },
-    { d: bowed(g.merge, g.end, bow), gradient: "trunk", width: 1 },
   ];
 }
 
