@@ -185,3 +185,89 @@ describe("FindPeople", () => {
     expect(screen.getByRole("textbox", { name: /Job title/ })).toHaveValue("software engineer");
   });
 });
+
+describe("FindPeople: get new people", () => {
+  const ALEX = person({ email: "alex@stripe.com", full_name: "Alex Kim" });
+  const PRIYA = person({ email: "priya@stripe.com", full_name: "Priya Nair" });
+  const fresh = (people = [ALEX, PRIYA], overrides = {}) => ({
+    domain: "stripe.com", organization: "Stripe", pattern: "{first}", total: 30, people,
+    reached_end: false, pages_checked: 2, pages_paid: 1, ...overrides,
+  });
+
+  async function searched(user: ReturnType<typeof userEvent.setup>) {
+    // Last time: Jane (not emailed) and Sam (emailed).
+    api("post", "/api/people-search/company", search([JANE, SAM], { total: 30 }));
+    await user.type(companyBox(), "stripe.com{Enter}");
+    await user.click(searchButton());
+    await screen.findByText("Jane Doe");
+  }
+
+  it("swaps in people you haven't emailed, all ticked, and says what it cost", async () => {
+    const calls = api("post", "/api/people-search/company/new", fresh());
+    const user = setup();
+    await searched(user);
+    await user.click(screen.getByRole("button", { name: /Get 10 new people/ }));
+
+    expect(await screen.findByText("Alex Kim")).toBeInTheDocument();
+    expect(screen.queryByText("Jane Doe")).not.toBeInTheDocument();
+    expect(screen.getByText("2 people you haven’t emailed. Used about 1 credit.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Email 2 people/ })).toBeEnabled();
+    expect(screen.queryByRole("button", { name: /Load more/ })).not.toBeInTheDocument();
+    expect(calls[0].body).toEqual({
+      query: "stripe.com", want: 10, job_titles: "software engineer",
+      location: expect.any(Array), hide_seen: false,
+    });
+    // And again for the next batch.
+    await user.click(screen.getByRole("button", { name: /Get 10 new people/ }));
+    await waitFor(() => expect(calls).toHaveLength(2));
+  });
+
+  it("can also skip people already seen, and remembers that choice", async () => {
+    const calls = api("post", "/api/people-search/company/new", fresh([ALEX], { pages_paid: 0, reached_end: true }));
+    const user = setup();
+    await searched(user);
+    await user.click(screen.getByRole("checkbox", { name: /Hide people I’ve already seen/ }));
+    expect(saved().hideSeen).toBe(true);
+    await user.click(screen.getByRole("button", { name: /Get 10 new people/ }));
+    expect(
+      await screen.findByText("1 person you haven’t seen or emailed. Free: from results saved earlier. That’s everyone new Hunter has for this search."),
+    ).toBeInTheDocument();
+    expect((calls[0].body as { hide_seen: boolean }).hide_seen).toBe(true);
+  });
+
+  it("says when there's nobody new left", async () => {
+    api("post", "/api/people-search/company/new", fresh([], { reached_end: true }));
+    const user = setup();
+    await searched(user);
+    await user.click(screen.getByRole("button", { name: /Get 10 new people/ }));
+    expect(await screen.findByText(/You’ve reached everyone Hunter has at Stripe for this search/)).toBeInTheDocument();
+    // You can still try again (e.g. after changing the hide-seen option).
+    expect(screen.getByRole("button", { name: /Get 10 new people/ })).toBeInTheDocument();
+  });
+
+  it("says when it hasn't found anyone yet but there's more to look through", async () => {
+    api("post", "/api/people-search/company/new", fresh([], { pages_checked: 10 }));
+    const user = setup();
+    await searched(user);
+    await user.click(screen.getByRole("button", { name: /Get 10 new people/ }));
+    expect(await screen.findByText("No new people in the next 100 results. Click again to keep looking.")).toBeInTheDocument();
+  });
+
+  it("shows errors", async () => {
+    apiError("post", "/api/people-search/company/new", 429, "You've used all your Hunter credits for this month.");
+    const user = setup();
+    await searched(user);
+    await user.click(screen.getByRole("button", { name: /Get 10 new people/ }));
+    expect(await screen.findByText("You've used all your Hunter credits for this month.")).toBeInTheDocument();
+  });
+
+  it("isn't offered when the company has nobody at all", async () => {
+    api("post", "/api/people-search/company", search([]));
+    api("get", "/api/people-search/count", { total: 0, by_department: {}, by_seniority: {} });
+    const user = setup();
+    await user.type(companyBox(), "nobody.io{Enter}");
+    await user.click(searchButton());
+    await waitFor(() => expect(screen.queryByText("Searching Hunter…")).not.toBeInTheDocument());
+    expect(screen.queryByRole("button", { name: /new people/ })).not.toBeInTheDocument();
+  });
+});

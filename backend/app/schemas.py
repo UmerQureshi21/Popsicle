@@ -338,6 +338,29 @@ class PeopleSearchOut(BaseModel):
     cached: bool
 
 
+class NewPeopleIn(BaseModel):
+    """Find people at a company you haven't emailed yet (and, optionally, haven't been shown)."""
+
+    query: str = Field(min_length=1)
+    want: int = Field(10, ge=1, le=25)
+    department: str | None = None
+    seniority: str | None = None
+    job_titles: str | None = None
+    location: list[LocationFilter] | None = None
+    hide_seen: bool = False
+
+
+class NewPeopleOut(BaseModel):
+    domain: str | None
+    organization: str | None
+    pattern: str | None
+    total: int  # how many people Hunter has for this search
+    people: list[FoundPerson]  # up to `want`, none emailed yet
+    reached_end: bool  # every person Hunter has was checked: there are no more new ones
+    pages_checked: int
+    pages_paid: int  # pages fetched from Hunter now (the rest were saved earlier, free)
+
+
 class CompanySuggestion(BaseModel):
     name: str | None
     domain: str

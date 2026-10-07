@@ -338,3 +338,12 @@ class Meeting(Base):
     calendar_invite: Mapped[bool] = mapped_column(Boolean)  # they were also sent a calendar invite
     gmail_message_id: Mapped[str | None] = mapped_column(String(100))
     created_at: Mapped[datetime] = _created_at()
+
+
+class SeenPerson(Base):
+    """Someone Find people has shown you (by email), so "new people" can leave them out."""
+
+    __tablename__ = "seen_people"
+
+    email: Mapped[str] = mapped_column(String(320), primary_key=True)  # lowercase
+    first_seen_at: Mapped[datetime] = _created_at()

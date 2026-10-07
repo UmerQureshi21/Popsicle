@@ -74,3 +74,35 @@ test("look up one person from their LinkedIn profile and add them to the batch",
   await page.goto("/lookup");
   await expect(page.getByText("Recent lookups")).toBeVisible();
 });
+
+test("get a fresh batch of people you haven't emailed yet", async ({ page }) => {
+  const api = await new FakeApi({
+    "GET /api/people-search/suggest": [],
+    "POST /api/people-search/company": {
+      domain: "stripe.com", organization: "Stripe", pattern: "{first}", total: 30, offset: 0, limit: 10, cached: true,
+      people: [person({ email: "sam@stripe.com", full_name: "Sam Lee", first_name: "Sam", already_emailed_at: "2026-03-01T12:00:00Z" })],
+    },
+    "POST /api/people-search/company/new": {
+      domain: "stripe.com", organization: "Stripe", pattern: "{first}", total: 30, reached_end: false, pages_checked: 2, pages_paid: 1,
+      people: [person({ email: "alex@stripe.com", full_name: "Alex Kim", first_name: "Alex" }), person({ email: "priya@stripe.com", full_name: "Priya Nair", first_name: "Priya" })],
+    },
+  }).install(page);
+
+  await page.goto("/find");
+  await page.getByRole("combobox", { name: "Add a company" }).fill("stripe.com");
+  await page.keyboard.press("Enter");
+  await page.getByRole("checkbox", { name: /Hide people I’ve already seen/ }).check();
+  await page.getByRole("button", { name: /^Search/ }).click();
+  await expect(page.getByText("Sam Lee")).toBeVisible();
+
+  await page.getByRole("button", { name: /Get 10 new people/ }).click();
+  await expect(page.getByText("Alex Kim")).toBeVisible();
+  await expect(page.getByText("Sam Lee")).toHaveCount(0);
+  await expect(page.getByText("2 people you haven’t seen or emailed. Used about 1 credit.")).toBeVisible();
+  expect(api.called("POST /api/people-search/company/new")[0].body).toMatchObject({ query: "stripe.com", want: 10, hide_seen: true });
+
+  await page.getByRole("button", { name: /Email 2 people/ }).click();
+  await expect(page).toHaveURL(/\/compose$/);
+  await expect(page.getByRole("textbox", { name: "Row 1 email" })).toHaveValue("alex@stripe.com");
+  await expect(page.getByRole("textbox", { name: "Row 2 email" })).toHaveValue("priya@stripe.com");
+});
