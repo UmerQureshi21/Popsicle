@@ -24,8 +24,9 @@ describe("theme", () => {
     expect(storedTheme()).toBe("light");
   });
 
-  it("keeps the landing page light", () => {
-    expect(themeFor("/", "dark")).toBe("light");
+  it("keeps the landing page dark", () => {
+    expect(themeFor("/", "light")).toBe("dark");
+    expect(themeFor("/", "dark")).toBe("dark");
     expect(themeFor("/compose", "dark")).toBe("dark");
     expect(themeFor("/compose", "light")).toBe("light");
   });
@@ -51,15 +52,18 @@ describe("theme", () => {
     expect(document.documentElement.dataset.theme).toBe("dark");
   });
 
-  it("the before-paint script applies the saved theme, except on the landing page", () => {
+  it("the before-paint script applies the saved theme, and dark on the landing page", () => {
     const run = () => new Function(NO_FLASH_SCRIPT)();
     localStorage.setItem(THEME_KEY, "dark");
     window.history.replaceState(null, "", "/compose");
     run();
     expect(document.documentElement.dataset.theme).toBe("dark");
-    window.history.replaceState(null, "", "/");
+    localStorage.setItem(THEME_KEY, "light");
     run();
     expect(document.documentElement.dataset.theme).toBe("light");
+    window.history.replaceState(null, "", "/");
+    run();
+    expect(document.documentElement.dataset.theme).toBe("dark");
     localStorage.clear();
     window.history.replaceState(null, "", "/inbox");
     run();

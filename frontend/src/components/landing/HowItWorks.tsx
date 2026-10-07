@@ -40,7 +40,7 @@ const STEPS = [
 
 export type BeamTheme = "light" | "dark";
 
-/** Colours of the tracks and particles, per theme (light for now; dark to experiment with). */
+/** Colours of the tracks and particles, to force one theme (normally they follow the page palette). */
 export const BEAM_THEMES: Record<BeamTheme, React.CSSProperties> = {
   light: {
     "--beam-track": "rgba(141, 153, 174, 0.32)",

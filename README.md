@@ -170,7 +170,7 @@ Recent lookups stay on the page so you can come back to them.
 
 ### Light and dark
 
-The sun/moon button at the top right of the app switches between the light and dark palettes. Your choice is remembered in this browser and applied before the page is drawn, so there's no flash. The landing page stays light for now.
+The sun/moon button at the top right of the app switches between the light and dark palettes. Your choice is remembered in this browser and applied before the page is drawn, so there's no flash. The landing page is always dark: its light trails read best on a dark background. To change that, edit `FIXED_THEME` in `frontend/src/lib/themeScript.ts`.
 
 Colours are defined once in `frontend/src/app/globals.css`, each with one job (`paper` for surfaces, `cloud` for the background, `ink` for text, `steel` for secondary text, `night` for dark accents, plus the brand reds); the dark palette swaps their values.
 

@@ -1,7 +1,7 @@
 import { useCallback, useSyncExternalStore } from "react";
-import { LIGHT_ONLY, THEME_KEY, type Theme } from "./themeScript";
+import { FIXED_THEME, THEME_KEY, type Theme } from "./themeScript";
 
-export { LIGHT_ONLY, NO_FLASH_SCRIPT, THEME_KEY, type Theme } from "./themeScript";
+export { FIXED_THEME, NO_FLASH_SCRIPT, THEME_KEY, type Theme } from "./themeScript";
 
 const THEME_EVENT = "popsicle:theme";
 
@@ -14,7 +14,7 @@ export function storedTheme(): Theme {
 }
 
 export function themeFor(pathname: string, chosen: Theme): Theme {
-  return LIGHT_ONLY.has(pathname) ? "light" : chosen;
+  return FIXED_THEME[pathname] ?? chosen;
 }
 
 export function applyTheme(theme: Theme) {

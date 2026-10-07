@@ -63,7 +63,7 @@ test("pages carry the security headers", async ({ page }) => {
   expect(headers["x-powered-by"]).toBeUndefined();
 });
 
-test("the theme switch: one click to dark, remembered, and the landing page stays light", async ({ page }) => {
+test("the theme switch: one click to dark, remembered; the landing page is always dark", async ({ page }) => {
   await new FakeApi().install(page);
   await page.goto("/sent");
   const html = page.locator("html");
@@ -77,8 +77,11 @@ test("the theme switch: one click to dark, remembered, and the landing page stay
   expect(await page.evaluate(() => document.documentElement.dataset.theme)).toBe("dark");
   await expect(page.getByRole("button", { name: "Switch to light mode" })).toBeVisible();
 
-  await page.goto("/");
-  await expect(html).toHaveAttribute("data-theme", "light");
   await page.goto("/compose");
   await expect(html).toHaveAttribute("data-theme", "dark");
+  await page.getByRole("button", { name: "Switch to light mode" }).click();
+  await page.goto("/");
+  await expect(html).toHaveAttribute("data-theme", "dark"); // dark even with light chosen
+  await page.goto("/compose");
+  await expect(html).toHaveAttribute("data-theme", "light");
 });
