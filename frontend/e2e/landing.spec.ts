@@ -42,13 +42,25 @@ test("How it works lights up step by step as you scroll, and back again", async 
   await expect(page.locator("[data-beam-step][data-lit]")).toHaveCount(1);
 });
 
-test("the feature cards light up as the trail reaches them", async ({ page }) => {
+test("the feature cards all appear together, then the trail zigzags through them once", async ({ page }) => {
   await new FakeApi().install(page);
   await page.goto("/");
-  await scrollTo(page, "[data-beam-card]", 3);
-  await expect(page.locator("[data-beam-card][data-lit]")).toHaveCount(4);
-  await scrollTo(page, "[data-beam-card]", 5);
-  await expect(page.locator("[data-beam-card][data-lit]")).toHaveCount(6);
+  const cards = page.locator("[data-beam-card]");
+  await expect(cards).toHaveCount(6);
+  await cards.first().scrollIntoViewIfNeeded();
+  // Shown together, not one by one as you scroll.
+  await expect(page.locator("[data-shown]")).toHaveCount(1);
+  // The particle lights them in zigzag order: top-left, top-right, middle-right, middle-left, ...
+  const order: number[] = [];
+  await expect
+    .poll(async () => {
+      const lit = await cards.evaluateAll((els) => els.map((e, i) => (e.hasAttribute("data-lit") ? i : -1)).filter((i) => i >= 0));
+      for (const i of lit) if (!order.includes(i)) order.push(i);
+      return lit.length;
+    }, { timeout: 10_000, intervals: [50] })
+    .toBe(6);
+  expect(order).toEqual([0, 1, 3, 2, 4, 5]);
+  await expect(page.locator("[data-particle]").last()).toHaveCSS("opacity", "0"); // done: the particle fades out
 });
 
 test("with reduced motion, everything is shown already lit", async ({ browser }) => {
@@ -58,6 +70,8 @@ test("with reduced motion, everything is shown already lit", async ({ browser })
   await page.goto("/");
   await expect(page.locator("[data-beam-step][data-lit]")).toHaveCount(5);
   await expect(page.locator('[data-particle="trunk"]')).toHaveCSS("opacity", "0");
+  await page.locator("[data-beam-card]").first().scrollIntoViewIfNeeded();
+  await expect(page.locator("[data-beam-card][data-lit]")).toHaveCount(6); // lit straight away
   await context.close();
 });
 
@@ -66,8 +80,10 @@ test("on a phone the cards stack plainly, without trails", async ({ browser }) =
   const page = await context.newPage();
   await new FakeApi().install(page);
   await page.goto("/");
-  await scrollTo(page, "[data-beam-card]", 5);
-  await expect(page.locator("[data-beam-card][data-lit]")).toHaveCount(0);
+  await page.locator("[data-beam-card]").first().scrollIntoViewIfNeeded();
+  await expect(page.locator("[data-shown]")).toHaveCount(1); // the cards appear
+  await page.waitForTimeout(1500);
+  await expect(page.locator("[data-beam-card][data-lit]")).toHaveCount(0); // but no trail
   await expect(page.locator("[data-beam-step]")).toHaveCount(5); // How it works still has its trail
   await context.close();
 });

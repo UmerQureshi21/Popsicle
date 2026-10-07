@@ -107,3 +107,69 @@ export function useMeasure(container: RefObject<HTMLElement | null>, measure: ()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 }
+
+// ---- The feature cards' zigzag -------------------------------------------------------
+
+export type Box = { left: number; top: number; right: number; bottom: number };
+
+/**
+ * A path that snakes through cards laid out two per row: across the first row left to right,
+ * down the right column into the next row, across it right to left, down the left column, and
+ * so on. Between cards it runs through the gaps; inside a card it passes underneath (hidden).
+ * Returns the points and, for each card, which point is where the particle reaches it.
+ */
+export function zigzag(cards: Box[]): { points: Pt[]; reach: number[] } {
+  const mid = (b: Box) => (b.top + b.bottom) / 2;
+  const centre = (b: Box) => (b.left + b.right) / 2;
+  const points: Pt[] = [];
+  const reach: number[] = new Array(cards.length).fill(0);
+  const rows = Math.ceil(cards.length / 2);
+  for (let r = 0; r < rows; r++) {
+    const row = [2 * r, 2 * r + 1].filter((i) => i < cards.length);
+    if (r % 2 === 1) row.reverse(); // even rows left→right, odd rows right→left
+    const [firstId, secondId] = row;
+    const first = cards[firstId];
+    const second = secondId === undefined ? undefined : cards[secondId];
+    if (r > 0) {
+      // Down from the card above into the top of this row's first card.
+      reach[firstId] = points.length;
+      points.push({ x: centre(first), y: first.top });
+    }
+    if (!second) {
+      if (r === 0) points.push({ x: first.right, y: mid(first) });
+      break;
+    }
+    const goingRight = first.left < second.left;
+    if (r === 0) reach[firstId] = points.length;
+    points.push({ x: goingRight ? first.right : first.left, y: mid(first) });
+    reach[secondId] = points.length;
+    points.push({ x: goingRight ? second.left : second.right, y: mid(second) });
+    if (r < rows - 1) points.push({ x: centre(second), y: second.bottom }); // leave through its bottom
+  }
+  return { points, reach };
+}
+
+/** Lengths along a polyline: [0, after point 1, after point 2, ...]. */
+export function cumulative(points: Pt[]): number[] {
+  const out = [0];
+  for (let i = 1; i < points.length; i++) out.push(out[i - 1] + Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y));
+  return out;
+}
+
+/** The point `at` along a polyline (with its cumulative lengths). */
+export function pointAlong(points: Pt[], lengths: number[], at: number): Pt {
+  if (points.length === 0) return { x: 0, y: 0 };
+  if (at <= 0) return points[0];
+  for (let i = 1; i < points.length; i++) {
+    if (at <= lengths[i]) {
+      const t = (at - lengths[i - 1]) / (lengths[i] - lengths[i - 1] || 1);
+      return { x: points[i - 1].x + (points[i].x - points[i - 1].x) * t, y: points[i - 1].y + (points[i].y - points[i - 1].y) * t };
+    }
+  }
+  return points[points.length - 1];
+}
+
+export const polyline = (points: Pt[]) => points.map((p, i) => `${i ? "L" : "M"} ${r(p.x)} ${r(p.y)}`).join(" ");
+
+/** Slow start and end, quick middle. */
+export const easeInOut = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);

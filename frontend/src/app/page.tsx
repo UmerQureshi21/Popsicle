@@ -216,12 +216,12 @@ export default function LandingPage() {
       <section className="relative flex min-h-screen flex-col justify-center bg-cloud px-6 py-32">
         <div className="mx-auto w-full max-w-7xl">
           <FeatureBeams theme="light">
-            <div className="grid auto-rows-fr gap-6 sm:grid-cols-2 sm:gap-x-16">
+            <div className="grid auto-rows-fr gap-6 sm:grid-cols-2 sm:gap-x-16 sm:gap-y-14">
               {FEATURES.map(({ image, icon: Icon, title, text }, n) => {
                 // A checkerboard: the dark cards sit diagonally from each other.
                 const dark = n % 4 === 1 || n % 4 === 2;
                 return (
-                  <Reveal key={title} delay={n * 120} direction={n % 2 === 0 ? "left" : "right"}>
+                  <div key={title}>
                     <div
                       data-beam-card
                       className={`h-full min-h-[320px] rounded-[2rem] border p-10 shadow-sm ring-0 ring-crimson/20 transition-all duration-500 sm:p-12 hover:-translate-y-1 hover:shadow-[0_30px_60px_-30px_rgba(43,45,66,0.4)] data-lit:ring-2 data-lit:shadow-[0_30px_70px_-34px_rgba(217,4,41,0.55)] ${dark ? "border-ink bg-ink" : "border-white bg-white"}`}
@@ -234,7 +234,7 @@ export default function LandingPage() {
                       <h3 className={`mt-7 text-2xl font-semibold tracking-tight text-balance ${dark ? "text-white" : "text-ink"}`}>{title}</h3>
                       <p className={`mt-3 text-lg leading-relaxed text-pretty ${dark ? "text-white/60" : "text-steel"}`}>{text}</p>
                     </div>
-                  </Reveal>
+                  </div>
                 );
               })}
             </div>
