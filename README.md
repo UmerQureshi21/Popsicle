@@ -133,6 +133,8 @@ Open the **Find people** tab:
 
 There's also a quicker **Find people** button inside Compose that searches one company and adds people to the current batch. Its **Look them up** section finds a single person's email from their name or LinkedIn URL.
 
+**Get new people.** Already emailed the first 10 people at a company and want more? Click **Get 10 new people** on that company. Popsicle goes through Hunter's results from the top and skips everyone you've already emailed, until it has 10 people you haven't. Pages it has already fetched are saved, so going back over them is free; usually only the one page with new people uses a credit. Tick **Hide people I've already seen** to also skip anyone Find people has shown you before (whether or not you emailed them). When Hunter has nobody new left for that search, Popsicle says so and suggests a wider location or no job title.
+
 Results are saved for 30 days, so repeating a search costs nothing. Use **refresh** on saved results to search Hunter again.
 
 If a company search finds no one, Popsicle checks (for free) how many people Hunter has there in total and tells you whether the filters are the reason. It then offers one-click **Search anywhere** or **Remove the job title** retries.

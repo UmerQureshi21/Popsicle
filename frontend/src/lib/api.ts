@@ -293,6 +293,18 @@ export type PeopleSearch = {
   cached: boolean;
 };
 
+/** People at a company not emailed yet (see the backend's /company/new). */
+export type NewPeople = {
+  domain: string | null;
+  organization: string | null;
+  pattern: string | null;
+  total: number;
+  people: FoundPerson[];
+  reached_end: boolean;
+  pages_checked: number;
+  pages_paid: number;
+};
+
 export type EmailFinderResult = { person: FoundPerson | null; domain: string | null; company: string | null; cached: boolean };
 
 export type CompanySuggestion = { name: string | null; domain: string; logo: string | null; email_count: number | null };

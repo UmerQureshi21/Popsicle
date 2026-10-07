@@ -2,8 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { ArrowRight, Loader2, Search, UserSearch, X } from "lucide-react";
-import { api, type FoundPerson, type PeopleSearch } from "@/lib/api";
+import { ArrowRight, Loader2, Search, Sparkles, UserSearch, X } from "lucide-react";
+import { api, type FoundPerson, type NewPeople, type PeopleSearch } from "@/lib/api";
 import { creditsChanged, creditsText, searchCost, useHunterStatus } from "@/lib/credits";
 import { formatDate } from "@/lib/format";
 import { DEFAULT_LOCATION, LOCATIONS, locationById, type LocationId } from "@/lib/locations";
@@ -25,6 +25,8 @@ type CompanyResult = {
   selected: string[]; // emails
   filterLabel?: string; // e.g. “software engineer” in the GTA, as searched
   filters?: Filters; // what this company was searched with, reused for load more and refresh
+  fresh?: boolean; // showing "new people" (not emailed yet) rather than a page of the search
+  note?: string; // what the last "new people" fetch found
 };
 
 type Filters = { jobTitle: string; location: LocationId };
@@ -34,6 +36,7 @@ type Saved = {
   jobTitle: string;
   location: LocationId;
   perCompany: number;
+  hideSeen: boolean; // "new people" also leaves out anyone shown before
   results: CompanyResult[];
 };
 
@@ -44,8 +47,23 @@ const DEFAULTS: Saved = {
   jobTitle: "software engineer",
   location: DEFAULT_LOCATION,
   perCompany: 10,
+  hideSeen: false,
   results: [],
 };
+
+/** What a "Get new people" fetch found, in a sentence. */
+export function newPeopleNote(res: NewPeople, company: string, hideSeen: boolean): string {
+  if (res.people.length === 0) {
+    return res.reached_end
+      ? `You’ve reached everyone Hunter has at ${company} for this search. Try a wider location, or no job title.`
+      : `No new people in the next ${res.pages_checked * 10} results. Click again to keep looking.`;
+  }
+  const n = res.people.length;
+  const who = hideSeen ? "you haven’t seen or emailed" : "you haven’t emailed";
+  const cost = res.pages_paid ? `Used about ${creditsText(res.pages_paid)}.` : "Free: from results saved earlier.";
+  const last = res.reached_end ? " That’s everyone new Hunter has for this search." : "";
+  return `${n} ${n === 1 ? "person" : "people"} ${who}. ${cost}${last}`;
+}
 
 /** Start Find people with these companies (e.g. picked on the Companies page), replacing any
  * companies and results from the last search but keeping its filters. */
@@ -82,6 +100,7 @@ export default function FindPeople() {
   const [jobTitle, setJobTitle] = useState(initial.jobTitle);
   const [location, setLocation] = useState<LocationId>(initial.location);
   const [perCompany, setPerCompany] = useState(initial.perCompany);
+  const [hideSeen, setHideSeen] = useState(initial.hideSeen);
   const [results, setResults] = useState<CompanyResult[]>(initial.results);
   const status = useHunterStatus();
   const [searching, setSearching] = useState(false);
@@ -89,9 +108,9 @@ export default function FindPeople() {
 
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ chips, jobTitle, location, perCompany, results }));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ chips, jobTitle, location, perCompany, hideSeen, results }));
     } catch {}
-  }, [chips, jobTitle, location, perCompany, results]);
+  }, [chips, jobTitle, location, perCompany, hideSeen, results]);
 
   const companies = chips.map((c) => c.query);
   const addChips = (added: Chip[]) => {
@@ -124,6 +143,8 @@ export default function FindPeople() {
         return {
           state: "done",
           search: res,
+          fresh: false,
+          note: undefined,
           filters,
           filterLabel: [filters.jobTitle.trim() && `matching “${filters.jobTitle.trim()}”`, locationById(filters.location).short]
             .filter(Boolean)
@@ -134,6 +155,43 @@ export default function FindPeople() {
       });
     } catch (e) {
       update(query, { state: "error", error: (e as Error).message });
+    } finally {
+      creditsChanged();
+    }
+  };
+
+  /** The next people at this company not emailed yet (and, with hideSeen, never shown). */
+  const getNew = async (r: CompanyResult) => {
+    const filters = r.filters ?? { jobTitle, location };
+    update(r.query, { state: "loading", error: undefined });
+    try {
+      const res = await api.post<NewPeople>("/api/people-search/company/new", {
+        query: r.query,
+        want: perCompany,
+        job_titles: filters.jobTitle.trim() || null,
+        location: locationById(filters.location).filters,
+        hide_seen: hideSeen,
+      });
+      update(r.query, (prev) => ({
+        state: "done",
+        fresh: true,
+        filters,
+        note: newPeopleNote(res, prev.search?.organization ?? r.query, hideSeen),
+        search: {
+          domain: res.domain ?? prev.search?.domain ?? null,
+          organization: res.organization ?? prev.search?.organization ?? null,
+          pattern: res.pattern,
+          total: res.total,
+          offset: 0,
+          limit: res.people.length,
+          people: res.people,
+          cached: res.pages_paid === 0,
+        },
+        people: res.people,
+        selected: res.people.map((p) => p.email),
+      }));
+    } catch (e) {
+      update(r.query, { state: "error", error: (e as Error).message });
     } finally {
       creditsChanged();
     }
@@ -259,6 +317,18 @@ export default function FindPeople() {
                 className="mt-2 w-full"
               />
             </label>
+            <label className="flex items-start gap-2.5 text-sm text-ink">
+              <input
+                type="checkbox"
+                checked={hideSeen}
+                onChange={(e) => setHideSeen(e.target.checked)}
+                className="mt-0.5 size-4 accent-crimson"
+              />
+              <span>
+                Hide people I’ve already seen
+                <span className="block text-xs text-steel">For “Get new people”: also skip anyone shown to you before, not just people you’ve emailed.</span>
+              </span>
+            </label>
           </div>
         </div>
 
@@ -286,7 +356,7 @@ export default function FindPeople() {
       {/* Results */}
       {results.map((r) => {
         const total = r.search?.total ?? 0;
-        const hasMore = !!r.search && r.search.offset + r.search.limit < total;
+        const hasMore = !r.fresh && !!r.search && r.search.offset + r.search.limit < total;
         const allSelected = r.people.length > 0 && r.people.every((p) => r.selected.includes(p.email));
         return (
           <section key={r.query} className="animate-fade-up -mx-4 overflow-hidden border-y border-cloud bg-paper sm:mx-0 sm:rounded-3xl sm:border sm:shadow-sm">
@@ -331,7 +401,10 @@ export default function FindPeople() {
               </div>
             )}
             {r.state === "error" && <p className="px-5 py-5 text-sm text-crimson">{r.error}</p>}
-            {r.state === "done" && r.people.length === 0 && (
+            {r.note && (
+              <p className={`border-b border-cloud px-5 py-3 text-sm ${r.people.length ? "bg-cloud/30 text-ink/80" : "text-steel"}`}>{r.note}</p>
+            )}
+            {r.state === "done" && r.people.length === 0 && !r.fresh && (
               <EmptyResultHelp
                 company={r.search?.domain ?? r.query}
                 organization={r.search?.organization ?? null}
@@ -366,21 +439,26 @@ export default function FindPeople() {
                     </li>
                   ))}
                 </ul>
-                {hasMore && (
-                  <div className="border-t border-cloud py-2 text-center">
-                    <Button
-                      variant="ghost"
-                      disabled={r.state === "loading"}
-                      onClick={() =>
-                        fetchCompany(r.query, r.search!.offset + r.search!.limit, false, r.filters)
-                      }
-                    >
-                      {r.state === "loading" && <Loader2 className="size-4 animate-spin" />}
-                      Load more (up to {creditsText(searchCost(perCompany))})
-                    </Button>
-                  </div>
-                )}
               </>
+            )}
+            {r.search && total > 0 && r.state !== "error" && (r.people.length > 0 || r.fresh) && (
+              <div className="flex flex-wrap items-center justify-center gap-2 border-t border-cloud px-4 py-2">
+                {hasMore && (
+                  <Button variant="ghost" disabled={r.state === "loading"} onClick={() => fetchCompany(r.query, r.search!.offset + r.search!.limit, false, r.filters)}>
+                    {r.state === "loading" && <Loader2 className="size-4 animate-spin" />}
+                    Load more (up to {creditsText(searchCost(perCompany))})
+                  </Button>
+                )}
+                <Button
+                  variant="ghost"
+                  disabled={r.state === "loading"}
+                  onClick={() => getNew(r)}
+                  title="Skips everyone you’ve already emailed. Pages Popsicle has already fetched are free; only new pages use credits."
+                >
+                  {r.state === "loading" && !hasMore && <Loader2 className="size-4 animate-spin" />}
+                  <Sparkles className="size-4" /> Get {perCompany} new people
+                </Button>
+              </div>
             )}
           </section>
         );
