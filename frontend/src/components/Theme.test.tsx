@@ -39,10 +39,10 @@ describe("ThemeToggle", () => {
 });
 
 describe("ThemeSync", () => {
-  it("keeps the landing page light even when dark is chosen", () => {
-    localStorage.setItem(THEME_KEY, "dark");
+  it("keeps the landing page dark even when light is chosen", () => {
+    localStorage.setItem(THEME_KEY, "light");
     navigation.pathname = "/";
     render(<ThemeSync />);
-    expect(document.documentElement.dataset.theme).toBe("light");
+    expect(document.documentElement.dataset.theme).toBe("dark");
   });
 });
