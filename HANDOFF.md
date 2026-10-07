@@ -352,7 +352,7 @@ Keep that pattern for anything new that might take long.
 ### 7.10 Landing page (`app/page.tsx`, `components/landing/*`)
 - **Hero**:
   - The left side has the headline "**Pop** into their inbox" ("Pop" in crimson), the description, and Get started. The "From cold email to coffee chat" subtitle was removed on purpose.
-  - The right side is `HeroVisual`: a 7:5 canvas with one tilted popsicle, three cards for the app's main parts (Email found with Hunter's logo and a made-up `umer.qureshi@acme.com`, 10 emails sent with Gmail's, Meet link sent with `public/meet-icon.png`), dashed SVG arrows (viewBox 1000×714 matching the canvas), and the envelope.
+  - The right side is `HeroVisual`: a 7:5 canvas with one tilted popsicle, four cards for the app's main parts, in order (Email found with Hunter's logo and a made-up `umer.qureshi@acme.com`; 10 emails sent with Gmail's; Available times sent with `public/calendar-icon.svg`, a drawn stand-in for the Google Calendar logo; Meet link sent with `public/meet-icon.png`), no status icons since the logos already say where, dashed SVG arrows (viewBox 1000×714 matching the canvas), and the envelope.
   - Positions are percentages taken from his mockup. If you move something, keep the arrows' viewBox coordinates in sync.
 - **How it works** (`HowItWorks.tsx`):
   - Scroll-driven light trails: Hunter and Gmail particles fan in, merge at step 1, and run down a single trunk line (no side strands) through every step.
