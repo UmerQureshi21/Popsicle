@@ -1,12 +1,15 @@
 """Turning a compose draft into per-recipient emails, and running a campaign's sends."""
 
 import logging
+import os
 import random
+import socket
 import threading
 import time
+import uuid
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import func, select, update
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.orm import Session
 
 from . import gmail, sending, verification
@@ -194,10 +197,65 @@ _wake_requested: set[int] = set()  # scheduled batches told to start early
 
 MAX_SCHEDULE_AHEAD = timedelta(days=60)
 
+# ---- Who sends what -------------------------------------------------------
+# More than one server process can be up at once (during a redeploy, the old one keeps running
+# while the new one starts). Each claims a batch in the database before sending it and keeps
+# renewing that claim; a batch whose claim lapses (its process died) can be picked up again.
+
+WORKER_ID = f"{socket.gethostname()}-{os.getpid()}-{uuid.uuid4().hex[:6]}"[:64]
+LEASE = timedelta(seconds=60)
+RENEW_EVERY = 15.0  # seconds, well inside LEASE
+SWEEP_EVERY = 30.0  # seconds between checks for batches whose process died
+ACTIVE = (CampaignStatus.QUEUED, CampaignStatus.SENDING, CampaignStatus.WAITING, CampaignStatus.SCHEDULED)
+INTERRUPTED_MID_SEND = (
+    "Sending stopped while this email was being handed to Gmail, so it may have gone out. "
+    "Check Gmail’s Sent folder before retrying it."
+)
+
+
+def _claim(campaign_id: int) -> bool:
+    """Take the batch for this process, unless another live process has it."""
+    with SessionLocal() as db:
+        got = db.execute(
+            update(Campaign)
+            .where(
+                Campaign.id == campaign_id,
+                or_(Campaign.worker_id.is_(None), Campaign.worker_id == WORKER_ID, Campaign.lease_until < now()),
+            )
+            .values(worker_id=WORKER_ID, lease_until=now() + LEASE)
+            .returning(Campaign.id)
+        ).first()
+        db.commit()
+        return got is not None
+
+
+def _renew(campaign_id: int) -> bool:
+    """Extend this process's claim. False if it lost the batch, or the batch was cancelled or
+    stopped (possibly by another process), so it must stop sending."""
+    with SessionLocal() as db:
+        got = db.execute(
+            update(Campaign)
+            .where(Campaign.id == campaign_id, Campaign.worker_id == WORKER_ID, Campaign.status.in_(ACTIVE))
+            .values(lease_until=now() + LEASE)
+            .returning(Campaign.id)
+        ).first()
+        db.commit()
+        return got is not None
+
+
+def _release(campaign_id: int) -> None:
+    with SessionLocal() as db:
+        db.execute(
+            update(Campaign)
+            .where(Campaign.id == campaign_id, Campaign.worker_id == WORKER_ID)
+            .values(worker_id=None, lease_until=None)
+        )
+        db.commit()
+
 
 def start(campaign_id: int) -> None:
     with _lock:
-        if campaign_id in _running:
+        if campaign_id in _running or not _claim(campaign_id):
             return
         _running.add(campaign_id)
         _cancel_requested.discard(campaign_id)
@@ -205,7 +263,12 @@ def start(campaign_id: int) -> None:
 
 
 def is_running(campaign_id: int) -> bool:
-    return campaign_id in _running
+    """Being sent by this process, or by another one whose claim is still live."""
+    if campaign_id in _running:
+        return True
+    with SessionLocal() as db:
+        c = db.get(Campaign, campaign_id)
+        return bool(c and c.worker_id and c.lease_until and c.lease_until > now())
 
 
 def request_cancel(db: Session, campaign: Campaign) -> None:
@@ -224,13 +287,19 @@ def _wait(campaign_id: int, seconds: float) -> bool:
     """Sleep in short steps; returns False if the campaign was cancelled meanwhile.
     Returns early (True) if the batch is told to start now."""
     end = time.monotonic() + seconds
+    renew_at = time.monotonic() + RENEW_EVERY
     while time.monotonic() < end:
         if campaign_id in _cancel_requested:
             return False
         if campaign_id in _wake_requested:
             _wake_requested.discard(campaign_id)
             return True
-        time.sleep(min(0.5, end - time.monotonic()))
+        if time.monotonic() >= renew_at:
+            # Also how a cancel made through another process reaches this one.
+            if not _renew(campaign_id):
+                return False
+            renew_at = time.monotonic() + RENEW_EVERY
+        time.sleep(max(0.0, min(0.5, end - time.monotonic())))
     return campaign_id not in _cancel_requested
 
 
@@ -238,10 +307,11 @@ def send_now(db: Session, campaign: Campaign) -> None:
     """Move a scheduled batch's time to now and wake its sleeping sender (or start one)."""
     campaign.scheduled_for = now()
     db.commit()
-    if is_running(campaign.id):
+    if campaign.id in _running:
         _wake_requested.add(campaign.id)
-    else:
+    elif not is_running(campaign.id):
         start(campaign.id)
+    # Otherwise another process has it; it sees the new time on its next check.
 
 
 def _wait_for_schedule(db: Session, campaign: Campaign) -> bool:
@@ -249,7 +319,8 @@ def _wait_for_schedule(db: Session, campaign: Campaign) -> bool:
     while campaign.scheduled_for and campaign.scheduled_for > now():
         campaign.status = CampaignStatus.SCHEDULED
         db.commit()
-        if not _wait(campaign.id, (campaign.scheduled_for - now()).total_seconds()):
+        # In short steps, so "send now" from another process is noticed.
+        if not _wait(campaign.id, min(SWEEP_EVERY, (campaign.scheduled_for - now()).total_seconds())):
             return False
         db.refresh(campaign)  # "send now" moves the time forward
     return True
@@ -276,10 +347,18 @@ def _wait_for_quota(db: Session, campaign: Campaign) -> bool:
 
 def _run(campaign_id: int) -> None:
     try:
+        if not _claim(campaign_id):
+            return  # missing, or another live process is sending it
         with SessionLocal() as db:
             campaign = db.get(Campaign, campaign_id)
-            if campaign is None:
-                return
+            # Emails handed to Gmail when the server last stopped may have gone out: never resend them blindly.
+            db.execute(
+                update(Email)
+                .where(Email.campaign_id == campaign_id, Email.status == EmailStatus.PENDING, Email.attempted_at.is_not(None))
+                .values(status=EmailStatus.FAILED, error=INTERRUPTED_MID_SEND)
+            )
+            db.commit()
+            db.refresh(campaign)
             if not _wait_for_schedule(db, campaign):
                 return
             campaign.status = CampaignStatus.SENDING
@@ -306,6 +385,10 @@ def _run(campaign_id: int) -> None:
                     continue
                 if not _wait_for_quota(db, campaign):
                     break
+                if not _renew(campaign_id):
+                    return  # lost the batch, or it was cancelled or stopped elsewhere
+                email.attempted_at = now()
+                db.commit()
                 try:
                     res = gmail.send(service, email.to_email, email.subject, email.body, attachments)
                     email.status = EmailStatus.SENT
@@ -327,7 +410,7 @@ def _run(campaign_id: int) -> None:
                         db.commit()
                         return
                     # One bad address shouldn't stop the batch.
-                    log.exception("send failed for %s", email.to_email)
+                    log.exception("send failed for email %s in campaign %s", email.id, campaign_id)
                     email.status = EmailStatus.FAILED
                     email.error = str(e)[:2000]
                 db.commit()
@@ -339,10 +422,12 @@ def _run(campaign_id: int) -> None:
                         break
 
             db.refresh(campaign)
-            if campaign.status != CampaignStatus.CANCELLED:
+            # Only if it's still ours and still active (not cancelled or stopped elsewhere).
+            if _renew(campaign_id):
+                db.refresh(campaign)
                 campaign.status = CampaignStatus.COMPLETED
                 campaign.finished_at = now()
-            db.commit()
+                db.commit()
     except Exception:
         log.exception("campaign %s crashed", campaign_id)
         with SessionLocal() as db:
@@ -352,6 +437,10 @@ def _run(campaign_id: int) -> None:
                 c.error = "Unexpected error while sending; see server logs."
                 db.commit()
     finally:
+        try:
+            _release(campaign_id)
+        except Exception:
+            log.exception("couldn't release campaign %s", campaign_id)
         with _lock:
             _running.discard(campaign_id)
             _cancel_requested.discard(campaign_id)
@@ -360,21 +449,58 @@ def _run(campaign_id: int) -> None:
 
 def resume_on_startup() -> None:
     """Batches waiting on the daily limit or for their scheduled time pick up again by
-    themselves after a restart."""
+    themselves, unless another live process already has them."""
     with SessionLocal() as db:
-        waiting = db.scalars(
-            select(Campaign.id).where(Campaign.status.in_([CampaignStatus.WAITING, CampaignStatus.SCHEDULED]))
+        idle = db.scalars(
+            select(Campaign.id).where(
+                Campaign.status.in_([CampaignStatus.WAITING, CampaignStatus.SCHEDULED]),
+                or_(Campaign.worker_id.is_(None), Campaign.lease_until < now()),
+            )
         ).all()
-    for campaign_id in waiting:
+    for campaign_id in idle:
         start(campaign_id)
 
 
-def mark_interrupted_on_startup() -> None:
-    """Campaigns that were mid-send when the server stopped can be resumed from the UI."""
+def mark_interrupted_on_startup(startup: bool = True) -> None:
+    """Batches that were mid-send when their process stopped can be resumed from the UI. Ones
+    another live process is still sending are left alone. At startup, rows from before claims
+    existed (no claim at all) count as stopped; later, only lapsed claims do, since a new batch
+    is claimed a moment after it's created."""
+    lapsed = Campaign.lease_until < now()
     with SessionLocal() as db:
         db.execute(
             update(Campaign)
-            .where(Campaign.status.in_([CampaignStatus.QUEUED, CampaignStatus.SENDING]))
-            .values(status=CampaignStatus.INTERRUPTED, error="Server restarted while sending. Resume to continue.")
+            .where(
+                Campaign.status.in_([CampaignStatus.QUEUED, CampaignStatus.SENDING]),
+                or_(Campaign.lease_until.is_(None), lapsed) if startup else lapsed,
+                Campaign.id.not_in(list(_running) or [-1]),
+            )
+            .values(
+                status=CampaignStatus.INTERRUPTED,
+                error="Server restarted while sending. Resume to continue.",
+                worker_id=None,
+                lease_until=None,
+            )
         )
         db.commit()
+
+
+def sweep() -> None:
+    """Pick up batches whose process died: resumable ones are marked, waiting ones restart."""
+    mark_interrupted_on_startup(startup=False)
+    resume_on_startup()
+
+
+def start_sweeper(stop: threading.Event | None = None, every: float = SWEEP_EVERY) -> threading.Thread:
+    stop = stop or threading.Event()
+
+    def loop():
+        while not stop.wait(every):
+            try:
+                sweep()
+            except Exception:
+                log.exception("sweep failed")
+
+    t = threading.Thread(target=loop, daemon=True, name="campaign-sweeper")
+    t.start()
+    return t

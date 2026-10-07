@@ -68,9 +68,14 @@ def delete_template(template_id: int, db: Session = Depends(get_db)):
 
 @router.post("/attachments", response_model=AttachmentOut, status_code=201, tags=["attachments"])
 async def upload_attachment(file: UploadFile = File(...), db: Session = Depends(get_db)):
-    data = await file.read()
-    if len(data) > MAX_ATTACHMENT_BYTES:
-        raise HTTPException(413, "Attachments must be under 20 MB.")
+    # Read in pieces and stop as soon as it's too big, so a huge upload can't fill the memory.
+    chunks, size = [], 0
+    while chunk := await file.read(1024 * 1024):
+        size += len(chunk)
+        if size > MAX_ATTACHMENT_BYTES:
+            raise HTTPException(413, "Attachments must be under 20 MB.")
+        chunks.append(chunk)
+    data = b"".join(chunks)
     a = Attachment(
         filename=file.filename or "attachment",
         content_type=(
@@ -115,7 +120,9 @@ def gmail_callback(request: Request, state: str = "", error: str | None = None, 
     if error:
         return RedirectResponse(f"{back}?gmail_error={error}")
     try:
-        gmail.finish_auth(db, state, str(request.url))
+        # Rebuilt from the public address: behind the frontend's /api forwarding, request.url is
+        # the backend's internal (http) address, which Google's sign-in library rejects.
+        gmail.finish_auth(db, state, f"{settings.backend_url}{gmail.REDIRECT_PATH}?{request.url.query}")
     except gmail.MissingSendPermission:
         return RedirectResponse(f"{back}?gmail_error=missing_send_permission")
     except Exception as e:

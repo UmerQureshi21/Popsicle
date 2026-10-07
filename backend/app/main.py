@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .auth import require_user
 from . import migrations
-from .campaigns import mark_interrupted_on_startup, resume_on_startup
+from .campaigns import mark_interrupted_on_startup, resume_on_startup, start_sweeper
 from .config import settings
 from .db import engine
 from .models import Base
@@ -23,10 +23,18 @@ async def lifespan(_: FastAPI):
     migrations.run(engine)
     mark_interrupted_on_startup()
     resume_on_startup()
+    start_sweeper()
     yield
 
 
-app = FastAPI(title="Popsicle", lifespan=lifespan)
+def docs_urls(local: bool) -> dict:
+    """The interactive API docs list every endpoint, so they're only offered locally."""
+    if local:
+        return {"docs_url": "/docs", "redoc_url": "/redoc", "openapi_url": "/openapi.json"}
+    return {"docs_url": None, "redoc_url": None, "openapi_url": None}
+
+
+app = FastAPI(title="Popsicle", lifespan=lifespan, **docs_urls(settings.is_local))
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[settings.frontend_url],

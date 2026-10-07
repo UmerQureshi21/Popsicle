@@ -45,27 +45,29 @@ def me(user: User | None = Depends(auth.current_user)):
 
 
 @router.post("/login", response_model=UserOut)
-def login(body: Credentials, response: Response, db: Session = Depends(get_db)):
+def login(body: Credentials, request: Request, response: Response, db: Session = Depends(get_db)):
     email = body.email.strip().lower()
-    auth.check_not_locked(email)
+    ip = auth.client_ip(request)
+    auth.check_not_locked(email, ip)
     user = _find(db, email)
     if not auth.verify_password(body.password, user.password_hash if user else None):
-        auth.record_failure(email)
+        auth.record_failure(email, ip)
         # Same message whether the email or the password is wrong, so emails can't be probed.
         raise HTTPException(401, "That email and password don't match an account.")
-    auth.clear_failures(email)
+    auth.clear_failures(email, ip)
     auth.start_session(db, user, response)
     return _out(user)
 
 
 @router.post("/signup", response_model=UserOut)
-def signup(body: Credentials, response: Response, db: Session = Depends(get_db)):
+def signup(body: Credentials, request: Request, response: Response, db: Session = Depends(get_db)):
     """Only works for an email you've invited (`python -m app.manage invite`) that has no password yet."""
     email = body.email.strip().lower()
-    auth.check_not_locked(email)
+    ip = auth.client_ip(request)
+    auth.check_not_locked(email, ip)
     user = _find(db, email)
     if user is None:
-        auth.record_failure(email)
+        auth.record_failure(email, ip)
         raise HTTPException(403, INVITE_ONLY)
     if user.password_hash:
         raise HTTPException(409, "This email already has an account. Log in instead.")

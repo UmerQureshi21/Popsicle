@@ -1,6 +1,9 @@
 """Sending a campaign. `_run` is called directly (no thread) with gmail.load_credentials,
 gmail.gmail_service and gmail.send swapped out, so no real email is ever sent."""
 
+import threading
+from datetime import timedelta
+
 import pytest
 from sqlalchemy import update
 
@@ -217,7 +220,8 @@ class TestWait:
 
 
 class TestStart:
-    def test_starts_one_thread_per_campaign(self, monkeypatch):
+    def test_starts_one_thread_per_campaign(self, db, monkeypatch):
+        c = f.campaign(db)
         threads = []
 
         class Thread:
@@ -228,13 +232,14 @@ class TestStart:
                 pass
 
         monkeypatch.setattr(campaigns.threading, "Thread", Thread)
-        campaigns._cancel_requested.add(7)
-        campaigns.start(7)
-        campaigns.start(7)  # already running: ignored
+        campaigns._cancel_requested.add(c.id)
+        campaigns.start(c.id)
+        campaigns.start(c.id)  # already running: ignored
 
-        assert threads == [(campaigns._run, (7,), True, "campaign-7")]
-        assert campaigns.is_running(7)
-        assert 7 not in campaigns._cancel_requested
+        assert threads == [(campaigns._run, (c.id,), True, f"campaign-{c.id}")]
+        assert campaigns.is_running(c.id)
+        assert c.id not in campaigns._cancel_requested
+        assert reload(c.id)[0].worker_id == campaigns.WORKER_ID
 
 
 def test_mark_interrupted_on_startup(db):
@@ -349,7 +354,7 @@ def test_waits_until_the_scheduled_time_then_sends(db, outbox, monkeypatch):
 
     def fake_wait(cid, seconds):
         with SessionLocal() as s:
-            seen.append((s.get(Campaign, cid).status, round(seconds / 3600)))
+            seen.append((s.get(Campaign, cid).status, seconds))
             # Time passes: pretend it's now the scheduled time.
             s.execute(update(Campaign).where(Campaign.id == cid).values(scheduled_for=campaigns.now()))
             s.commit()
@@ -358,7 +363,8 @@ def test_waits_until_the_scheduled_time_then_sends(db, outbox, monkeypatch):
     monkeypatch.setattr(campaigns, "_wait", fake_wait)
     campaigns._run(c.id)
 
-    assert seen == [(CampaignStatus.SCHEDULED, 10)]
+    # Waits in short steps (not 10 hours at once), so "send now" from another process is noticed.
+    assert seen == [(CampaignStatus.SCHEDULED, campaigns.SWEEP_EVERY)]
     assert [m[0] for m in outbox] == ["a@x.com"]
     campaign, _ = reload(c.id)
     assert campaign.status == CampaignStatus.COMPLETED
@@ -437,3 +443,187 @@ class TestCompanyStatus:
         campaigns._run(c.id)
         db.refresh(stripe)
         assert stripe.status == "not_started"
+
+
+
+# ---- Several server processes (e.g. during a redeploy) -----------------------------
+
+
+def held_by_another(db, campaign, *, lapsed=False):
+    """Make another process's claim on the batch: live, or lapsed (that process died)."""
+    campaign.worker_id = "other-process"
+    campaign.lease_until = campaigns.now() + (timedelta(seconds=-5) if lapsed else campaigns.LEASE)
+    db.commit()
+
+
+class TestClaims:
+    def test_a_batch_another_process_is_sending_is_left_alone(self, db, outbox, monkeypatch):
+        c = f.campaign(db, [("a@x.com", P)])
+        held_by_another(db, c)
+        threads = []
+        monkeypatch.setattr(campaigns.threading, "Thread", lambda **kw: threads.append(kw))
+
+        campaigns.start(c.id)
+        campaigns._run(c.id)
+
+        assert threads == [] and outbox == []
+        assert campaigns.is_running(c.id)  # the other process is on it
+        assert reload(c.id)[0].worker_id == "other-process"
+
+    def test_a_lapsed_claim_can_be_taken_over(self, db, outbox):
+        c = f.campaign(db, [("a@x.com", P)])
+        held_by_another(db, c, lapsed=True)
+        assert not campaigns.is_running(c.id)
+
+        campaigns._run(c.id)
+
+        assert [m[0] for m in outbox] == ["a@x.com"]
+        campaign, _ = reload(c.id)
+        assert campaign.status == CampaignStatus.COMPLETED
+        assert (campaign.worker_id, campaign.lease_until) == (None, None)  # released when done
+
+    def test_stops_when_another_process_takes_the_batch(self, db, outbox):
+        c = f.campaign(db, [("a@x.com", P), ("b@x.com", P), ("c@x.com", P)])
+
+        def taken_over(to):
+            if to == "a@x.com":
+                with SessionLocal() as other:
+                    held_by_another(other, other.get(Campaign, c.id))
+
+        outbox.on_send = taken_over
+        campaigns._run(c.id)
+
+        assert [m[0] for m in outbox] == ["a@x.com"]
+        campaign, emails = reload(c.id)
+        assert campaign.status == CampaignStatus.SENDING  # the other process finishes it
+        assert campaign.worker_id == "other-process"
+        assert [e.status for e in emails] == [EmailStatus.SENT, P, P]
+
+    def test_a_cancel_made_through_another_process_stops_the_batch(self, db, outbox):
+        c = f.campaign(db, [("a@x.com", P), ("b@x.com", P)])
+
+        def cancelled_elsewhere(to):
+            # Another process handled the Cancel click: it only changes the database.
+            with SessionLocal() as other:
+                other.execute(update(Campaign).where(Campaign.id == c.id).values(status=CampaignStatus.CANCELLED))
+                other.commit()
+
+        outbox.on_send = cancelled_elsewhere
+        campaigns._run(c.id)
+
+        assert [m[0] for m in outbox] == ["a@x.com"]
+        assert reload(c.id)[0].status == CampaignStatus.CANCELLED
+
+    def test_waiting_renews_the_claim_and_stops_if_it_was_lost(self, db, monkeypatch):
+        c = f.campaign(db, status=CampaignStatus.SCHEDULED)
+        assert campaigns._claim(c.id)
+        clock = iter(range(0, 1000, 10))
+        monkeypatch.setattr(campaigns.time, "monotonic", lambda: next(clock))
+        monkeypatch.setattr(campaigns.time, "sleep", lambda s: None)
+        before = reload(c.id)[0].lease_until
+
+        assert campaigns._wait(c.id, 25) is True  # renewed once on the way
+        assert reload(c.id)[0].lease_until > before
+
+        held_by_another(db, db.get(Campaign, c.id))
+        assert campaigns._wait(c.id, 25) is False
+
+    def test_send_now_on_a_batch_another_process_holds_only_moves_the_time(self, db, monkeypatch):
+        c = f.campaign(db, status=CampaignStatus.SCHEDULED, scheduled_for=campaigns.now() + timedelta(days=1))
+        held_by_another(db, c)
+        started = []
+        monkeypatch.setattr(campaigns, "start", started.append)
+
+        campaigns.send_now(db, c)
+
+        assert started == [] and c.id not in campaigns._wake_requested
+        assert reload(c.id)[0].scheduled_for <= campaigns.now()
+
+    def test_a_failure_to_release_is_logged_not_raised(self, db, outbox, monkeypatch):
+        c = f.campaign(db, [("a@x.com", P)])
+
+        def broken(campaign_id):
+            raise RuntimeError("database went away")
+
+        monkeypatch.setattr(campaigns, "_release", broken)
+        campaigns._run(c.id)
+        assert c.id not in campaigns._running
+
+
+class TestInterruptedMidSend:
+    def test_marks_each_email_before_handing_it_to_gmail(self, db, outbox):
+        c = f.campaign(db, [("a@x.com", P)])
+        seen = []
+        outbox.on_send = lambda to: seen.append(reload(c.id)[1][0].attempted_at)
+        campaigns._run(c.id)
+        assert seen[0] is not None
+
+    def test_an_email_that_may_have_gone_out_is_never_resent(self, db, outbox):
+        c = f.campaign(db, [("a@x.com", P), ("b@x.com", P)])
+        first = reload(c.id)[1][0]
+        db.execute(update(Email).where(Email.id == first.id).values(attempted_at=campaigns.now()))
+        db.commit()
+
+        campaigns._run(c.id)
+
+        assert [m[0] for m in outbox] == ["b@x.com"]
+        a, b = reload(c.id)[1]
+        assert (a.status, a.error) == (EmailStatus.FAILED, campaigns.INTERRUPTED_MID_SEND)
+        assert b.status == EmailStatus.SENT
+
+
+class TestSweep:
+    def test_marks_batches_whose_process_died_and_leaves_live_ones(self, db):
+        dead = f.campaign(db, status=CampaignStatus.SENDING)
+        held_by_another(db, dead, lapsed=True)
+        alive = f.campaign(db, status=CampaignStatus.SENDING)
+        held_by_another(db, alive)
+        just_created = f.campaign(db, status=CampaignStatus.QUEUED)  # claimed a moment later
+        mine = f.campaign(db, status=CampaignStatus.SENDING)
+        held_by_another(db, mine, lapsed=True)
+        campaigns._running.add(mine.id)
+
+        campaigns.sweep()
+
+        assert reload(dead.id)[0].status == CampaignStatus.INTERRUPTED
+        assert (reload(dead.id)[0].worker_id, reload(dead.id)[0].lease_until) == (None, None)
+        assert reload(alive.id)[0].status == CampaignStatus.SENDING
+        assert reload(just_created.id)[0].status == CampaignStatus.QUEUED
+        assert reload(mine.id)[0].status == CampaignStatus.SENDING
+
+    def test_restarts_waiting_batches_whose_process_died(self, db, monkeypatch):
+        dead = f.campaign(db, status=CampaignStatus.WAITING)
+        held_by_another(db, dead, lapsed=True)
+        alive = f.campaign(db, status=CampaignStatus.SCHEDULED)
+        held_by_another(db, alive)
+        started = []
+        monkeypatch.setattr(campaigns, "start", started.append)
+
+        campaigns.sweep()
+
+        assert started == [dead.id]
+
+    def test_at_startup_unclaimed_sending_batches_count_as_stopped(self, db):
+        old = f.campaign(db, status=CampaignStatus.SENDING)  # from before claims existed
+        alive = f.campaign(db, status=CampaignStatus.SENDING)
+        held_by_another(db, alive)
+
+        campaigns.mark_interrupted_on_startup()
+
+        assert reload(old.id)[0].status == CampaignStatus.INTERRUPTED
+        assert reload(alive.id)[0].status == CampaignStatus.SENDING
+
+    def test_the_sweeper_runs_in_the_background_and_survives_errors(self, monkeypatch):
+        calls = []
+        stop = threading.Event()
+
+        def sweep():
+            calls.append(1)
+            if len(calls) == 1:
+                raise RuntimeError("database blip")
+            stop.set()
+
+        monkeypatch.setattr(campaigns, "sweep", sweep)
+        t = campaigns.start_sweeper(stop, every=0)
+        t.join(timeout=5)
+        assert len(calls) == 2 and t.daemon and t.name == "campaign-sweeper"

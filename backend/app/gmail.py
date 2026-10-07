@@ -13,12 +13,15 @@ from googleapiclient.errors import HttpError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from . import secrets_box
 from .config import settings
 from .models import Attachment, GmailAccount
 
-# Local dev runs over http://localhost, and Google may return scopes in a different order.
-os.environ.setdefault("OAUTHLIB_INSECURE_TRANSPORT", "1")
+# Google may return scopes in a different order than asked.
 os.environ.setdefault("OAUTHLIB_RELAX_TOKEN_SCOPE", "1")
+if settings.is_local:
+    # Only for plain http://localhost; deployed, Google sign-in must use https.
+    os.environ.setdefault("OAUTHLIB_INSECURE_TRANSPORT", "1")
 
 SEND_SCOPE = "https://www.googleapis.com/auth/gmail.send"
 READ_SCOPE = "https://www.googleapis.com/auth/gmail.readonly"  # replies, for Conversations
@@ -104,7 +107,7 @@ def finish_auth(db: Session, state: str, callback_url: str) -> str:
     for acct in db.scalars(select(GmailAccount)):
         db.delete(acct)
     db.flush()
-    db.add(GmailAccount(email=email, token_json=creds.to_json(), scopes=" ".join(granted)))
+    db.add(GmailAccount(email=email, token_json=secrets_box.seal(creds.to_json()), scopes=" ".join(granted)))
     db.commit()
     return email
 
@@ -117,8 +120,15 @@ def load_credentials(db: Session) -> Credentials:
     acct = current_account(db)
     if acct is None:
         raise GmailNotConnected("Gmail is not connected.")
+    try:
+        info = json.loads(secrets_box.unseal(acct.token_json))
+    except secrets_box.CantDecrypt as e:
+        raise GmailNotConnected(f"{e} Reconnect Gmail.") from e
     # Only the granted scopes: refreshing with one that wasn't granted fails.
-    creds = Credentials.from_authorized_user_info(json.loads(acct.token_json), granted_scopes(acct))
+    creds = Credentials.from_authorized_user_info(info, granted_scopes(acct))
+    if settings.token_encryption_key and not secrets_box.is_sealed(acct.token_json):
+        acct.token_json = secrets_box.seal(acct.token_json)  # saved before encryption was on
+        db.commit()
     if not creds.valid:
         if not creds.refresh_token:
             raise GmailNotConnected("Gmail login expired. Reconnect Gmail.")
@@ -126,7 +136,7 @@ def load_credentials(db: Session) -> Credentials:
             creds.refresh(Request())
         except Exception as e:
             raise GmailNotConnected(f"Gmail login expired ({e}). Reconnect Gmail.") from e
-        acct.token_json = creds.to_json()
+        acct.token_json = secrets_box.seal(creds.to_json())
         db.commit()
     return creds
 

@@ -14,3 +14,4 @@ google-auth==2.59.1
 google-auth-oauthlib==1.5.0
 google-auth-httplib2==0.4.4
 httplib2==0.32.0
+cryptography==50.0.2

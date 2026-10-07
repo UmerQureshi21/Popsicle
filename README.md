@@ -168,6 +168,26 @@ The **Look up** tab finds a single person's email. Either paste their **LinkedIn
 
 Recent lookups stay on the page so you can come back to them.
 
+## Deploying
+
+Popsicle is built to run as one site: the frontend (e.g. on Vercel) forwards `/api/*` to the backend (e.g. on Railway), so the browser only ever talks to the frontend's address and login cookies work in every browser.
+
+**Backend settings**
+
+| Setting | Value |
+|---|---|
+| `DATABASE_URL` | Your hosted Postgres, as `postgresql+psycopg://…` |
+| `FRONTEND_URL`, `BACKEND_URL` | Both the frontend's public address, e.g. `https://popsicle.vercel.app`. Google returns to `BACKEND_URL/api/gmail/callback` after connecting Gmail, so add that address to the OAuth client's redirect URIs |
+| `TOKEN_ENCRYPTION_KEY` | Required. Encrypts the Gmail login in the database (see `backend/.env.example` for how to make one). Keep it safe: losing it means reconnecting Gmail |
+| `HUNTER_API_KEY` | Your Hunter key |
+| `GOOGLE_CLIENT_SECRETS` | Path to the OAuth client JSON (from a secret file, never committed) |
+
+Anywhere but localhost, login is always on, the session cookie is https-only and the API docs are hidden; the backend refuses to start if `AUTH_REQUIRED=false` or `TOKEN_ENCRYPTION_KEY` is missing. Create your account with `python -m app.manage create-user you@example.com`.
+
+**Frontend settings:** `BACKEND_ORIGIN` = the backend's own address (e.g. `https://popsicle.up.railway.app`), and `NEXT_PUBLIC_API_URL` set to an empty value, so API calls go to the frontend's own `/api`.
+
+**Sending safely across restarts.** Each batch is claimed in the database by the server process sending it, and the claim is renewed while it works. During a redeploy, when the old and new servers overlap, a batch is only ever sent by one of them. An email that was being handed to Gmail when a server stopped is marked failed ("may have gone out, check Gmail's Sent folder") rather than resent. Waiting and scheduled batches whose server stopped are picked up again within a minute.
+
 ## Testing
 
 None of the tests reach Hunter or Gmail: Hunter calls and sends are faked, so no credits are spent and no email goes out. Each suite fails if coverage drops below 90%. GitHub Actions runs all of them on every push (`.github/workflows/test.yml`).

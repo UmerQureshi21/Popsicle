@@ -150,7 +150,12 @@ class Campaign(Base):
     delay_seconds: Mapped[float] = mapped_column(Float, default=30)
     status: Mapped[str] = mapped_column(String(20), default=CampaignStatus.QUEUED)
     error: Mapped[str | None] = mapped_column(Text)  # why it stopped, if it did
-    scheduled_for: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))  # don't start before this
+    scheduled_for: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Which server process is sending this batch, and until when its claim holds. A process
+    # renews its claim while it works, so two processes (e.g. old and new during a redeploy)
+    # never send the same batch.
+    worker_id: Mapped[str | None] = mapped_column(String(64))
+    lease_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))  # don't start before this
     created_at: Mapped[datetime] = _created_at()
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -177,6 +182,9 @@ class Email(Base):
     error: Mapped[str | None] = mapped_column(Text)
     gmail_message_id: Mapped[str | None] = mapped_column(String(100))
     gmail_thread_id: Mapped[str | None] = mapped_column(String(100))
+    # Set just before handing the email to Gmail. Still pending with this set means the server
+    # stopped mid-send, so it may have gone out: it's never resent automatically.
+    attempted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = _created_at()
 

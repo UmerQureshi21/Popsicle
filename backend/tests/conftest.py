@@ -17,7 +17,7 @@ os.environ["AUTH_REQUIRED"] = "false"
 os.environ["COOKIE_SECURE"] = "false"
 os.environ["GOOGLE_CLIENT_SECRETS"] = str(Path(__file__).parent / "does-not-exist.json")
 os.environ["FRONTEND_URL"] = "http://frontend.test"
-os.environ["BACKEND_URL"] = "http://backend.test"
+os.environ["BACKEND_URL"] = "http://localhost:8000"
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
@@ -75,7 +75,11 @@ def started(monkeypatch):
 
 
 @pytest.fixture
-def client(started):
+def client(started, monkeypatch):
+    # Startup would launch the background sweeper; tests call campaigns.sweep() directly instead.
+    import app.main as main
+
+    monkeypatch.setattr(main, "start_sweeper", lambda: None)
     with TestClient(app) as c:
         yield c
 

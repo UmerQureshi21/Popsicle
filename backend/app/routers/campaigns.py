@@ -127,13 +127,13 @@ def resume(campaign_id: int, retry_failed: bool = False, db: Session = Depends(g
         db.execute(
             update(Email)
             .where(Email.campaign_id == campaign_id, Email.status == EmailStatus.FAILED)
-            .values(status=EmailStatus.PENDING, error=None)
+            .values(status=EmailStatus.PENDING, error=None, attempted_at=None)
         )
     if c.status == CampaignStatus.CANCELLED:
         db.execute(
             update(Email)
             .where(Email.campaign_id == campaign_id, Email.status == EmailStatus.CANCELLED)
-            .values(status=EmailStatus.PENDING)
+            .values(status=EmailStatus.PENDING, attempted_at=None)
         )
     c.status = CampaignStatus.QUEUED
     c.finished_at = None

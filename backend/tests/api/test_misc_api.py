@@ -75,6 +75,29 @@ class TestAttachments:
         r = client.post("/api/attachments", files={"file": ("big.bin", b"12345", "application/pdf")})
         assert r.status_code == 413
 
+    def test_read_in_pieces_and_stopped_early(self, client, db, monkeypatch):
+        from starlette.datastructures import UploadFile
+
+        reads = []
+        real = UploadFile.read
+
+        async def counting(self, size=-1):
+            reads.append(size)
+            return await real(self, size)
+
+        monkeypatch.setattr(UploadFile, "read", counting)
+        monkeypatch.setattr(misc, "MAX_ATTACHMENT_BYTES", 1024 * 1024)
+        r = client.post("/api/attachments", files={"file": ("big.bin", b"x" * (3 * 1024 * 1024), "application/pdf")})
+        assert r.status_code == 413
+        assert reads == [1024 * 1024, 1024 * 1024]  # never the whole file at once
+        assert db.scalars(select(Attachment)).all() == []
+
+    def test_a_file_bigger_than_one_piece_is_kept_whole(self, client, db):
+        data = bytes(range(256)) * 5000  # ~1.2 MB
+        r = client.post("/api/attachments", files={"file": ("doc.pdf", data, "application/pdf")})
+        assert r.json()["size_bytes"] == len(data)
+        assert db.get(Attachment, r.json()["id"]).data == data
+
 
 class TestGmail:
     def test_status(self, client, db):
@@ -119,7 +142,9 @@ class TestGmail:
         monkeypatch.setattr(gmail, "finish_auth", lambda db, state, url: seen.update(state=state, url=url))
         r = client.get("/api/gmail/callback?state=s1&code=c", follow_redirects=False)
         assert r.headers["location"] == "http://frontend.test/compose?gmail=connected"
-        assert seen["state"] == "s1" and "code=c" in seen["url"]
+        assert seen["state"] == "s1"
+        # Built from the public address, not the backend's internal one behind the forwarding.
+        assert seen["url"] == "http://localhost:8000/api/gmail/callback?state=s1&code=c"
 
     def test_callback_when_the_user_declined(self, client):
         r = client.get("/api/gmail/callback?error=access_denied", follow_redirects=False)
