@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { FakeApi } from "./fake-api";
+import { FakeApi, conversationsPage } from "./fake-api";
 
 // Everything here is answered by FakeApi in the browser: nothing reaches Gmail or Google Calendar.
 
@@ -14,7 +14,7 @@ test("see a reply and set up a Google Meet", async ({ page }) => {
   const api = await new FakeApi({
     "GET /api/gmail/status": { connected: true, email: "me@gmail.com", credentials_file_present: true, can_read: true, can_meet: true },
     "POST /api/conversations/sync": { threads_checked: 1, threads_downloaded: 1, new_messages: 1, synced_at: "2026-10-06T12:00:00Z" },
-    "GET /api/conversations": [douglas],
+    "GET /api/conversations": conversationsPage([douglas]),
     "GET /api/conversations/3": () => ({
       ...douglas,
       meetings,
@@ -64,7 +64,7 @@ test("on a phone, a long last message doesn't make the page wider than the scree
   await new FakeApi({
     "GET /api/gmail/status": { connected: true, email: "me@gmail.com", credentials_file_present: true, can_read: true, can_meet: true },
     "POST /api/conversations/sync": { threads_checked: 0, threads_downloaded: 0, new_messages: 0, synced_at: null },
-    "GET /api/conversations": [douglas, waiting],
+    "GET /api/conversations": conversationsPage([douglas, waiting]),
     "GET /api/conversations/4": {
       ...waiting, meetings: [],
       messages: [{ id: "m1", from_me: true, from_name: null, from_addr: "me@gmail.com", to: waiting.email,
@@ -82,4 +82,22 @@ test("on a phone, a long last message doesn't make the page wider than the scree
   await page.getByRole("button", { name: /Priya Raman/ }).click();
   await expect(page.getByRole("button", { name: "Send Meet link" })).toBeVisible();
   expect(await pageWidth()).toBeLessThanOrEqual(390);
+});
+
+test("scrolling to the end of the list loads the next people by itself", async ({ page }) => {
+  const people = Array.from({ length: 45 }, (_, i) => ({ ...douglas, contact_id: 100 + i, email: `p${i}@example.com`, full_name: `Person ${i}` }));
+  const api = await new FakeApi({
+    "GET /api/gmail/status": { connected: true, email: "me@gmail.com", credentials_file_present: true, can_read: true, can_meet: true },
+    "POST /api/conversations/sync": { threads_checked: 0, threads_downloaded: 0, new_messages: 0, synced_at: null },
+    "GET /api/conversations": conversationsPage(people),
+  }).install(page);
+  await page.goto("/conversations");
+  await expect(page.getByText("Showing 30 of 45")).toBeVisible();
+  await expect(page.getByRole("button", { name: /Person 44/ })).toHaveCount(0);
+
+  await page.getByRole("button", { name: /Person 29/ }).scrollIntoViewIfNeeded();
+  await expect(page.getByRole("button", { name: /Person 44/ })).toBeAttached();
+  await expect(page.getByText(/Showing \d+ of 45/)).toHaveCount(0);
+  const offsets = api.called("GET /api/conversations").map((c) => c.url.searchParams.get("offset"));
+  expect(offsets).toContain("30");
 });
