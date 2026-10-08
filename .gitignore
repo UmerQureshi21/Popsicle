@@ -12,9 +12,6 @@ client_secret*.json
 *.key
 
 # ---- Local data ----
-cli/sent_log.csv
-cli/contacts*.csv
-!cli/contacts.example.csv
 *.sqlite
 *.db
 logfile
