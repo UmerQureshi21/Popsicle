@@ -45,7 +45,7 @@ These come straight from the owner. Breaking them has caused real problems befor
 | Backend | Python 3.14, FastAPI, SQLAlchemy 2, psycopg 3, Postgres 14, pinned in `backend/requirements*.txt` |
 | Frontend | Next.js 16 (App Router), React 19, Tailwind CSS v4, lucide-react, TypeScript |
 | Tests | pytest + pytest-cov; Vitest + Testing Library + MSW; Playwright (Chromium) |
-| CI | `.github/workflows/test.yml`: backend + CLI pytest, frontend lint, `npm run typecheck`, Vitest with coverage, Playwright |
+| CI | `.github/workflows/test.yml`: backend pytest, frontend lint, `npm run typecheck`, Vitest with coverage, Playwright |
 | External | Gmail API, Google Calendar API (Meet), Hunter.io API |
 
 ```
@@ -81,7 +81,6 @@ frontend/src/
   proxy.ts           Next 16 "proxy" (was middleware): adds the shared secret to /api calls
   test/              MSW server (api()/apiError()), fixtures, navigation mock, setup
 frontend/e2e/        Playwright specs + fake-api.ts
-cli/                 the original command-line sender (has its own tests)
 dev.sh               starts Postgres (5442), backend (8000, --reload) and frontend (3000)
 ```
 
@@ -181,7 +180,6 @@ dev.sh               starts Postgres (5442), backend (8000, --reload) and fronte
 ### 6.4 All suites (what CI runs)
 ```
 cd backend && .venv/bin/python -m pytest -q -p no:cacheprovider
-cd cli && ../backend/.venv/bin/python -m pytest -q
 cd frontend && npm run lint && npm run typecheck && npx vitest run --coverage && CI= npx playwright test
 ```
 
