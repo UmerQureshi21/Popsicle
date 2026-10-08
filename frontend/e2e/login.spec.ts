@@ -38,19 +38,20 @@ test("when login is required, you log in and land on the page you asked for", as
   expect(api.called("POST /api/auth/logout")).toHaveLength(1);
 });
 
-test("signing up with an email that wasn't invited is refused", async ({ page }) => {
-  await new FakeApi({
+test("sign-ups are closed: the Sign up tab can't send anything", async ({ page }) => {
+  const api = await new FakeApi({
     "GET /api/auth/me": { user: null, auth_required: true },
     "POST /api/auth/signup": new Reply(403, { detail: "Popsicle is invite-only. Ask for access and you'll get an account." }),
   }).install(page);
 
   await page.goto("/login");
   await page.getByRole("tab", { name: "Sign up" }).click();
-  await page.getByPlaceholder("you@example.com").fill("stranger@example.com");
-  await page.getByLabel("Password", { exact: true }).fill("long enough");
-  await page.getByLabel("Confirm password").fill("long enough");
-  await page.getByRole("button", { name: "Create account" }).click();
-  await expect(page.locator("p[role=alert]")).toContainText("invite-only");
+  await expect(page.getByRole("heading", { name: "Sign-ups are closed" })).toBeVisible();
+  await expect(page.getByText("Popsicle is invite-only.")).toBeVisible();
+  await expect(page.getByPlaceholder("you@example.com")).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Create account" })).toBeDisabled();
+  await page.keyboard.press("Enter");
+  expect(api.called("POST /api/auth/signup")).toHaveLength(0);
 });
 
 test("pages carry the security headers", async ({ page }) => {

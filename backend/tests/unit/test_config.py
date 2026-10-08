@@ -14,7 +14,7 @@ LOCAL_DB = "postgresql+psycopg://localhost:5442/cold_emailer"
 HOSTED_DB = "postgresql+psycopg://postgres:pw@postgres.railway.internal:5432/railway"
 DEPLOYED = dict(
     backend_url="https://popsicle.vercel.app", frontend_url="https://popsicle.vercel.app", database_url=HOSTED_DB,
-    proxy_secret="p" * 40,
+    proxy_secret="p" * 40, allowed_emails="me@example.com",
 )
 
 
@@ -27,7 +27,7 @@ def make(**values) -> Settings:
 
 @pytest.fixture(autouse=True)
 def clean_env(monkeypatch):
-    for name in ("AUTH_REQUIRED", "COOKIE_SECURE", "BACKEND_URL", "FRONTEND_URL", "DATABASE_URL", "TOKEN_ENCRYPTION_KEY", "COOKIE_SAMESITE", "PROXY_SECRET", "GOOGLE_CLIENT_SECRETS_JSON"):
+    for name in ("AUTH_REQUIRED", "COOKIE_SECURE", "BACKEND_URL", "FRONTEND_URL", "DATABASE_URL", "TOKEN_ENCRYPTION_KEY", "COOKIE_SAMESITE", "PROXY_SECRET", "GOOGLE_CLIENT_SECRETS_JSON", "ALLOWED_EMAILS"):
         monkeypatch.delenv(name, raising=False)
 
 
@@ -53,6 +53,11 @@ class TestDeployed:
     def test_refuses_to_start_without_an_encryption_key(self):
         with pytest.raises(ValidationError, match="Set TOKEN_ENCRYPTION_KEY"):
             make(**DEPLOYED)
+
+    @pytest.mark.parametrize("missing", [None, "", " , "])
+    def test_refuses_to_start_without_allowed_emails(self, missing):
+        with pytest.raises(ValidationError, match="Set ALLOWED_EMAILS"):
+            make(**{**DEPLOYED, "allowed_emails": missing}, token_encryption_key=KEY)
 
     @pytest.mark.parametrize("forgotten", ["backend_url", "frontend_url"])
     def test_a_hosted_database_with_a_forgotten_address_refuses_to_start(self, forgotten):
@@ -84,6 +89,12 @@ class TestDeployed:
         with pytest.raises(ValidationError):
             make(backend_url="http://localhost:8000", cookie_samesite="none")
         assert make(backend_url="http://localhost:8000", cookie_samesite="strict").cookie_samesite == "strict"
+
+
+def test_allowed_emails_are_read_loosely():
+    s = make(allowed_emails=" Me@Example.com , ,friend@x.com")
+    assert s.allowed_email_set == {"me@example.com", "friend@x.com"}
+    assert make().allowed_email_set == frozenset()
 
 
 class TestHostedDatabaseAddress:

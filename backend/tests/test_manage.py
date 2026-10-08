@@ -92,3 +92,19 @@ def test_list_users(run, db):
         "me@example.com  [active, last login 2026-10-01]",
         "friend@example.com  [invited (no password yet)]",
     ]
+
+
+class TestAllowedEmails:
+    def test_cannot_create_or_invite_someone_not_on_the_list(self, run, db, settings):
+        settings(allowed_emails="owner@example.com")
+        for cmd in ("create-user", "invite"):
+            with pytest.raises(SystemExit, match="isn't in ALLOWED_EMAILS"):
+                run(cmd, "friend@example.com", passwords=["long password", "long password"])
+        assert users(db) == {}
+        run("create-user", "Owner@Example.com", passwords=["long password", "long password"])
+        assert list(users(db)) == ["owner@example.com"]
+
+    def test_list_users_flags_accounts_that_cant_log_in(self, run, db, settings):
+        f.user(db, email="me@example.com")
+        settings(allowed_emails="owner@example.com")
+        assert run("list-users").splitlines() == ["me@example.com  [blocked: not in ALLOWED_EMAILS]"]

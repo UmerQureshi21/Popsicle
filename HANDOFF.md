@@ -334,7 +334,8 @@ Keep that pattern for anything new that might take long.
   - `src/proxy.ts` adds `x-popsicle-proxy: PROXY_SECRET` and the visitor's IP. When deployed, the backend rejects anything without the secret (403 "Use Popsicle through its website"), except `/api/health`.
   - The client IP is believed only from that header.
 - **Logins**:
-  - Accounts are created with `python -m app.manage create-user <email>` (invite-only; sign-up only works for invited emails without a password).
+  - Accounts are created with `python -m app.manage create-user <email>`. The website's Sign up tab is closed (disabled form, no request).
+  - **`ALLOWED_EMAILS`** (just Umer's email) is required when deployed and checked in `auth.is_allowed` on login, sign-up and `current_user`, so an unlisted account is refused even with the right password or an existing session. A refused login gives the same 401 as a wrong password and counts toward the lockout. `manage.py` refuses to create unlisted emails.
   - Throttling: 5 wrong passwords per visitor per 15 minutes, and 20 per account, except from a **trusted device** (`popsicle_device` cookie, table `trusted_devices`).
 - **Other**:
   - State-changing requests whose `Origin` isn't the frontend get a 403.
@@ -386,7 +387,7 @@ Keep that pattern for anything new that might take long.
 
 1. **Deploy**:
    - **Plan:** Vercel for the frontend (free `*.vercel.app`) and Railway for the backend and Postgres (the backend must be always-on and run **one** process, because of the threads; see `README.md` → Deploying for every setting).
-   - **Backend env:** `DATABASE_URL`, `FRONTEND_URL`, `BACKEND_URL` (both the Vercel address), `TOKEN_ENCRYPTION_KEY`, `PROXY_SECRET`, `HUNTER_API_KEY`, `GOOGLE_CLIENT_SECRETS_JSON` (the contents of `credentials.json`; Railway's `postgresql://` `DATABASE_URL` is converted to psycopg automatically).
+   - **Backend env:** `DATABASE_URL`, `FRONTEND_URL`, `BACKEND_URL` (both the Vercel address), `ALLOWED_EMAILS` (his email), `TOKEN_ENCRYPTION_KEY`, `PROXY_SECRET`, `HUNTER_API_KEY`, `GOOGLE_CLIENT_SECRETS_JSON` (the contents of `credentials.json`; Railway's `postgresql://` `DATABASE_URL` is converted to psycopg automatically).
    - **Frontend env:** `BACKEND_ORIGIN` and `PROXY_SECRET`. With `BACKEND_ORIGIN` set, `next.config.ts` makes `NEXT_PUBLIC_API_URL` empty (same-site `/api`).
    - **Railway:** `backend/railway.json` (start command, health check, one replica, no sleeping) and `backend/.python-version`. Set the service's config file path to `/backend/railway.json`. README → Deploying has the click-by-click steps.
    - **Also:** add the Vercel callback URL to the Google OAuth client, copy his local data across, and create his account with `manage.py`.

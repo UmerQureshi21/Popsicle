@@ -51,7 +51,9 @@ def login(body: Credentials, request: Request, response: Response, db: Session =
     user = _find(db, email)
     trusted = auth.is_trusted_device(db, request, user)
     auth.check_not_locked(email, ip, trusted)
-    if not auth.verify_password(body.password, user.password_hash if user else None):
+    # Checked even for emails that aren't allowed, so the answer takes the same time either way.
+    password_ok = auth.verify_password(body.password, user.password_hash if user else None)
+    if not password_ok or not auth.is_allowed(email):
         auth.record_failure(email, ip, trusted)
         # Same message whether the email or the password is wrong, so emails can't be probed.
         raise HTTPException(401, "That email and password don't match an account.")
@@ -63,12 +65,13 @@ def login(body: Credentials, request: Request, response: Response, db: Session =
 
 @router.post("/signup", response_model=UserOut)
 def signup(body: Credentials, request: Request, response: Response, db: Session = Depends(get_db)):
-    """Only works for an email you've invited (`python -m app.manage invite`) that has no password yet."""
+    """Only works for an email on ALLOWED_EMAILS that you've invited (`python -m app.manage invite`)
+    and that has no password yet. The website doesn't offer it; this is the server-side lock."""
     email = body.email.strip().lower()
     ip = auth.client_ip(request)
     auth.check_not_locked(email, ip)
     user = _find(db, email)
-    if user is None:
+    if user is None or not auth.is_allowed(email):
         auth.record_failure(email, ip)
         raise HTTPException(403, INVITE_ONLY)
     if user.password_hash:
