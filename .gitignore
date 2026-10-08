@@ -9,6 +9,7 @@ client_secret*.json
 .env.*
 !.env.example
 *.pem
+.owner-password
 *.key
 
 # ---- Local data ----
