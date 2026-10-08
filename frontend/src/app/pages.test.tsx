@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CampaignSummary, Company, Contact } from "@/lib/api";
@@ -240,25 +240,30 @@ describe("Login page", () => {
     expect(screen.getByRole("button", { name: "Log in" })).toBeEnabled();
   });
 
-  it("signs up an invited email, checking both passwords match", async () => {
-    const signup = api("post", "/api/auth/signup", { email: "friend@x.com", name: null });
+  it("has sign-ups closed: the form is disabled and never reaches the server", async () => {
+    const signup = api("post", "/api/auth/signup", { email: "stranger@x.com", name: null });
+    const login = api("post", "/api/auth/login", { email: "stranger@x.com", name: null });
     const user = renderLogin();
     await user.click(await screen.findByRole("tab", { name: "Sign up" }));
-    expect(screen.getByRole("heading", { name: "Set up your account" })).toBeInTheDocument();
-    await user.type(screen.getByPlaceholderText("you@example.com"), "friend@x.com");
-    await user.type(screen.getByLabelText("Password"), "long enough");
-    await user.type(screen.getByLabelText("Confirm password"), "different");
-    await user.click(screen.getByRole("button", { name: "Create account" }));
-    expect(screen.getByRole("alert")).toHaveTextContent("Those passwords don't match.");
-    expect(signup).toHaveLength(0);
+    expect(screen.getByRole("heading", { name: "Sign-ups are closed" })).toBeInTheDocument();
+    expect(screen.getByText(/Popsicle is invite-only/)).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("you@example.com")).toBeDisabled();
+    expect(screen.getByLabelText("Password")).toBeDisabled();
+    expect(screen.queryByLabelText("Confirm password")).not.toBeInTheDocument();
+    const button = screen.getByRole("button", { name: "Create account" });
+    expect(button).toBeDisabled();
 
-    await user.clear(screen.getByLabelText("Confirm password"));
-    await user.type(screen.getByLabelText("Confirm password"), "long enough");
-    await user.click(screen.getByRole("button", { name: "Create account" }));
-    await waitFor(() => expect(navigation.router.replace).toHaveBeenCalledWith("/compose"));
+    // Even if the form is submitted another way (Enter, or the button re-enabled in devtools).
+    button.removeAttribute("disabled");
+    fireEvent.submit(button.closest("form")!);
+    await user.click(button);
+    expect(signup).toHaveLength(0);
+    expect(login).toHaveLength(0);
+    expect(navigation.router.replace).not.toHaveBeenCalled();
 
     await user.click(screen.getByRole("tab", { name: "Log in" }));
-    expect(screen.queryByLabelText("Confirm password")).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Welcome back" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Password")).toBeEnabled();
   });
 
   it("skips the page when already logged in", async () => {

@@ -57,7 +57,6 @@ function LoginCard() {
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [confirm, setConfirm] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -66,15 +65,16 @@ function LoginCard() {
     if (me?.user) router.replace(nextPath());
   }, [me, router]);
 
+  // Sign-ups are closed: accounts are only made from the terminal (python -m app.manage), and the
+  // server refuses any email not on ALLOWED_EMAILS. The Sign up tab only says so.
+  const closed = mode === "signup";
+
   const submit = async () => {
+    if (closed) return;
     setError(null);
-    if (mode === "signup" && password !== confirm) {
-      setError("Those passwords don't match.");
-      return;
-    }
     setBusy(true);
     try {
-      const user = await api.post<AuthUser>(`/api/auth/${mode}`, { email, password });
+      const user = await api.post<AuthUser>("/api/auth/login", { email, password });
       setUser(user);
       router.replace(nextPath());
     } catch (e) {
@@ -86,7 +86,6 @@ function LoginCard() {
   const switchMode = (m: "login" | "signup") => {
     setMode(m);
     setError(null);
-    setConfirm("");
   };
 
   const input =
@@ -115,11 +114,11 @@ function LoginCard() {
             ))}
           </div>
 
-          <h1 className="mt-8 text-3xl font-bold tracking-tight text-ink">{mode === "login" ? "Welcome back" : "Set up your account"}</h1>
+          <h1 className="mt-8 text-3xl font-bold tracking-tight text-ink">{closed ? "Sign-ups are closed" : "Welcome back"}</h1>
           <p className="mt-1 text-sm text-steel">
-            {mode === "login"
-              ? "Log in to write and send your emails."
-              : "Popsicle is invite-only. If you've been invited, choose a password for your email."}
+            {closed
+              ? "Popsicle is invite-only. New accounts can't be created here; if you have one, log in."
+              : "Log in to write and send your emails."}
           </p>
 
           <form
@@ -129,45 +128,32 @@ function LoginCard() {
               submit();
             }}
           >
-            <label className="block">
-              <span className="text-sm font-medium text-ink">Email</span>
-              <input
-                type="email"
-                autoComplete="email"
-                required
-                autoFocus
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@example.com"
-                className={input}
-              />
-            </label>
-            <label className="block">
-              <span className="text-sm font-medium text-ink">Password</span>
-              <input
-                type="password"
-                autoComplete={mode === "login" ? "current-password" : "new-password"}
-                required
-                minLength={mode === "signup" ? 8 : undefined}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder={mode === "signup" ? "At least 8 characters" : ""}
-                className={input}
-              />
-            </label>
-            {mode === "signup" && (
+            <fieldset disabled={closed} className="space-y-4 disabled:opacity-50">
               <label className="block">
-                <span className="text-sm font-medium text-ink">Confirm password</span>
+                <span className="text-sm font-medium text-ink">Email</span>
                 <input
-                  type="password"
-                  autoComplete="new-password"
+                  type="email"
+                  autoComplete="email"
                   required
-                  value={confirm}
-                  onChange={(e) => setConfirm(e.target.value)}
+                  autoFocus
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@example.com"
                   className={input}
                 />
               </label>
-            )}
+              <label className="block">
+                <span className="text-sm font-medium text-ink">Password</span>
+                <input
+                  type="password"
+                  autoComplete="current-password"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className={input}
+                />
+              </label>
+            </fieldset>
 
             {error && (
               <p role="alert" className="rounded-xl bg-crimson/5 px-3.5 py-2.5 text-sm text-crimson">
@@ -177,12 +163,12 @@ function LoginCard() {
 
             <button
               type="submit"
-              disabled={busy}
-              className="group flex w-full items-center justify-center gap-2 rounded-xl bg-crimson py-3 text-sm font-semibold text-white shadow-[0_14px_30px_-12px_rgba(217,4,41,0.6)] transition-all hover:bg-scarlet disabled:bg-steel/60"
+              disabled={busy || closed}
+              className="group flex w-full items-center justify-center gap-2 rounded-xl bg-crimson py-3 text-sm font-semibold text-white shadow-[0_14px_30px_-12px_rgba(217,4,41,0.6)] transition-all enabled:hover:bg-scarlet disabled:cursor-not-allowed disabled:bg-steel/60 disabled:shadow-none"
             >
               {busy ? <Loader2 className="size-4 animate-spin" /> : null}
-              {mode === "login" ? "Log in" : "Create account"}
-              {!busy && <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />}
+              {closed ? "Create account" : "Log in"}
+              {!busy && !closed && <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />}
             </button>
           </form>
 
