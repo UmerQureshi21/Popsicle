@@ -179,22 +179,63 @@ Colours are defined once in `frontend/src/app/globals.css`, each with one job (`
 
 ## Deploying
 
-Popsicle is built to run as one site: the frontend (e.g. on Vercel) forwards `/api/*` to the backend (e.g. on Railway), so the browser only ever talks to the frontend's address and login cookies work in every browser.
+Popsicle is built to run as one site: the frontend (Vercel) forwards `/api/*` to the backend (Railway), so the browser only ever talks to the frontend's address and login cookies work in every browser.
 
-**Backend settings**
+Popsicle counts as local only when its addresses and its database are all on your machine; anything else gets the deployed rules: login always on, the session cookie https-only, the API docs hidden. The backend refuses to start if `AUTH_REQUIRED=false`, if `TOKEN_ENCRYPTION_KEY` or `PROXY_SECRET` is missing, or if `BACKEND_URL` or `FRONTEND_URL` is still a localhost address.
+
+### 1. Make two secrets
+
+```sh
+python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"   # TOKEN_ENCRYPTION_KEY
+python -c "import secrets; print(secrets.token_urlsafe(32))"                                 # PROXY_SECRET
+```
+
+Keep both somewhere safe. Losing `TOKEN_ENCRYPTION_KEY` means reconnecting Gmail.
+
+### 2. Backend and database on Railway
+
+1. Create a project (the Hobby plan: the backend has to stay on) and add **Postgres** to it.
+2. Add a service from this GitHub repo. In its **Settings**:
+   - **Root Directory:** `backend`
+   - **Railway Config File:** `/backend/railway.json` (the config file doesn't follow the root directory). It sets the start command, the `/api/health` check, and exactly one always-on server: sending runs in background threads of that one process, so don't add replicas.
+   - **Networking → Generate Domain.** This is the backend's own address, e.g. `https://popsicle-production.up.railway.app`.
+3. Set its **Variables**:
 
 | Setting | Value |
 |---|---|
-| `DATABASE_URL` | Your hosted Postgres, as `postgresql+psycopg://…` |
-| `FRONTEND_URL`, `BACKEND_URL` | Both the frontend's public address, e.g. `https://popsicle.vercel.app`. Google returns to `BACKEND_URL/api/gmail/callback` after connecting Gmail, so add that address to the OAuth client's redirect URIs |
-| `TOKEN_ENCRYPTION_KEY` | Required. Encrypts the Gmail login in the database (see `backend/.env.example` for how to make one). Keep it safe: losing it means reconnecting Gmail |
-| `PROXY_SECRET` | Required. 32+ random characters, the same value as the frontend's. The backend refuses any call that didn't come through the frontend, so its own address can't be used directly. Make one with `python -c "import secrets; print(secrets.token_urlsafe(32))"` |
+| `DATABASE_URL` | `${{Postgres.DATABASE_URL}}` (Railway's `postgresql://` address works as-is) |
+| `FRONTEND_URL`, `BACKEND_URL` | **Both** the Vercel address, e.g. `https://popsicle.vercel.app`. Google returns to `BACKEND_URL/api/gmail/callback`, which the frontend forwards to the backend |
+| `TOKEN_ENCRYPTION_KEY`, `PROXY_SECRET` | From step 1 |
 | `HUNTER_API_KEY` | Your Hunter key |
-| `GOOGLE_CLIENT_SECRETS` | Path to the OAuth client JSON (from a secret file, never committed) |
+| `GOOGLE_CLIENT_SECRETS_JSON` | The whole contents of `backend/credentials.json` (Railway has no secret files). Locally the file is used instead |
 
-Popsicle counts as local only when its addresses and its database are all on your machine; anything else gets the deployed rules: login always on, the session cookie https-only, the API docs hidden. The backend refuses to start if `AUTH_REQUIRED=false`, if `TOKEN_ENCRYPTION_KEY` or `PROXY_SECRET` is missing, or if `BACKEND_URL` or `FRONTEND_URL` is still a localhost address. Create your account with `python -m app.manage create-user you@example.com`.
+### 3. Frontend on Vercel
 
-**Frontend settings:** `BACKEND_ORIGIN` = the backend's own address (e.g. `https://popsicle.up.railway.app`), `PROXY_SECRET` = the same value as the backend's, and `NEXT_PUBLIC_API_URL` set to an empty value, so API calls go to the frontend's own `/api`.
+1. Import this repo with **Root Directory** `frontend`.
+2. Before the first build, set `BACKEND_ORIGIN` (the Railway address from step 2) and `PROXY_SECRET` (the same value as the backend's). With `BACKEND_ORIGIN` set, the site calls its own `/api`; there's no need to set `NEXT_PUBLIC_API_URL`.
+3. Deploy. Changing a setting later needs a redeploy.
+
+### 4. Google
+
+In the Google Cloud OAuth client, add `https://<your-vercel-address>/api/gmail/callback` to **Authorized redirect URIs** (keep the localhost one). Leaving the app in Testing mode is fine; the login still expires every 7 days.
+
+### 5. Your data and account
+
+1. Copy your local data across (optional):
+   ```sh
+   pg_dump -p 5442 -Fc cold_emailer > popsicle.dump
+   pg_restore --no-owner --no-acl -d "<Railway Postgres public URL>" popsicle.dump
+   ```
+   Afterwards, cancel any batches still scheduled in your *local* database, or `./dev.sh` would send them too.
+2. Create your account from the backend service's shell on Railway (`railway ssh`): `python -m app.manage create-user you@example.com`.
+3. Open the Vercel address, log in and click **Connect Gmail** (the local connection doesn't carry over: it's encrypted with a different key).
+
+### 6. Check it
+
+- `https://<railway-address>/api/health` answers; any other path on the Railway address says "Use Popsicle through its website". That's the proxy secret working.
+- Attachments go through Vercel on their way to the backend: try a large one with a test send to yourself before relying on it.
+
+### Good to know
 
 **Logging in.** Wrong passwords are limited per visitor (5 per 15 minutes) and per account (20). A browser you've logged in from before isn't held to the per-account limit, so someone guessing your password can't lock you out of your own browser.
 

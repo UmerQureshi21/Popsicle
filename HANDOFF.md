@@ -386,8 +386,9 @@ Keep that pattern for anything new that might take long.
 
 1. **Deploy**:
    - **Plan:** Vercel for the frontend (free `*.vercel.app`) and Railway for the backend and Postgres (the backend must be always-on and run **one** process, because of the threads; see `README.md` → Deploying for every setting).
-   - **Backend env:** `DATABASE_URL`, `FRONTEND_URL`, `BACKEND_URL` (both the Vercel address), `TOKEN_ENCRYPTION_KEY`, `PROXY_SECRET`, `HUNTER_API_KEY`, `GOOGLE_CLIENT_SECRETS`.
-   - **Frontend env:** `BACKEND_ORIGIN`, `PROXY_SECRET`, and an empty `NEXT_PUBLIC_API_URL`.
+   - **Backend env:** `DATABASE_URL`, `FRONTEND_URL`, `BACKEND_URL` (both the Vercel address), `TOKEN_ENCRYPTION_KEY`, `PROXY_SECRET`, `HUNTER_API_KEY`, `GOOGLE_CLIENT_SECRETS_JSON` (the contents of `credentials.json`; Railway's `postgresql://` `DATABASE_URL` is converted to psycopg automatically).
+   - **Frontend env:** `BACKEND_ORIGIN` and `PROXY_SECRET`. With `BACKEND_ORIGIN` set, `next.config.ts` makes `NEXT_PUBLIC_API_URL` empty (same-site `/api`).
+   - **Railway:** `backend/railway.json` (start command, health check, one replica, no sleeping) and `backend/.python-version`. Set the service's config file path to `/backend/railway.json`. README → Deploying has the click-by-click steps.
    - **Also:** add the Vercel callback URL to the Google OAuth client, copy his local data across, and create his account with `manage.py`.
    - **Before deploying, check** whether Vercel's forwarding caps request bodies, which matters for attachments up to 20 MB.
 2. **Scheduling links** (after deploy): a per-person tokenized booking page where the recipient picks a time from his free slots (Google Calendar free/busy, likely one more scope), with no login. On booking, create the Meet via the existing `meetings.schedule`.
