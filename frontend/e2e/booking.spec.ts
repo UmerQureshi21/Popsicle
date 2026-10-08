@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { BOOKING_OFF, FakeApi } from "./fake-api";
+import { BOOKING_OFF, FakeApi, conversationsPage } from "./fake-api";
 
 // Everything here is answered by FakeApi in the browser: nothing reaches Gmail or Google Calendar.
 
@@ -37,7 +37,7 @@ test("turn on booking hours and send someone their link", async ({ page }) => {
   const api = await new FakeApi({
     "GET /api/gmail/status": { connected: true, email: "me@gmail.com", credentials_file_present: true, can_read: true, can_meet: true },
     "POST /api/conversations/sync": { threads_checked: 0, threads_downloaded: 0, new_messages: 0, synced_at: null },
-    "GET /api/conversations": [douglas],
+    "GET /api/conversations": conversationsPage([douglas]),
     "GET /api/conversations/3": { ...douglas, meetings: [], messages: [] },
     "GET /api/booking/settings": () => settings,
     "PUT /api/booking/settings": (body) => (settings = { ...(body as typeof BOOKING_OFF), can_check_calendar: true }),

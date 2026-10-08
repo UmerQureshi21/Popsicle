@@ -165,6 +165,12 @@ export type Company = {
   last_sent_at: string | null;
 };
 
+/** One page of a long list: pass next_offset back as ?offset= for the next one. */
+export type Page<T> = { items: T[]; total: number; next_offset: number | null };
+
+export type CompanyPage = Page<Company> & { counts: Record<CompanyStatus, number>; all: number; missing_domains: number };
+export type CompanyName = { id: number; name: string };
+
 export type Contact = {
   id: number;
   email: string;
@@ -242,6 +248,7 @@ export type Meeting = {
 };
 
 export type ConversationDetail = ConversationSummary & { messages: ConversationMessage[]; meetings: Meeting[] };
+export type ConversationPage = Page<ConversationSummary> & { counts: { all: number; replied: number; waiting: number } };
 
 /** When people may book a call through their booking link. Times are minutes after midnight. */
 export type BookingSettings = {

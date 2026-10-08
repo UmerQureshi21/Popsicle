@@ -5,10 +5,12 @@ from sqlalchemy.orm import Session, selectinload
 from .. import campaigns as svc
 from ..db import get_db
 from ..models import Campaign, CampaignStatus, Email, EmailStatus
+from ..paging import PageParams, next_offset
 from ..schemas import (
     AttachmentOut,
     CampaignCounts,
     CampaignDetail,
+    CampaignPage,
     CampaignDraft,
     CampaignSummary,
     EmailOut,
@@ -72,14 +74,21 @@ def create(draft: CampaignDraft, db: Session = Depends(get_db)):
     return _detail(db, campaign.id)
 
 
-@router.get("", response_model=list[CampaignSummary])
-def list_campaigns(company_id: int | None = None, db: Session = Depends(get_db)):
-    q = select(Campaign).options(selectinload(Campaign.company)).order_by(Campaign.created_at.desc())
-    if company_id is not None:
-        q = q.where(Campaign.company_id == company_id)
+@router.get("", response_model=CampaignPage)
+def list_campaigns(company_id: int | None = None, page: PageParams = Depends(), db: Session = Depends(get_db)):
+    """One page of batches, newest first."""
+    filters = [Campaign.company_id == company_id] if company_id is not None else []
+    total = db.scalar(select(func.count()).select_from(Campaign).where(*filters))
+    q = (
+        select(Campaign).where(*filters).options(selectinload(Campaign.company))
+        .order_by(Campaign.created_at.desc(), Campaign.id.desc()).offset(page.offset).limit(page.limit)
+    )
     items = list(db.scalars(q))
     counts = _counts(db, [c.id for c in items])
-    return [CampaignSummary(**_summary(c, counts[c.id])) for c in items]
+    return CampaignPage(
+        items=[CampaignSummary(**_summary(c, counts[c.id])) for c in items], total=total,
+        next_offset=next_offset(page, len(items), total),
+    )
 
 
 @router.get("/{campaign_id}", response_model=CampaignDetail)

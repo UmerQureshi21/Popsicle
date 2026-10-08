@@ -58,7 +58,7 @@ class TestList:
         f.contact(db, email="never@x.com")
         reply(db, douglas, "m2", "Happy to chat!\n\nOn Wed, Umer wrote:\n> Hi", at(3))
 
-        rows = client.get("/api/conversations").json()
+        rows = client.get("/api/conversations").json()["items"]
         assert [(r["full_name"], r["replied"], r["message_count"], r["last_from_me"]) for r in rows] == [
             ("Douglas Quan", True, 2, False),
             ("Jane Doe", False, 1, True),
@@ -69,7 +69,7 @@ class TestList:
         assert rows[1]["company_name"] is None
 
     def test_nothing_emailed(self, client):
-        assert client.get("/api/conversations").json() == []
+        assert client.get("/api/conversations").json()["items"] == []
 
 
 class TestDetail:
@@ -132,7 +132,7 @@ class TestSync:
         assert body["running"] is False
         assert (body["threads_checked"], body["threads_downloaded"], body["new_messages"], body["error"]) == (1, 1, 2, None)
         assert body["synced_at"] is not None
-        assert client.get("/api/conversations").json()[0]["replied"] is True
+        assert client.get("/api/conversations").json()["items"][0]["replied"] is True
 
     def test_answers_straight_away_while_it_runs(self, client, db, account, monkeypatch):
         from app.routers import conversations as routes
@@ -261,7 +261,7 @@ class TestMeetings:
         assert [m["title"] for m in detail["meetings"]] == ["Coffee chat"]
         nine_toronto = datetime(2030, 10, 7, 13, tzinfo=timezone.utc)
         assert datetime.fromisoformat(detail["next_meeting_at"]) == nine_toronto
-        assert datetime.fromisoformat(client.get("/api/conversations").json()[0]["next_meeting_at"]) == nine_toronto
+        assert datetime.fromisoformat(client.get("/api/conversations").json()["items"][0]["next_meeting_at"]) == nine_toronto
 
     def test_past_meetings_are_listed_but_not_next(self, client, db, scheduled):
         from app.models import Meeting

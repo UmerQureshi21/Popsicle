@@ -28,7 +28,8 @@ export class FakeApi {
     this.set({
       "GET /api/auth/me": { user: null, auth_required: false },
       "GET /api/people-search/status": { configured: true, plan_name: "Free", credits_used: 10, credits_total: 50, credits_remaining: 40, reset_date: "2026-11-02", error: null },
-      "GET /api/companies": [],
+      "GET /api/companies": companiesPage(() => []),
+      "GET /api/companies/names": [],
       "GET /api/templates": [],
       "GET /api/gmail/status": { connected: true, email: "me@gmail.com", credentials_file_present: true },
       "GET /api/booking/settings": BOOKING_OFF,
@@ -104,3 +105,40 @@ export const person = (overrides: Record<string, unknown> = {}) => ({
   already_emailed_at: null,
   ...overrides,
 });
+
+/** Answers like the backend's lists: a page at a time (?limit=&offset=). */
+export function pageOf<T>(items: T[], url: URL) {
+  const offset = Number(url.searchParams.get("offset") ?? 0);
+  const end = offset + Number(url.searchParams.get("limit") ?? 30);
+  return { items: items.slice(offset, end), total: items.length, next_offset: end < items.length ? end : null };
+}
+
+type Status = "not_started" | "emailed" | "replied" | "not_interested";
+
+/** GET /api/companies over `list()`, with ?status= and ?q=, and the counts the tabs show. */
+export function companiesPage(list: () => { name: string; domain: string | null; status: string }[]): Handler {
+  return (_body, url) => {
+    const q = url.searchParams.get("q")?.toLowerCase();
+    const status = url.searchParams.get("status");
+    const matching = list().filter((c) => !q || c.name.toLowerCase().includes(q) || c.domain?.includes(q));
+    const counts: Record<Status, number> = { not_started: 0, emailed: 0, replied: 0, not_interested: 0 };
+    matching.forEach((c) => counts[c.status as Status]++);
+    return {
+      ...pageOf(status ? matching.filter((c) => c.status === status) : matching, url),
+      counts, all: matching.length, missing_domains: matching.filter((c) => !c.domain).length,
+    };
+  };
+}
+
+/** GET /api/conversations over `people`, with ?filter= and ?q=, and the tab counts. */
+export function conversationsPage(people: { replied: boolean; full_name: string | null; email: string }[]): Handler {
+  return (_body, url) => {
+    const q = url.searchParams.get("q")?.toLowerCase();
+    const filter = url.searchParams.get("filter") ?? "all";
+    const replied = people.filter((p) => p.replied).length;
+    const shown = people.filter(
+      (p) => (filter === "all" || p.replied === (filter === "replied")) && (!q || `${p.full_name} ${p.email}`.toLowerCase().includes(q)),
+    );
+    return { ...pageOf(shown, url), counts: { all: people.length, replied, waiting: people.length - replied } };
+  };
+}

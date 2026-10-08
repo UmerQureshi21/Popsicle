@@ -130,7 +130,7 @@ test("see and change the daily limit on the Sent page", async ({ page }) => {
   const quota = { daily_limit: 40, min_delay_seconds: 20, sent_last_24h: 6, remaining: 34, next_slot_at: "2026-10-06T12:00:00Z", oldest_sent_at: null };
   const api = await new FakeApi({
     "GET /api/stats": { sent_total: 6, sent_last_7_days: 6, companies: 1, contacts: 6, failed_total: 0 },
-    "GET /api/campaigns": [],
+    "GET /api/campaigns": { items: [], total: 0, next_offset: null },
     "GET /api/sending/quota": quota,
     "PUT /api/sending/settings": (body) => ({ ...quota, ...(body as object), remaining: 24 }),
   }).install(page);

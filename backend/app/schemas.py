@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Literal
+from typing import Generic, Literal, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -559,3 +559,43 @@ class SendBookingLinkIn(BaseModel):
 class BookingLinkOut(BaseModel):
     url: str
     expires_at: datetime
+
+
+# ---- Pages of long lists --------------------------------------------------------
+
+T = TypeVar("T")
+
+
+class Page(BaseModel, Generic[T]):
+    items: list[T]
+    total: int  # matching the search and filter, across all pages
+    next_offset: int | None  # pass as ?offset= for the next page; None on the last one
+
+
+class CompanyPage(Page[CompanyOut]):
+    counts: dict[str, int]  # companies per status, ignoring the status filter
+    all: int  # every company, ignoring the status filter
+    missing_domains: int  # companies without a domain (no logo yet)
+
+
+class CompanyName(BaseModel):
+    id: int
+    name: str
+
+
+class ConversationCounts(BaseModel):
+    all: int
+    replied: int
+    waiting: int
+
+
+class ConversationPage(Page[ConversationSummary]):
+    counts: ConversationCounts  # ignoring the filter and search
+
+
+class ContactPage(Page[ContactOut]):
+    pass
+
+
+class CampaignPage(Page[CampaignSummary]):
+    pass

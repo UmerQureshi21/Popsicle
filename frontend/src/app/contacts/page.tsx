@@ -3,35 +3,34 @@
 import { safeHref } from "@/lib/safeUrl";
 import { useEffect, useState } from "react";
 import { Link2, Search, Trash2, Users } from "lucide-react";
-import { api, type Company, type Contact } from "@/lib/api";
+import { api, type CompanyName, type Contact, type Page } from "@/lib/api";
 import { formatDate } from "@/lib/format";
+import { useDebounced, usePaged } from "@/lib/paged";
 import { Avatar, EmptyState, StatusBadge } from "@/components/ui";
+import LoadMore from "@/components/LoadMore";
 import PageShell from "@/components/PageShell";
 import Select from "@/components/Select";
 
 export default function ContactsPage() {
-  const [contacts, setContacts] = useState<Contact[] | null>(null);
-  const [companies, setCompanies] = useState<Company[]>([]);
+  const [companies, setCompanies] = useState<CompanyName[]>([]);
   const [q, setQ] = useState("");
   const [companyId, setCompanyId] = useState("");
-  const [reload, setReload] = useState(0);
+  const search = useDebounced(q.trim(), 200);
 
   useEffect(() => {
-    api.get<Company[]>("/api/companies").then(setCompanies, () => {});
+    api.get<CompanyName[]>("/api/companies/names").then(setCompanies, () => {});
   }, []);
 
-  useEffect(() => {
-    const params = new URLSearchParams();
-    if (q.trim()) params.set("q", q.trim());
-    if (companyId) params.set("company_id", companyId);
-    const t = setTimeout(() => api.get<Contact[]>(`/api/contacts?${params}`).then(setContacts, () => setContacts([])), 200);
-    return () => clearTimeout(t);
-  }, [q, companyId, reload]);
+  const params = new URLSearchParams();
+  if (search) params.set("q", search);
+  if (companyId) params.set("company_id", companyId);
+  const list = usePaged<Page<Contact>>(`/api/contacts?${params}`);
+  const contacts = list.items ?? (list.error ? [] : null);
 
   const remove = async (c: Contact) => {
     if (!confirm(`Remove ${c.full_name || c.email}? Their sent emails stay in history.`)) return;
     await api.del(`/api/contacts/${c.id}`);
-    setReload((n) => n + 1);
+    list.reload();
   };
 
   return (
@@ -118,6 +117,16 @@ export default function ContactsPage() {
               ))}
             </tbody>
           </table>
+          {list.data && (
+            <LoadMore
+              shown={list.data.items.length}
+              total={list.data.total}
+              hasMore={list.data.next_offset != null}
+              loading={list.loadingMore}
+              onMore={list.loadMore}
+              className="border-t border-cloud"
+            />
+          )}
         </div>
       )}
     </PageShell>

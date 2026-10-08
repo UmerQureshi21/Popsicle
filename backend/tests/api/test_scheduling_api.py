@@ -24,7 +24,7 @@ def test_creates_a_scheduled_batch(client, db, started):
     assert c["status"] == "scheduled"
     assert datetime.fromisoformat(c["scheduled_for"]) == datetime.fromisoformat(when)
     assert started == [c["id"]]  # its sender starts and sleeps until then
-    assert client.get("/api/campaigns").json()[0]["scheduled_for"] is not None
+    assert client.get("/api/campaigns").json()["items"][0]["scheduled_for"] is not None
 
 
 def test_sending_now_has_no_schedule(client):

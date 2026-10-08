@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { FakeApi } from "./fake-api";
+import { FakeApi, companiesPage } from "./fake-api";
 
 const company = (id: number, name: string, domain: string | null, status = "not_started") => ({
   id, name, domain, status, linkedin_url: null, notes: null, created_at: "2026-10-01T12:00:00Z",
@@ -9,7 +9,7 @@ const company = (id: number, name: string, domain: string | null, status = "not_
 test("build a target list, track statuses, and find people at the ones left", async ({ page }) => {
   let list = [company(1, "Stripe", "stripe.com", "emailed")];
   const api = await new FakeApi({
-    "GET /api/companies": () => list,
+    "GET /api/companies": companiesPage(() => list),
     "GET /api/people-search/suggest": [],
     "POST /api/companies/bulk": (body) => {
       const added = [company(2, "Shopify", "shopify.com"), company(3, "Wealthsimple", null)];
@@ -21,7 +21,10 @@ test("build a target list, track statuses, and find people at the ones left", as
       list = list.map((c) => (c.id === 3 ? { ...c, domain: "wealthsimple.com" } : c));
       return { filled: 1, missing: 0 };
     },
-    "PATCH /api/companies/1": (body) => ({ ...list[0], ...(body as object) }),
+    "PATCH /api/companies/1": (body) => {
+      list = list.map((c) => (c.id === 1 ? { ...c, ...(body as object) } : c));
+      return list[0];
+    },
   }).install(page);
 
   await page.goto("/companies");

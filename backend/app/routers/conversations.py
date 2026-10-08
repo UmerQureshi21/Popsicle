@@ -6,17 +6,22 @@ from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
 from googleapiclient.errors import HttpError
-from sqlalchemy import func, select
+from typing import Literal
+
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from .. import conversations as svc
 from .. import bookings, gmail, meetings
 from ..db import SessionLocal, get_db
-from ..models import Contact, ConversationMessage, Email, EmailStatus, GmailAccount, Meeting
+from ..models import Company, Contact, ConversationMessage, Email, EmailStatus, GmailAccount, Meeting
+from ..paging import PageParams, next_offset
 from ..schemas import (
     BookingLinkOut,
+    ConversationCounts,
     ConversationDetail,
     ConversationMessageOut,
+    ConversationPage,
     ConversationSummary,
     ConversationSyncOut,
     MeetingIn,
@@ -87,15 +92,18 @@ def _summary(c: Contact, msgs: list[ConversationMessageOut], next_meeting: datet
     )
 
 
-def _people(db: Session, contact_id: int | None = None) -> list[Contact]:
+def _emailed(db: Session, contact_id: int) -> list[Contact]:
+    """The person, if you've emailed them (else nobody)."""
     q = (
         select(Contact)
-        .where(Contact.id.in_(select(Email.contact_id).where(Email.status == EmailStatus.SENT)))
+        .where(Contact.id == contact_id, Contact.id.in_(select(Email.contact_id).where(Email.status == EmailStatus.SENT)))
         .options(selectinload(Contact.company))
     )
-    if contact_id is not None:
-        q = q.where(Contact.id == contact_id)
     return list(db.scalars(q))
+
+
+def _people_by_id(db: Session, ids: list[int]) -> list[Contact]:
+    return list(db.scalars(select(Contact).where(Contact.id.in_(ids)).options(selectinload(Contact.company))))
 
 
 def _me(db: Session) -> str:
@@ -103,15 +111,63 @@ def _me(db: Session) -> str:
     return acct.email if acct else "me"
 
 
-@router.get("", response_model=list[ConversationSummary])
-def list_conversations(db: Session = Depends(get_db)):
-    """Everyone you've emailed, most recent conversation first."""
-    people = _people(db)
-    ids = [c.id for c in people]
+def _ranked(q: str | None, filter: str = "all"):
+    """Everyone you've emailed, with when the conversation last moved and whether they replied,
+    worked out in the database so a page can be cut from it."""
+    synced = (
+        select(
+            ConversationMessage.contact_id.label("cid"),
+            func.max(ConversationMessage.sent_at).label("last_synced"),
+            func.bool_or(~ConversationMessage.from_me).label("replied"),
+        )
+        .group_by(ConversationMessage.contact_id)
+        .subquery()
+    )
+    sent = (
+        select(Email.contact_id.label("cid"), func.max(Email.sent_at).label("last_sent"))
+        .where(Email.status == EmailStatus.SENT, Email.contact_id.is_not(None))
+        .group_by(Email.contact_id)
+        .subquery()
+    )
+    last_at = func.greatest(sent.c.last_sent, synced.c.last_synced)
+    replied = func.coalesce(synced.c.replied, False)
+    query = (
+        select(Contact.id, replied.label("replied"))
+        .join(sent, sent.c.cid == Contact.id)
+        .outerjoin(synced, synced.c.cid == Contact.id)
+        .outerjoin(Company, Company.id == Contact.company_id)
+        .order_by(last_at.desc().nulls_last(), Contact.id.desc())
+    )
+    if q and q.strip():
+        like = f"%{q.strip()}%"
+        query = query.where(or_(Contact.full_name.ilike(like), Contact.email.ilike(like), Company.name.ilike(like)))
+    if filter != "all":
+        query = query.where(replied.is_(filter == "replied"))
+    return query
+
+
+@router.get("", response_model=ConversationPage)
+def list_conversations(
+    filter: Literal["all", "replied", "waiting"] = "all",
+    q: str | None = None,
+    page: PageParams = Depends(),
+    db: Session = Depends(get_db),
+):
+    """One page of everyone you've emailed, most recent conversation first. The counts (for the
+    filter tabs) cover everyone, ignoring the filter and search."""
+    everyone = _ranked(None).subquery()
+    n_all, n_replied = db.execute(select(func.count(), func.count().filter(everyone.c.replied))).one()
+    ranked = _ranked(q, filter)
+    total = db.scalar(select(func.count()).select_from(ranked.subquery()))
+    ids = list(db.scalars(ranked.with_only_columns(Contact.id).offset(page.offset).limit(page.limit)))
+    people = {c.id: c for c in _people_by_id(db, ids)}
     msgs = _messages(db, ids, _me(db))
     upcoming = _next_meetings(db, ids)
-    rows = [ConversationSummary(**_summary(c, msgs[c.id], upcoming.get(c.id))) for c in people]
-    return sorted(rows, key=lambda r: r.last_message_at.timestamp() if r.last_message_at else 0, reverse=True)
+    items = [ConversationSummary(**_summary(people[i], msgs[i], upcoming.get(i))) for i in ids]
+    return ConversationPage(
+        items=items, total=total, next_offset=next_offset(page, len(items), total),
+        counts=ConversationCounts(all=n_all, replied=n_replied, waiting=n_all - n_replied),
+    )
 
 
 def _status(acct) -> ConversationSyncOut:
@@ -174,7 +230,7 @@ def sync_status(db: Session = Depends(get_db)):
 
 @router.get("/{contact_id}", response_model=ConversationDetail)
 def get_conversation(contact_id: int, db: Session = Depends(get_db)):
-    people = _people(db, contact_id)
+    people = _emailed(db, contact_id)
     if not people:
         raise HTTPException(404, "You haven't emailed this person yet.")
     msgs = _messages(db, [contact_id], _me(db))[contact_id]

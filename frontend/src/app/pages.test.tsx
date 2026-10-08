@@ -1,11 +1,12 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { CampaignSummary, Company, Contact } from "@/lib/api";
+import type { CampaignSummary, Contact } from "@/lib/api";
 import { AuthProvider } from "@/lib/auth";
 import { campaign, email, hunterStatus, quota } from "@/test/fixtures";
 import { navigation } from "@/test/navigation";
 import { api, apiError, quietDefaults } from "@/test/server";
+import { campaignsApi, contactsApi, conversationsApi } from "@/test/pages";
 import ComposePage from "./compose/page";
 import ContactsPage from "./contacts/page";
 import ConversationsPage from "./conversations/page";
@@ -20,11 +21,6 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-const company = (overrides: Partial<Company> = {}): Company => ({
-  id: 1, name: "Stripe", domain: "stripe.com", linkedin_url: null, notes: null, created_at: "2026-09-01T12:00:00Z",
-  contact_count: 2, emailed_count: 1, last_sent_at: "2026-10-01T12:00:00Z", status: "emailed", ...overrides,
-});
-
 const contact = (overrides: Partial<Contact> = {}): Contact => ({
   id: 1, email: "jane@stripe.com", full_name: "Jane Doe", first_name: "Jane", last_name: "Doe", title: "Engineer",
   linkedin_url: "https://linkedin.com/in/jane", notes: null, company_id: 1, company_name: "Stripe",
@@ -33,9 +29,9 @@ const contact = (overrides: Partial<Contact> = {}): Contact => ({
 
 describe("Contacts page", () => {
   it("lists contacts, searches, filters by company and removes", async () => {
-    api("get", "/api/companies", [company()]);
+    api("get", "/api/companies/names", [{ id: 1, name: "Stripe" }]);
     let list = [contact(), contact({ id: 2, email: "sam@x.com", full_name: null, title: null, linkedin_url: null, company_name: null, sent_count: 0, last_status: null })];
-    const calls = api("get", "/api/contacts", () => list);
+    const calls = contactsApi(() => list);
     api("delete", "/api/contacts/1", () => {
       list = list.slice(1);
       return new Response(null, { status: 204 });
@@ -64,8 +60,8 @@ describe("Contacts page", () => {
   });
 
   it("empty states", async () => {
-    api("get", "/api/companies", { detail: "down" }, 500);
-    api("get", "/api/contacts", []);
+    apiError("get", "/api/companies/names", 500);
+    contactsApi([]);
     render(<ContactsPage />);
     expect(await screen.findByText("No contacts yet")).toBeInTheDocument();
     await userEvent.setup().type(screen.getByPlaceholderText("Search name, email or title"), "zzz");
@@ -73,19 +69,31 @@ describe("Contacts page", () => {
   });
 
   it("treats a failed load as no contacts", async () => {
-    api("get", "/api/companies", []);
+    api("get", "/api/companies/names", [{ id: 1, name: "Stripe" }]);
     apiError("get", "/api/contacts", 500);
     render(<ContactsPage />);
     expect(await screen.findByText("No contacts yet")).toBeInTheDocument();
   });
 
   it("removing someone without a name uses their email", async () => {
-    api("get", "/api/companies", []);
-    api("get", "/api/contacts", [contact({ full_name: null })]);
+    api("get", "/api/companies/names", [{ id: 1, name: "Stripe" }]);
+    contactsApi([contact({ full_name: null })]);
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
     render(<ContactsPage />);
     await userEvent.setup().click(await screen.findByRole("button", { name: "Remove contact" }));
     expect(confirm).toHaveBeenCalledWith("Remove jane@stripe.com? Their sent emails stay in history.");
+  });
+});
+
+describe("long lists", () => {
+  it("Contacts shows 30 at a time and loads the rest", async () => {
+    api("get", "/api/companies/names", []);
+    contactsApi(Array.from({ length: 31 }, (_, i) => contact({ id: i + 1, email: `p${i}@x.com`, full_name: `Person ${i}` })));
+    render(<ContactsPage />);
+    expect(await screen.findByText("Showing 30 of 31")).toBeInTheDocument();
+    await userEvent.setup().click(screen.getByRole("button", { name: "Load more" }));
+    expect(await screen.findByText("Person 30")).toBeInTheDocument();
+    expect(screen.queryByText(/Showing/)).not.toBeInTheDocument();
   });
 });
 
@@ -97,7 +105,7 @@ describe("Sent page", () => {
 
   it("shows the daily limit card", async () => {
     api("get", "/api/stats", { sent_total: 6, sent_last_7_days: 6, companies: 1, contacts: 6, failed_total: 0 });
-    api("get", "/api/campaigns", []);
+    campaignsApi([]);
     render(<SentPage />);
     expect(await screen.findByText("6 of 40 sent in the last 24 hours")).toBeInTheDocument();
     expect(screen.getByRole("region", { name: "Sending safety" })).toBeInTheDocument();
@@ -109,9 +117,18 @@ describe("Sent page", () => {
     return rest;
   };
 
+  it("shows 30 batches at a time and loads the rest", async () => {
+    api("get", "/api/stats", { sent_total: 0, sent_last_7_days: 0, companies: 0, contacts: 0, failed_total: 0 });
+    campaignsApi(Array.from({ length: 32 }, (_, i) => summary({ id: i + 1, name: `Batch ${i}` })));
+    render(<SentPage />);
+    expect(await screen.findByText("Showing 30 of 32")).toBeInTheDocument();
+    await userEvent.setup().click(screen.getByRole("button", { name: "Load more" }));
+    expect(await screen.findByText("Batch 31")).toBeInTheDocument();
+  });
+
   it("shows stats and batches, and opens one", async () => {
     api("get", "/api/stats", { sent_total: 12, sent_last_7_days: 3, companies: 2, contacts: 9, failed_total: 1 });
-    api("get", "/api/campaigns", [summary({ counts: { total: 3, pending: 0, sent: 1, failed: 1, skipped: 1, cancelled: 0 } }), summary({ id: 8, name: "Solo", counts: { total: 1, pending: 0, sent: 1, failed: 0, skipped: 0, cancelled: 0 } })]);
+    campaignsApi([summary({ counts: { total: 3, pending: 0, sent: 1, failed: 1, skipped: 1, cancelled: 0 } }), summary({ id: 8, name: "Solo", counts: { total: 1, pending: 0, sent: 1, failed: 0, skipped: 0, cancelled: 0 } })]);
     api("get", "/api/campaigns/7", campaign({ status: "completed", finished_at: "2026-10-01T12:05:00Z", emails: [email({ status: "sent", sent_at: "2026-10-01T12:00:00Z" })] }));
     render(<SentPage />);
     const user = userEvent.setup();
@@ -130,7 +147,7 @@ describe("Sent page", () => {
 
   it("a scheduled batch says when it sends", async () => {
     api("get", "/api/stats", { sent_total: 0, sent_last_7_days: 0, companies: 1, contacts: 1, failed_total: 0 });
-    api("get", "/api/campaigns", [summary({ status: "scheduled", scheduled_for: "2026-10-07T13:00:00Z" })]);
+    campaignsApi([summary({ status: "scheduled", scheduled_for: "2026-10-07T13:00:00Z" })]);
     render(<SentPage />);
     expect(await screen.findByText(`1 recipient · sends ${formatDateTime("2026-10-07T13:00:00Z")}`)).toBeInTheDocument();
     expect(screen.getByText("scheduled", { selector: "span.inline-flex" })).toBeInTheDocument();
@@ -138,7 +155,7 @@ describe("Sent page", () => {
 
   it("shows Loading… while a batch opens", async () => {
     api("get", "/api/stats", { detail: "x" }, 500);
-    api("get", "/api/campaigns", [summary()]);
+    campaignsApi([summary()]);
     api("get", "/api/campaigns/7", () => new Promise(() => {}));
     render(<SentPage />);
     await userEvent.setup().click(await screen.findByRole("button", { name: /^Stripe/ }));
@@ -149,7 +166,7 @@ describe("Sent page", () => {
   it("deletes a finished batch after confirming, and shows delete errors", async () => {
     let list = [summary()];
     api("get", "/api/stats", { sent_total: 0, sent_last_7_days: 0, companies: 0, contacts: 0, failed_total: 0 });
-    api("get", "/api/campaigns", () => list);
+    campaignsApi(() => list);
     api("get", "/api/campaigns/7", campaign({ status: "completed", emails: [] }));
     let fail = true;
     api("delete", "/api/campaigns/7", () => {
@@ -174,7 +191,7 @@ describe("Sent page", () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     let status: "sending" | "completed" = "sending";
     api("get", "/api/stats", { sent_total: 0, sent_last_7_days: 0, companies: 0, contacts: 0, failed_total: 0 });
-    const list = api("get", "/api/campaigns", () => [summary({ status })]);
+    const list = campaignsApi(() => [summary({ status })]);
     api("get", "/api/campaigns/7", () => campaign({ status }));
     render(<SentPage />);
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
@@ -303,7 +320,7 @@ describe("pages that render in the browser only", () => {
 
   it("Inbox", async () => {
     api("get", "/api/gmail/status", { connected: true, email: "me@gmail.com", credentials_file_present: true });
-    api("get", "/api/conversations", []);
+    conversationsApi([]);
     render(<ConversationsPage />);
     expect(screen.getByRole("heading", { name: "Inbox" })).toBeInTheDocument();
     expect(await screen.findByText("No conversations yet")).toBeInTheDocument();

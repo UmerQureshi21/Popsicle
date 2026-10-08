@@ -20,7 +20,7 @@ import {
   type Attachment,
   type CampaignDetail,
   type CampaignDraft,
-  type Company,
+  type CompanyName,
   type GmailStatus,
   type FoundPerson,
   type Template,
@@ -47,7 +47,7 @@ export default function Compose() {
   const [menu, setMenu] = useState<"delay" | "skip" | null>(null);
   const [gmail, setGmail] = useState<GmailStatus | null>(null);
   const [notice, setNotice] = useState<string | null>(initial.notice);
-  const [companies, setCompanies] = useState<Company[]>([]);
+  const [companies, setCompanies] = useState<CompanyName[]>([]);
   const [uploading, setUploading] = useState(false);
   const [reviewing, setReviewing] = useState<CampaignDraft | null>(null);
   const [findingPeople, setFindingPeople] = useState(false);
@@ -68,7 +68,7 @@ export default function Compose() {
     clearHandoff();
     if (window.location.search) window.history.replaceState(null, "", window.location.pathname);
     api.get<GmailStatus>("/api/gmail/status").then(setGmail, () => setGmail(null));
-    api.get<Company[]>("/api/companies").then(setCompanies, () => {});
+    api.get<CompanyName[]>("/api/companies/names").then(setCompanies, () => {});
   }, []);
 
   const recipients = useMemo(() => validateRows(rows, variables), [rows, variables]);
@@ -152,7 +152,7 @@ export default function Compose() {
     set({ rows: [{}], company: "" });
     setCampaign(null);
     setPanelOpen(true);
-    api.get<Company[]>("/api/companies").then(setCompanies, () => {});
+    api.get<CompanyName[]>("/api/companies/names").then(setCompanies, () => {});
   };
 
   const totalMinutes = Math.ceil((Math.max(recipients.length - 1, 0) * delaySeconds) / 60);

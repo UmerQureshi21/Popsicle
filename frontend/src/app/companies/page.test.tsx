@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Company, Contact } from "@/lib/api";
 import { navigation } from "@/test/navigation";
 import { api, apiError } from "@/test/server";
+import { companiesApi, contactsApi } from "@/test/pages";
 import CompaniesPage from "./page";
 
 afterEach(() => {
@@ -30,7 +31,7 @@ const LIST = [
 
 describe("Companies page", () => {
   it("shows each company with its logo, status and counts", async () => {
-    api("get", "/api/companies", LIST);
+    companiesApi(LIST);
     render(<CompaniesPage />);
     expect(await screen.findByText("Stripe")).toBeInTheDocument();
     expect(screen.getByText("no domain yet")).toBeInTheDocument();
@@ -45,7 +46,7 @@ describe("Companies page", () => {
   });
 
   it("filters by status, with counts", async () => {
-    api("get", "/api/companies", LIST);
+    companiesApi(LIST);
     render(<CompaniesPage />);
     const user = userEvent.setup();
     await screen.findByText("Stripe");
@@ -61,20 +62,53 @@ describe("Companies page", () => {
     expect(screen.getByText("No companies are not a fit.")).toBeInTheDocument();
   });
 
-  it("changes a company's status", async () => {
-    api("get", "/api/companies", LIST);
-    const patch = api("patch", "/api/companies/2", company({ id: 2, status: "replied" }));
+  it("shows 30 at a time; Load more brings the rest, and the counts cover everyone", async () => {
+    const many = Array.from({ length: 35 }, (_, i) => company({ id: 100 + i, name: `Company ${i}`, status: i < 5 ? "replied" : "not_started" }));
+    const calls = companiesApi(many);
+    render(<CompaniesPage />);
+    const user = userEvent.setup();
+    expect(await screen.findByText("Showing 30 of 35")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /^Status of/ })).toHaveLength(30);
+    expect(screen.getByRole("tab", { name: /All/ })).toHaveTextContent("All 35");
+    expect(screen.getByRole("tab", { name: /Replied/ })).toHaveTextContent("Replied 5");
+    await user.click(screen.getByRole("button", { name: "Load more" }));
+    await waitFor(() => expect(screen.getAllByRole("button", { name: /^Status of/ })).toHaveLength(35));
+    expect(screen.queryByText(/Showing/)).not.toBeInTheDocument();
+    expect(calls.at(-1)!.url.searchParams.get("offset")).toBe("30");
+  });
+
+  it("searches every company on the server", async () => {
+    const calls = companiesApi(LIST);
+    render(<CompaniesPage />);
+    const user = userEvent.setup();
+    await user.type(await screen.findByRole("textbox", { name: "Search companies" }), "shop");
+    await waitFor(() => expect(screen.getAllByRole("button", { name: /^Status of/ })).toHaveLength(1));
+    expect(screen.getByRole("button", { name: "Status of Shopify" })).toBeInTheDocument();
+    expect(calls.at(-1)!.url.searchParams.get("q")).toBe("shop");
+    await user.clear(screen.getByRole("textbox", { name: "Search companies" }));
+    await user.type(screen.getByRole("textbox", { name: "Search companies" }), "zzz");
+    expect(await screen.findByText("No companies match “zzz”.")).toBeInTheDocument();
+  });
+
+  it("changes a company's status, and the counts follow", async () => {
+    let list = LIST;
+    companiesApi(() => list);
+    const patch = api("patch", "/api/companies/2", ({ body }) => {
+      list = list.map((c) => (c.id === 2 ? { ...c, ...(body as object) } : c));
+      return list.find((c) => c.id === 2)!;
+    });
     render(<CompaniesPage />);
     const user = userEvent.setup();
     await user.click(await screen.findByRole("button", { name: "Status of Shopify" }));
     await user.click(screen.getByRole("option", { name: "Replied" }));
+    // Shown at once, then confirmed by the server along with the counts.
     expect(screen.getByRole("button", { name: "Status of Shopify" })).toHaveTextContent("Replied");
-    expect(screen.getByRole("tab", { name: /Replied/ })).toHaveTextContent("Replied 2");
-    await waitFor(() => expect(patch[0]?.body).toEqual({ status: "replied" }));
+    await waitFor(() => expect(screen.getByRole("tab", { name: /Replied/ })).toHaveTextContent("Replied 2"));
+    expect(patch[0].body).toEqual({ status: "replied" });
   });
 
   it("puts the status back if saving it fails", async () => {
-    api("get", "/api/companies", LIST);
+    companiesApi(LIST);
     apiError("patch", "/api/companies/2", 500, "Database is down");
     render(<CompaniesPage />);
     const user = userEvent.setup();
@@ -86,7 +120,7 @@ describe("Companies page", () => {
 
   it("sends the selected companies to Find people", async () => {
     localStorage.setItem("popsicle:find-people:v1", JSON.stringify({ jobTitle: "designer", chips: [{ query: "old.com" }], results: [{ query: "old.com" }] }));
-    api("get", "/api/companies", LIST);
+    companiesApi(LIST);
     render(<CompaniesPage />);
     const user = userEvent.setup();
     await user.click(await screen.findByRole("checkbox", { name: "Select Shopify" }));
@@ -107,7 +141,7 @@ describe("Companies page", () => {
   });
 
   it("starts a fresh Find people search when nothing was saved", async () => {
-    api("get", "/api/companies", LIST);
+    companiesApi(LIST);
     render(<CompaniesPage />);
     const user = userEvent.setup();
     await user.click(await screen.findByRole("checkbox", { name: "Select Stripe" }));
@@ -116,7 +150,7 @@ describe("Companies page", () => {
   });
 
   it("unselects, clears the selection, and only counts companies in view", async () => {
-    api("get", "/api/companies", LIST);
+    companiesApi(LIST);
     render(<CompaniesPage />);
     const user = userEvent.setup();
     const stripe = await screen.findByRole("checkbox", { name: "Select Stripe" });
@@ -133,7 +167,7 @@ describe("Companies page", () => {
 
   it("fills in missing domains so logos show", async () => {
     let list = LIST;
-    api("get", "/api/companies", () => list);
+    companiesApi(() => list);
     const fill = api("post", "/api/companies/fill-domains", () => {
       list = LIST.map((c) => (c.id === 3 ? { ...c, domain: "acme.com" } : c));
       return { filled: 1, missing: 0 };
@@ -150,7 +184,7 @@ describe("Companies page", () => {
   });
 
   it("looks up missing logos a few at a time, carrying on where each piece stopped", async () => {
-    api("get", "/api/companies", [company({ id: 3, name: "Acme", domain: null }), company({ id: 4, name: "Zed", domain: null })]);
+    companiesApi([company({ id: 3, name: "Acme", domain: null }), company({ id: 4, name: "Zed", domain: null })]);
     const calls = api("post", "/api/companies/fill-domains", (call) =>
       call.url.searchParams.get("after_id") === "0" ? { filled: 1, missing: 1, next_after: 3 } : { filled: 0, missing: 1, next_after: null },
     );
@@ -161,7 +195,7 @@ describe("Companies page", () => {
   });
 
   it("stops if the backend doesn't move forward", async () => {
-    api("get", "/api/companies", [company({ id: 3, name: "Acme", domain: null })]);
+    companiesApi([company({ id: 3, name: "Acme", domain: null })]);
     const calls = api("post", "/api/companies/fill-domains", { filled: 0, missing: 1, next_after: 0 });
     render(<CompaniesPage />);
     await userEvent.setup().click(await screen.findByRole("button", { name: "Find 1 missing logo" }));
@@ -171,7 +205,7 @@ describe("Companies page", () => {
 
   it("says when Hunter only knew some, or none, of the missing domains", async () => {
     const two = [company({ id: 3, name: "Acme", domain: null }), company({ id: 4, name: "Zed", domain: null }), company({ id: 5, name: "Qux", domain: null })];
-    api("get", "/api/companies", two);
+    companiesApi(two);
     let answer = { filled: 2, missing: 1 };
     api("post", "/api/companies/fill-domains", () => answer);
     render(<CompaniesPage />);
@@ -184,7 +218,7 @@ describe("Companies page", () => {
   });
 
   it("shows why filling domains failed, and Looking up… meanwhile", async () => {
-    api("get", "/api/companies", [company({ domain: null })]);
+    companiesApi([company({ domain: null })]);
     let fail: (r: Response) => void = () => {};
     api("post", "/api/companies/fill-domains", () => new Promise<Response>((r) => (fail = r)));
     render(<CompaniesPage />);
@@ -196,8 +230,8 @@ describe("Companies page", () => {
   });
 
   it("shows one company's contacts", async () => {
-    api("get", "/api/companies", LIST);
-    const contacts = api("get", "/api/contacts", [contact(), contact({ id: 2, email: "sam@stripe.com", full_name: null, title: null, last_status: null, last_sent_at: null })]);
+    companiesApi(LIST);
+    const contacts = contactsApi([contact(), contact({ id: 2, email: "sam@stripe.com", full_name: null, title: null, last_status: null, last_sent_at: null })]);
     render(<CompaniesPage />);
     const user = userEvent.setup();
     await user.click(await screen.findByRole("button", { name: /^Stripe/ }));
@@ -211,20 +245,20 @@ describe("Companies page", () => {
   });
 
   it("shows a company with no contacts, and Loading… first", async () => {
-    api("get", "/api/companies", [company()]);
+    companiesApi([company()]);
     let answer: (r: Response) => void = () => {};
     api("get", "/api/contacts", () => new Promise<Response>((r) => (answer = r)));
     render(<CompaniesPage />);
     await userEvent.setup().click(await screen.findByRole("button", { name: /^Stripe/ }));
     expect(screen.getByText("Loading…")).toBeInTheDocument();
-    answer(Response.json([]));
+    answer(Response.json({ items: [], total: 0, next_offset: null }));
     expect(await screen.findByText("No contacts at this company yet.")).toBeInTheDocument();
   });
 
   it("deletes a company after confirming", async () => {
     let list = [company()];
-    api("get", "/api/companies", () => list);
-    api("get", "/api/contacts", []);
+    companiesApi(() => list);
+    contactsApi([]);
     const del = api("delete", "/api/companies/1", () => {
       list = [];
       return new Response(null, { status: 204 });
@@ -254,7 +288,7 @@ describe("Companies page: adding", () => {
 
   it("adds companies picked, typed and pasted as a list", async () => {
     let list: Company[] = [];
-    api("get", "/api/companies", () => list);
+    companiesApi(() => list);
     api("get", "/api/people-search/suggest", SUGGESTIONS);
     const bulk = api("post", "/api/companies/bulk", () => {
       list = [company({ id: 9, name: "Wealthsimple", domain: "wealthsimple.com", status: "not_started" })];
@@ -287,7 +321,7 @@ describe("Companies page: adding", () => {
   });
 
   it("removes the last chip with backspace, ignores a one-name paste, and cancels", async () => {
-    api("get", "/api/companies", []);
+    companiesApi([]);
     api("get", "/api/people-search/suggest", []);
     render(<CompaniesPage />);
     const user = userEvent.setup();
@@ -308,7 +342,7 @@ describe("Companies page: adding", () => {
   });
 
   it("says when one company was added and one skipped, and shows errors", async () => {
-    api("get", "/api/companies", []);
+    companiesApi([]);
     api("get", "/api/people-search/suggest", []);
     let fail = true;
     api("post", "/api/companies/bulk", () =>
@@ -327,7 +361,7 @@ describe("Companies page: adding", () => {
   });
 
   it("adds a long pasted list a piece at a time", async () => {
-    api("get", "/api/companies", []);
+    companiesApi([]);
     api("get", "/api/people-search/suggest", []);
     const bulk = api("post", "/api/companies/bulk", (call) => ({
       added: (call.body as { lines: string[] }).lines.map((name, i) => company({ id: i + 1, name })),
@@ -344,7 +378,7 @@ describe("Companies page: adding", () => {
   });
 
   it("just says how many were added when none were skipped", async () => {
-    api("get", "/api/companies", []);
+    companiesApi([]);
     api("get", "/api/people-search/suggest", []);
     api("post", "/api/companies/bulk", { added: [company({ name: "Acme" }), company({ id: 2, name: "Zed" })], skipped: [] });
     render(<CompaniesPage />);
