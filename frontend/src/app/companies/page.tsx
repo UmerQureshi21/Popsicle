@@ -1,16 +1,18 @@
 "use client";
 
 import { safeHref } from "@/lib/safeUrl";
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Building2, ExternalLink, ImageDown, Plus, Trash2, UserSearch, X } from "lucide-react";
-import { api, type CompaniesAdded, type Company, type CompanyStatus, type Contact } from "@/lib/api";
+import { Building2, ExternalLink, ImageDown, Plus, Search, Trash2, UserSearch, X } from "lucide-react";
+import { api, type CompaniesAdded, type Company, type CompanyPage, type CompanyStatus, type Contact, type Page } from "@/lib/api";
 import { textChip, textToChips, type Chip } from "@/lib/chips";
 import { COMPANIES_PIECE, inPieces } from "@/lib/pieces";
 import { formatDate, timeAgo } from "@/lib/format";
+import { useDebounced, usePaged } from "@/lib/paged";
 import { Avatar, Button, EmptyState, Modal, StatusBadge } from "@/components/ui";
 import CompanyAutocomplete, { CompanyLogo } from "@/components/CompanyAutocomplete";
 import { presetCompanies } from "@/components/find/FindPeople";
+import LoadMore from "@/components/LoadMore";
 import PageShell from "@/components/PageShell";
 import Select from "@/components/Select";
 
@@ -32,11 +34,11 @@ type Filter = CompanyStatus | "all";
 
 export default function CompaniesPage() {
   const router = useRouter();
-  const [companies, setCompanies] = useState<Company[] | null>(null);
   const [filter, setFilter] = useState<Filter>("all");
+  const [query, setQuery] = useState("");
+  const search = useDebounced(query.trim(), 250);
   const [picked, setPicked] = useState<Set<number>>(new Set());
   const [selected, setSelected] = useState<Company | null>(null);
-  const [contacts, setContacts] = useState<Contact[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [filling, setFilling] = useState(false);
@@ -47,25 +49,24 @@ export default function CompaniesPage() {
   const [draft, setDraft] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const refresh = useCallback(() => {
-    api.get<Company[]>("/api/companies").then(setCompanies, (e) => setError(e.message));
-  }, []);
-  useEffect(refresh, [refresh]);
+  // One page at a time; the status filter, search and counts run on the server.
+  const params = new URLSearchParams();
+  if (filter !== "all") params.set("status", filter);
+  if (search) params.set("q", search);
+  const list = usePaged<CompanyPage>(`/api/companies?${params}`);
+  const { reload: refresh, edit } = list;
+  const companies = list.items;
 
-  const open = async (c: Company) => {
-    setSelected(c);
-    setContacts(null);
-    setContacts(await api.get<Contact[]>(`/api/contacts?company_id=${c.id}`));
-  };
+  const open = (c: Company) => setSelected(c);
 
   const setStatus = async (c: Company, status: CompanyStatus) => {
-    setCompanies((list) => list?.map((x) => (x.id === c.id ? { ...x, status } : x)) ?? null);
+    edit((items) => items.map((x) => (x.id === c.id ? { ...x, status } : x)));
     try {
       await api.patch(`/api/companies/${c.id}`, { status });
     } catch (e) {
       setError((e as Error).message);
-      refresh();
     }
+    refresh(); // the counts, and whether it still matches the filter
   };
 
   const addChips = (added: Chip[]) => {
@@ -160,11 +161,11 @@ export default function CompaniesPage() {
     router.push("/find");
   };
 
-  const counts = Object.fromEntries(COMPANY_STATUSES.map((s) => [s.value, 0])) as Record<CompanyStatus, number>;
-  companies?.forEach((c) => counts[c.status]++);
-  const shown = companies?.filter((c) => filter === "all" || c.status === filter) ?? [];
-  const noDomain = companies?.filter((c) => !c.domain).length ?? 0;
+  const counts = list.data?.counts ?? (Object.fromEntries(COMPANY_STATUSES.map((s) => [s.value, 0])) as Record<CompanyStatus, number>);
+  const shown = companies ?? [];
+  const noDomain = list.data?.missing_domains ?? 0;
   const pickedShown = shown.filter((c) => picked.has(c.id));
+  const nothingYet = !!list.data && list.data.all === 0 && !search;
 
   return (
     <PageShell
@@ -176,16 +177,29 @@ export default function CompaniesPage() {
         </Button>
       }
     >
-      {companies && companies.length === 0 && (
+      {nothingYet && (
         <EmptyState icon={<Building2 className="size-5" />} title="No companies yet">
           Add the companies you want to reach, or they’re added automatically when you send a batch.
         </EmptyState>
       )}
 
-      {!!companies?.length && (
+      {list.data && !nothingYet && (
+        <label className="mb-4 flex items-center gap-2 rounded-xl border border-steel/25 bg-paper px-3 py-2 shadow-sm focus-within:border-scarlet sm:max-w-sm">
+          <Search className="size-4 text-steel" />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search companies"
+            aria-label="Search companies"
+            className="flex-1 bg-transparent text-sm outline-none placeholder:text-steel"
+          />
+        </label>
+      )}
+
+      {list.data && !nothingYet && (
         <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
           <div role="tablist" aria-label="Filter by status" className="flex flex-wrap gap-1.5">
-            {[{ value: "all" as Filter, label: "All", n: companies.length }, ...COMPANY_STATUSES.map((s) => ({ ...s, n: counts[s.value] }))].map(
+            {[{ value: "all" as Filter, label: "All", n: list.data.all }, ...COMPANY_STATUSES.map((s) => ({ ...s, n: counts[s.value] }))].map(
               (t) => (
                 <button
                   key={t.value}
@@ -217,54 +231,68 @@ export default function CompaniesPage() {
           </button>
         </div>
       )}
-      {error && !adding && <p className="mb-4 text-sm text-crimson">{error}</p>}
+      {(error ?? list.error) && !adding && <p className="mb-4 text-sm text-crimson">{error ?? list.error}</p>}
 
-      {companies && companies.length > 0 && shown.length === 0 && (
+      {list.data && !nothingYet && shown.length === 0 && (
         <p className="rounded-2xl border border-dashed border-steel/40 bg-paper px-6 py-10 text-center text-sm text-steel">
-          No companies are {COMPANY_STATUSES.find((s) => s.value === filter)?.label.toLowerCase()}.
+          {search
+            ? `No companies match “${search}”.`
+            : `No companies are ${COMPANY_STATUSES.find((s) => s.value === filter)?.label.toLowerCase()}.`}
         </p>
       )}
 
-      <div className="grid gap-4 pb-20 sm:grid-cols-2 lg:grid-cols-3">
-        {shown.map((c) => (
-          <div
-            key={c.id}
-            className={`flex flex-col rounded-2xl border bg-paper p-5 shadow-sm transition hover:shadow-md ${
-              picked.has(c.id) ? "border-crimson ring-2 ring-crimson/15" : "border-cloud hover:border-steel/30"
-            }`}
-          >
-            <div className="flex items-start gap-3">
-              <CompanyLogo domain={c.domain} size={44} />
-              <button onClick={() => open(c)} className="min-w-0 flex-1 text-left">
-                <span className="block truncate font-semibold text-ink hover:underline">{c.name}</span>
-                <span className="block truncate text-sm text-steel">{c.domain ?? "no domain yet"}</span>
-              </button>
-              <input
-                type="checkbox"
-                checked={picked.has(c.id)}
-                onChange={() => togglePick(c.id)}
-                aria-label={`Select ${c.name}`}
-                className="mt-1 size-4 shrink-0 accent-crimson"
-              />
+      {/* Bottom room for the selection bar. */}
+      <div className="pb-20">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {shown.map((c) => (
+            <div
+              key={c.id}
+              className={`flex flex-col rounded-2xl border bg-paper p-5 shadow-sm transition hover:shadow-md ${
+                picked.has(c.id) ? "border-crimson ring-2 ring-crimson/15" : "border-cloud hover:border-steel/30"
+              }`}
+            >
+              <div className="flex items-start gap-3">
+                <CompanyLogo domain={c.domain} size={44} />
+                <button onClick={() => open(c)} className="min-w-0 flex-1 text-left">
+                  <span className="block truncate font-semibold text-ink hover:underline">{c.name}</span>
+                  <span className="block truncate text-sm text-steel">{c.domain ?? "no domain yet"}</span>
+                </button>
+                <input
+                  type="checkbox"
+                  checked={picked.has(c.id)}
+                  onChange={() => togglePick(c.id)}
+                  aria-label={`Select ${c.name}`}
+                  className="mt-1 size-4 shrink-0 accent-crimson"
+                />
+              </div>
+              <div className="mt-4 flex items-center gap-2">
+                <span className={`size-2 shrink-0 rounded-full ${DOT[c.status]}`} aria-hidden />
+                <Select
+                  ariaLabel={`Status of ${c.name}`}
+                  value={c.status}
+                  onChange={(s) => setStatus(c, s)}
+                  options={COMPANY_STATUSES}
+                  className="flex-1"
+                />
+              </div>
+              <div className="mt-4 flex gap-4 border-t border-cloud pt-3 text-xs text-steel">
+                <span>
+                  <span className="font-semibold text-ink">{c.emailed_count}</span>/{c.contact_count} emailed
+                </span>
+                <span>last {timeAgo(c.last_sent_at)}</span>
+              </div>
             </div>
-            <div className="mt-4 flex items-center gap-2">
-              <span className={`size-2 shrink-0 rounded-full ${DOT[c.status]}`} aria-hidden />
-              <Select
-                ariaLabel={`Status of ${c.name}`}
-                value={c.status}
-                onChange={(s) => setStatus(c, s)}
-                options={COMPANY_STATUSES}
-                className="flex-1"
-              />
-            </div>
-            <div className="mt-4 flex gap-4 border-t border-cloud pt-3 text-xs text-steel">
-              <span>
-                <span className="font-semibold text-ink">{c.emailed_count}</span>/{c.contact_count} emailed
-              </span>
-              <span>last {timeAgo(c.last_sent_at)}</span>
-            </div>
-          </div>
-        ))}
+          ))}
+        </div>
+        {list.data && (
+          <LoadMore
+            shown={list.data.items.length}
+            total={list.data.total}
+            hasMore={list.data.next_offset != null}
+            loading={list.loadingMore}
+            onMore={list.loadMore}
+          />
+        )}
       </div>
 
       {pickedShown.length > 0 && (
@@ -363,33 +391,53 @@ export default function CompaniesPage() {
           )
         }
       >
-        <div className="p-6">
-          {!contacts ? (
-            <p className="text-sm text-steel">Loading…</p>
-          ) : contacts.length === 0 ? (
-            <p className="text-sm text-steel">No contacts at this company yet.</p>
-          ) : (
-            <ul className="divide-y divide-cloud">
-              {contacts.map((p) => (
-                <li key={p.id} className="flex items-center gap-3 py-3">
-                  <Avatar name={p.full_name || p.email} size={32} />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-ink">{p.full_name || p.email}</p>
-                    <p className="truncate text-xs text-steel">
-                      {p.email}
-                      {p.title && <> · {p.title}</>}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    {p.last_status && <StatusBadge status={p.last_status} />}
-                    <p className="mt-0.5 text-xs text-steel">{p.last_sent_at ? formatDate(p.last_sent_at) : "not emailed"}</p>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+        <div className="p-6">{selected && <CompanyContacts companyId={selected.id} />}</div>
       </Modal>
     </PageShell>
+  );
+}
+
+/** Everyone at one company, a page at a time. */
+function CompanyContacts({ companyId }: { companyId: number }) {
+  const list = usePaged<Page<Contact>>(`/api/contacts?company_id=${companyId}`);
+  const contacts = list.items;
+  return (
+    <>
+      {list.error ? (
+        <p className="text-sm text-crimson">{list.error}</p>
+      ) : !contacts ? (
+        <p className="text-sm text-steel">Loading…</p>
+      ) : contacts.length === 0 ? (
+        <p className="text-sm text-steel">No contacts at this company yet.</p>
+      ) : (
+        <ul className="divide-y divide-cloud">
+          {contacts.map((p) => (
+            <li key={p.id} className="flex items-center gap-3 py-3">
+              <Avatar name={p.full_name || p.email} size={32} />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium text-ink">{p.full_name || p.email}</p>
+                <p className="truncate text-xs text-steel">
+                  {p.email}
+                  {p.title && <> · {p.title}</>}
+                </p>
+              </div>
+              <div className="text-right">
+                {p.last_status && <StatusBadge status={p.last_status} />}
+                <p className="mt-0.5 text-xs text-steel">{p.last_sent_at ? formatDate(p.last_sent_at) : "not emailed"}</p>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+      {list.data && (
+        <LoadMore
+          shown={list.data.items.length}
+          total={list.data.total}
+          hasMore={list.data.next_offset != null}
+          loading={list.loadingMore}
+          onMore={list.loadMore}
+        />
+      )}
+    </>
   );
 }

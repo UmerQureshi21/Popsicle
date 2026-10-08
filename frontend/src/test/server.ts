@@ -47,7 +47,8 @@ export function apiError(method: Method, path: string, status: number, detail: u
 /** Answers that most pages ask for on load and tests rarely care about. */
 export function quietDefaults() {
   api("get", "/api/people-search/status", { configured: true, credits_remaining: 40, credits_total: 50, reset_date: "2026-11-02" });
-  api("get", "/api/companies", []);
+  api("get", "/api/companies/names", []);
+  api("get", "/api/companies", { items: [], total: 0, next_offset: null, counts: { not_started: 0, emailed: 0, replied: 0, not_interested: 0 }, all: 0, missing_domains: 0 });
   api("get", "/api/templates", []);
   api("get", "/api/gmail/status", { connected: true, email: "me@gmail.com", credentials_file_present: true });
 }

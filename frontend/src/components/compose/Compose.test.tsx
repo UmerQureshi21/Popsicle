@@ -12,7 +12,7 @@ const CONNECTED: GmailStatus = { connected: true, email: "me@gmail.com", credent
 
 function setup({ gmail = CONNECTED, draft }: { gmail?: GmailStatus; draft?: object } = {}) {
   if (draft) localStorage.setItem(STORAGE_KEY, JSON.stringify(draft));
-  const companies = api("get", "/api/companies", [{ id: 1, name: "Stripe" }]);
+  const companies = api("get", "/api/companies/names", [{ id: 1, name: "Stripe" }]);
   api("get", "/api/templates", [template({ id: 4, name: "Role intro", subject: "About {{role}}", body: "Hi {{first_name}}", variables: ["role"] })]);
   api("get", "/api/gmail/status", gmail);
   render(<Compose />);
@@ -220,7 +220,7 @@ describe("Compose", () => {
     let templates = [template({ id: 4, name: "Role intro" }), template({ id: 5, name: "Other" })];
     api("get", "/api/templates", () => templates);
     api("get", "/api/gmail/status", CONNECTED);
-    api("get", "/api/companies", []);
+    api("get", "/api/companies/names", []);
     api("delete", "/api/templates/5", () => {
       templates = templates.slice(0, 1);
       return new Response(null, { status: 204 });
@@ -332,7 +332,7 @@ describe("Compose", () => {
   });
 
   it("works when Gmail status and companies can't be loaded", async () => {
-    api("get", "/api/companies", { detail: "down" }, 500);
+    api("get", "/api/companies/names", { detail: "down" }, 500);
     api("get", "/api/templates", []);
     api("get", "/api/gmail/status", { detail: "down" }, 500);
     render(<Compose />);

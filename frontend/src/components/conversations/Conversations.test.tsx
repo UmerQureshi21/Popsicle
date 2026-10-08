@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GmailStatus } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
 import { api, apiError } from "@/test/server";
+import { conversationsApi } from "@/test/pages";
 import Conversations from "./Conversations";
 import { detail, meeting, msg, person } from "./fixtures";
 
@@ -20,7 +21,7 @@ const PEOPLE = [
 function setup({ gmail = SEND_ONLY, people = PEOPLE }: { gmail?: GmailStatus | null; people?: typeof PEOPLE } = {}) {
   if (gmail) api("get", "/api/gmail/status", gmail);
   else apiError("get", "/api/gmail/status", 500);
-  const list = api("get", "/api/conversations", people);
+  const list = conversationsApi(people);
   render(<Conversations />);
   return { list, user: userEvent.setup() };
 }
@@ -32,7 +33,7 @@ afterEach(() => {
 
 describe("Conversations: everyone emailed", () => {
   it("lists people with their last message, filters and searches", async () => {
-    const { user } = setup();
+    const { user, list } = setup();
     expect(screen.getByText("Loading…")).toBeInTheDocument();
     expect(await screen.findByText("Douglas Quan")).toBeInTheDocument();
     const jane = screen.getByRole("button", { name: /jane@stripe\.com/ });
@@ -42,19 +43,32 @@ describe("Conversations: everyone emailed", () => {
     expect(screen.getAllByLabelText("replied")).toHaveLength(1);
     expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["All 2", "Replied 1", "No reply yet 1"]);
 
+    // Filters and search are asked of the server, so they cover everyone, not just the loaded page.
     await user.click(screen.getByRole("tab", { name: /Replied/ }));
-    expect(screen.queryByRole("button", { name: /jane@stripe\.com/ })).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole("button", { name: /jane@stripe\.com/ })).not.toBeInTheDocument());
     await user.click(screen.getByRole("tab", { name: /No reply yet/ }));
-    expect(screen.queryByRole("button", { name: /Douglas Quan/ })).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole("button", { name: /Douglas Quan/ })).not.toBeInTheDocument());
     await user.click(screen.getByRole("tab", { name: /All/ }));
+    expect(await screen.findByRole("button", { name: /Douglas Quan/ })).toBeInTheDocument();
 
     await user.type(screen.getByRole("textbox", { name: "Search people" }), "ibm");
+    await waitFor(() => expect(screen.queryByRole("button", { name: /jane@stripe\.com/ })).not.toBeInTheDocument());
     expect(screen.getByRole("button", { name: /Douglas Quan/ })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /jane@stripe\.com/ })).not.toBeInTheDocument();
+    expect(list.at(-1)!.url.searchParams.get("q")).toBe("ibm");
+    expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["All 2", "Replied 1", "No reply yet 1"]); // counts ignore the search
     await user.clear(screen.getByRole("textbox", { name: "Search people" }));
     await user.type(screen.getByRole("textbox", { name: "Search people" }), "nobody");
-    expect(screen.getByText("Nobody matches.")).toBeInTheDocument();
+    expect(await screen.findByText("Nobody matches.")).toBeInTheDocument();
     expect(screen.getByText("Pick someone to see your conversation.")).toBeInTheDocument();
+  });
+
+  it("shows 30 people at a time and loads the rest", async () => {
+    const many = Array.from({ length: 33 }, (_, i) => person({ contact_id: 100 + i, email: `p${i}@x.com`, full_name: `Person ${i}` }));
+    setup({ people: many });
+    expect(await screen.findByText("Showing 30 of 33")).toBeInTheDocument();
+    expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["All 33", "Replied 33", "No reply yet 0"]);
+    await userEvent.setup().click(screen.getByRole("button", { name: "Load more" }));
+    expect(await screen.findByRole("button", { name: /Person 32/ })).toBeInTheDocument();
   });
 
   it("shows an empty state", async () => {
@@ -133,7 +147,7 @@ describe("Conversations: checking Gmail", () => {
       return { threads_checked: 1, threads_downloaded: 1, new_messages: 3, synced_at: "2026-10-06T12:00:00Z" };
     });
     api("get", "/api/gmail/status", ALLOWED);
-    api("get", "/api/conversations", PEOPLE);
+    conversationsApi(PEOPLE);
     render(
       <StrictMode>
         <Conversations />

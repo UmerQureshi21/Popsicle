@@ -2,10 +2,12 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { ChevronDown, Send, Trash2 } from "lucide-react";
-import { api, type CampaignDetail, type CampaignSummary, type Stats } from "@/lib/api";
+import { api, type CampaignDetail, type CampaignSummary, type Page, type Stats } from "@/lib/api";
 import { formatDateTime, timeAgo } from "@/lib/format";
+import { usePaged } from "@/lib/paged";
 import { Button, EmptyState, StatusBadge } from "@/components/ui";
 import CampaignProgress, { ProgressBar, isActive } from "@/components/CampaignProgress";
+import LoadMore from "@/components/LoadMore";
 import PageShell from "@/components/PageShell";
 import SendingSafety from "@/components/SendingSafety";
 
@@ -20,17 +22,22 @@ function StatTile({ label, value, accent }: { label: string; value: number | str
 
 export default function SentPage() {
   const [stats, setStats] = useState<Stats | null>(null);
-  const [campaigns, setCampaigns] = useState<CampaignSummary[] | null>(null);
+  const list = usePaged<Page<CampaignSummary>>("/api/campaigns");
+  const campaigns = list.items;
   const [openId, setOpenId] = useState<number | null>(null);
   const [detail, setDetail] = useState<CampaignDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const { reload } = list;
   const refresh = useCallback(() => {
     api.get<Stats>("/api/stats").then(setStats, () => {});
-    api.get<CampaignSummary[]>("/api/campaigns").then(setCampaigns, (e) => setError(e.message));
-  }, []);
+    reload();
+  }, [reload]);
 
-  useEffect(refresh, [refresh]);
+  useEffect(() => {
+    api.get<Stats>("/api/stats").then(setStats, () => {});
+  }, []);
+  const shownError = error ?? list.error;
 
   // Keep the list fresh while anything is sending.
   const anyActive = campaigns?.some(isActive) ?? false;
@@ -72,7 +79,7 @@ export default function SentPage() {
         <StatTile label="Contacts" value={stats?.contacts ?? "–"} />
       </div>
 
-      {error && <p className="mb-4 rounded-xl bg-crimson/5 px-4 py-3 text-sm text-crimson">{error}</p>}
+      {shownError && <p className="mb-4 rounded-xl bg-crimson/5 px-4 py-3 text-sm text-crimson">{shownError}</p>}
 
       {campaigns && campaigns.length === 0 && (
         <EmptyState icon={<Send className="size-5" />} title="Nothing sent yet">
@@ -150,6 +157,15 @@ export default function SentPage() {
           );
         })}
       </div>
+      {list.data && (
+        <LoadMore
+          shown={list.data.items.length}
+          total={list.data.total}
+          hasMore={list.data.next_offset != null}
+          loading={list.loadingMore}
+          onMore={list.loadMore}
+        />
+      )}
     </PageShell>
   );
 }

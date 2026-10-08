@@ -7,7 +7,7 @@ import {
   API_URL,
   api,
   type ConversationDetail,
-  type ConversationSummary,
+  type ConversationPage,
   type ConversationSync,
   type GmailStatus,
   type Meeting,
@@ -15,8 +15,10 @@ import {
 import { readGmailNotice } from "@/lib/draft";
 import { sleep } from "@/lib/pieces";
 import { formatDateTime, timeAgo } from "@/lib/format";
+import { useDebounced, usePaged } from "@/lib/paged";
 import { Avatar, Button, EmptyState } from "@/components/ui";
 import { CompanyLogo } from "@/components/CompanyAutocomplete";
+import LoadMore from "@/components/LoadMore";
 import MeetScheduler from "./MeetScheduler";
 import SendBookingLink from "./SendBookingLink";
 
@@ -132,9 +134,9 @@ function checkGmail(): Promise<ConversationSync> {
 /** Everyone you've emailed, what was said since, and Google Meet invites. */
 export default function Conversations() {
   const [gmail, setGmail] = useState<GmailStatus | null>(null);
-  const [people, setPeople] = useState<ConversationSummary[] | null>(null);
   const [filter, setFilter] = useState<Filter>("all");
   const [query, setQuery] = useState("");
+  const search = useDebounced(query.trim(), 250);
   const [selectedId, setSelectedId] = useState<number | null>(() => {
     const id = Number(new URLSearchParams(window.location.search).get("contact"));
     return id > 0 ? id : null;
@@ -147,7 +149,10 @@ export default function Conversations() {
   const [scheduling, setScheduling] = useState(false);
   const [offeringTimes, setOfferingTimes] = useState(false);
 
-  const loadList = useCallback(() => api.get<ConversationSummary[]>("/api/conversations").then(setPeople, (e) => setError(e.message)), []);
+  // One page at a time; the filter and search run on the server, so they cover everyone.
+  const list = usePaged<ConversationPage>(`/api/conversations?${new URLSearchParams({ filter, ...(search ? { q: search } : {}) })}`);
+  const { reload: loadList } = list;
+  const people = list.items;
   const loadDetail = useCallback(
     (id: number) => api.get<ConversationDetail>(`/api/conversations/${id}`).then(setDetail, (e) => setError(e.message)),
     [],
@@ -170,7 +175,6 @@ export default function Conversations() {
   // Load what's saved, then check Gmail for anything new.
   useEffect(() => {
     if (window.location.search) window.history.replaceState(null, "", window.location.pathname);
-    loadList();
     api.get<GmailStatus>("/api/gmail/status").then(
       async (g) => {
         setGmail(g);
@@ -197,13 +201,8 @@ export default function Conversations() {
     setSelectedId(id);
   };
 
-  const q = query.trim().toLowerCase();
-  const shown = (people ?? []).filter(
-    (p) =>
-      (filter === "all" || (filter === "replied" ? p.replied : !p.replied)) &&
-      (!q || [p.full_name, p.email, p.company_name].some((v) => v?.toLowerCase().includes(q))),
-  );
-  const counts = { all: people?.length ?? 0, replied: people?.filter((p) => p.replied).length ?? 0, waiting: people?.filter((p) => !p.replied).length ?? 0 };
+  const shown = people ?? [];
+  const counts = list.data?.counts ?? { all: 0, replied: 0, waiting: 0 };
   const selected = people?.find((p) => p.contact_id === selectedId) ?? detail;
   const needsPermission = gmail?.connected && (!gmail.can_read || !gmail.can_meet);
 
@@ -244,9 +243,9 @@ export default function Conversations() {
           </button>
         </div>
       )}
-      {error && <p className="text-sm text-crimson">{error}</p>}
+      {(error ?? list.error) && <p className="text-sm text-crimson">{error ?? list.error}</p>}
 
-      {people && people.length === 0 ? (
+      {list.data && counts.all === 0 ? (
         <EmptyState icon={<MessagesSquare className="size-5" />} title="No conversations yet">
           Everyone you email shows up here, with their replies.
         </EmptyState>
@@ -294,7 +293,7 @@ export default function Conversations() {
               {syncing && <p className="text-xs text-steel">Checking Gmail for replies…</p>}
             </div>
             <ul className="min-h-0 flex-1 divide-y divide-cloud overflow-y-auto">
-              {!people && <li className="p-4 text-sm text-steel">Loading…</li>}
+              {!people && !list.error && <li className="p-4 text-sm text-steel">Loading…</li>}
               {people && shown.length === 0 && <li className="p-4 text-sm text-steel">Nobody matches.</li>}
               {shown.map((p) => (
                 <li key={p.contact_id}>
@@ -324,6 +323,18 @@ export default function Conversations() {
                   </button>
                 </li>
               ))}
+              {list.data && (
+                <li>
+                  <LoadMore
+                    shown={list.data.items.length}
+                    total={list.data.total}
+                    hasMore={list.data.next_offset != null}
+                    loading={list.loadingMore}
+                    onMore={list.loadMore}
+                    className="flex-col gap-2 text-xs"
+                  />
+                </li>
+              )}
             </ul>
           </section>
 
