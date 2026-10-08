@@ -55,3 +55,31 @@ test("see a reply and set up a Google Meet", async ({ page }) => {
   expect(new Date(sent.starts_at as string).getMinutes()).toBe(30);
   expect(sent.message).toContain("{{meet_link}}");
 });
+
+test("on a phone, a long last message doesn't make the page wider than the screen", async ({ page }) => {
+  const waiting = {
+    ...douglas, contact_id: 4, email: "priya.raman@example.com", full_name: "Priya Raman", replied: false, last_from_me: true,
+    last_snippet: "Hi Priya, I came across your profile while looking into the company and was really interested in the work your team is doing on payments infrastructure",
+  };
+  await new FakeApi({
+    "GET /api/gmail/status": { connected: true, email: "me@gmail.com", credentials_file_present: true, can_read: true, can_meet: true },
+    "POST /api/conversations/sync": { threads_checked: 0, threads_downloaded: 0, new_messages: 0, synced_at: null },
+    "GET /api/conversations": [douglas, waiting],
+    "GET /api/conversations/4": {
+      ...waiting, meetings: [],
+      messages: [{ id: "m1", from_me: true, from_name: null, from_addr: "me@gmail.com", to: waiting.email,
+        subject: "Learning more about the payments infrastructure team and the work you are doing there", body: waiting.last_snippet,
+        sent_at: "2026-10-04T19:08:00Z", gmail_thread_id: "t1" }],
+    },
+  }).install(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+  const pageWidth = () => page.evaluate(() => document.documentElement.scrollWidth);
+  await page.goto("/conversations");
+  await expect(page.getByRole("button", { name: /Priya Raman/ })).toBeVisible();
+  expect(await pageWidth()).toBeLessThanOrEqual(390);
+
+  // The conversation itself fits too.
+  await page.getByRole("button", { name: /Priya Raman/ }).click();
+  await expect(page.getByRole("button", { name: "Send Meet link" })).toBeVisible();
+  expect(await pageWidth()).toBeLessThanOrEqual(390);
+});
