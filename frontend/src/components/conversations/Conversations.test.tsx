@@ -283,6 +283,40 @@ describe("Conversations: one person", () => {
     expect(await screen.findByText("Coffee chat with Douglas")).toBeInTheDocument();
   });
 
+  it("sends a booking link as a reply", async () => {
+    api("get", "/api/conversations/3", detail());
+    const sent = api("post", "/api/conversations/3/booking-link", { url: "http://x/book/abc", expires_at: "2030-12-01T00:00:00Z" }, 201);
+    const { user } = setup();
+    await user.click(await screen.findByRole("button", { name: /Douglas Quan/ }));
+    await user.click(await screen.findByRole("button", { name: "Send booking link" }));
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByText("Booking link for Douglas")).toBeInTheDocument();
+    const text = within(dialog).getByRole<HTMLTextAreaElement>("textbox", { name: /Email to/ });
+    expect(text.value).toMatch(/^Hi Douglas,\n/);
+    expect(text.value).toContain("{{booking_link}}");
+    await user.clear(text);
+    await user.type(text, "Pick a time: {{{{booking_link}}");
+    await user.click(within(dialog).getByRole("button", { name: /Send booking link/ }));
+    expect(await screen.findByText(/Booking link sent to Douglas Quan/)).toBeInTheDocument();
+    expect(sent[0].body).toEqual({ message: "Pick a time: {{booking_link}}" });
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("shows why a booking link didn't send, and closes", async () => {
+    api("get", "/api/conversations/3", detail());
+    apiError("post", "/api/conversations/3/booking-link", 409, "Turn on booking links first (Booking hours, at the top of the Inbox).");
+    const { user } = setup();
+    await user.click(await screen.findByRole("button", { name: /Douglas Quan/ }));
+    await user.click(await screen.findByRole("button", { name: "Send booking link" }));
+    const dialog = screen.getByRole("dialog");
+    await user.click(within(dialog).getByRole("button", { name: /Send booking link/ }));
+    expect(await within(dialog).findByText(/Turn on booking links first/)).toBeInTheDocument();
+    await user.clear(within(dialog).getByRole("textbox", { name: /Email to/ }));
+    expect(within(dialog).getByRole("button", { name: /Send booking link/ })).toBeDisabled();
+    await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
   it("closes the Meet dialog", async () => {
     api("get", "/api/conversations/3", detail());
     const { user } = setup();

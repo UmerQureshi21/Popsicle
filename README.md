@@ -167,6 +167,19 @@ The **Inbox** tab lists everyone you've emailed. Open someone to see the whole c
 - **Send Meet link:** pick a date, time and length (in your timezone), and edit the email if you like. `{{meet_link}}` becomes the link. Popsicle creates a Google Calendar event with a Google Meet link, then emails it as a reply in your conversation. By default they also get a Google Calendar invite; untick that to send only the email. Meetings show at the top of the conversation with the link, a copy button and a link to the calendar event.
 - **Replying in your own words:** use **Reply in Gmail** at the bottom of a conversation.
 
+### Booking links: let them pick the time
+
+Instead of choosing a time yourself, send someone a link to a page where they pick a 30-minute slot that suits them. The call is then set up exactly like **Send Meet link**.
+
+1. **Booking hours** (top right of the Inbox): tick **Take bookings**, add your name (shown on the page), and choose your days, hours, time zone, how much notice you need, and how far ahead people can book.
+2. **Send the link**, either way:
+   - **In a batch:** put `{{booking_link}}` in your email. Each person gets their own link, made when you click Send. The preview shows where it goes.
+   - **In a conversation:** click **Booking link**, edit the email if you like, and send it as a reply.
+3. **They open it:** no account or login. They see your open times in their own time zone. Anything on your Google Calendar is left out, using the calendar permission Popsicle already has.
+4. **They pick a time:** Popsicle checks it's still free, creates the Google Meet call, sends them the calendar invite, and replies in your conversation with the Meet link. The call shows in your Inbox like any other.
+
+Each link works once and expires after 60 days. Anyone opening an old or made-up link just sees "This booking link doesn't work anymore", and the page is rate-limited. Booking-link emails sent from the Inbox count toward the daily limit, like Meet emails.
+
 ### Looking up one person
 
 The **Look up** tab finds a single person's email. Either paste their **LinkedIn profile URL** on its own (Hunter works out who they are and where they work), or enter their **full name plus their company or website domain**.

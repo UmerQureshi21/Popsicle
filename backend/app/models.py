@@ -340,6 +340,44 @@ class Meeting(Base):
     created_at: Mapped[datetime] = _created_at()
 
 
+class BookingSettings(Base):
+    """One row (id=1): when people may book a call through their booking link."""
+
+    __tablename__ = "booking_settings"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    host_name: Mapped[str] = mapped_column(String(100))  # shown on the booking page
+    time_zone: Mapped[str] = mapped_column(String(64))  # IANA name; the hours below are in it
+    weekdays: Mapped[list[int]] = mapped_column(JSONB)  # 0 = Monday ... 6 = Sunday
+    day_start: Mapped[int] = mapped_column(Integer)  # minutes after midnight
+    day_end: Mapped[int] = mapped_column(Integer)
+    notice_hours: Mapped[int] = mapped_column(Integer)  # earliest bookable time is this far ahead
+    days_ahead: Mapped[int] = mapped_column(Integer)  # how far ahead the page offers times
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class BookingLink(Base):
+    """One person's link to book a call: unguessable, works once, then shows their booking."""
+
+    __tablename__ = "booking_links"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    token: Mapped[str] = mapped_column(String(64), unique=True)
+    contact_id: Mapped[int] = mapped_column(ForeignKey("contacts.id", ondelete="CASCADE"), index=True)
+    created_at: Mapped[datetime] = _created_at()
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    # Sent on its own from the Inbox (counts toward the daily limit like any email).
+    emailed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    meeting_id: Mapped[int | None] = mapped_column(ForeignKey("meetings.id", ondelete="SET NULL"))
+    booked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    contact: Mapped[Contact] = relationship()
+    meeting: Mapped[Meeting | None] = relationship()
+
+
 class SeenPerson(Base):
     """Someone Find people has shown you (by email), so "new people" can leave them out."""
 

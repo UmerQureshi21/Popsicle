@@ -12,7 +12,7 @@ from .config import settings
 from .db import engine
 from .models import Base
 from .routers import auth as auth_routes
-from .routers import campaigns, conversations, misc, people, people_search, sending_limits
+from .routers import bookings, campaigns, conversations, misc, people, people_search, sending_limits
 
 logging.basicConfig(level=logging.INFO)
 
@@ -70,6 +70,8 @@ async def same_site_only(request: Request, call_next):
 
 
 app.include_router(auth_routes.router)
+# The booking page: open to the person you emailed, without logging in (see app/bookings.py).
+app.include_router(bookings.public)
 # Everything else needs a session when AUTH_REQUIRED is on (see app/auth.py).
 protected = [Depends(require_user)]
 app.include_router(campaigns.router, dependencies=protected)
@@ -78,6 +80,7 @@ app.include_router(misc.router, dependencies=protected)
 app.include_router(people_search.router, dependencies=protected)
 app.include_router(sending_limits.router, dependencies=protected)
 app.include_router(conversations.router, dependencies=protected)
+app.include_router(bookings.router, dependencies=protected)
 
 
 @app.get("/api/health")

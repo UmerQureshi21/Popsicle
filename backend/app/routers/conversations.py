@@ -10,16 +10,18 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from .. import conversations as svc
-from .. import gmail, meetings
+from .. import bookings, gmail, meetings
 from ..db import SessionLocal, get_db
 from ..models import Contact, ConversationMessage, Email, EmailStatus, GmailAccount, Meeting
 from ..schemas import (
+    BookingLinkOut,
     ConversationDetail,
     ConversationMessageOut,
     ConversationSummary,
     ConversationSyncOut,
     MeetingIn,
     MeetingOut,
+    SendBookingLinkIn,
 )
 
 router = APIRouter(prefix="/api/conversations", tags=["conversations"])
@@ -200,3 +202,16 @@ def schedule_meeting(contact_id: int, body: MeetingIn, db: Session = Depends(get
     except meetings.MeetingError as e:
         raise HTTPException(e.status, str(e)) from e
     return MeetingOut.model_validate(meeting)
+
+
+@router.post("/{contact_id}/booking-link", response_model=BookingLinkOut, status_code=201)
+def send_booking_link(contact_id: int, body: SendBookingLinkIn, db: Session = Depends(get_db)):
+    """Email them their own link to book a call, as a reply in your conversation."""
+    contact = db.get(Contact, contact_id)
+    if contact is None:
+        raise HTTPException(404, "Contact not found")
+    try:
+        link = bookings.send_link(db, contact, body.message)
+    except bookings.BookingError as e:
+        raise HTTPException(e.status, str(e)) from e
+    return BookingLinkOut(url=bookings.url(link.token), expires_at=link.expires_at)

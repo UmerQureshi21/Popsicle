@@ -23,7 +23,7 @@ import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 from sqlalchemy import create_engine, make_url, text  # noqa: E402
 
-from app import auth, campaigns, gmail  # noqa: E402
+from app import auth, bookings, campaigns, gmail  # noqa: E402
 from app.db import SessionLocal, engine  # noqa: E402
 from app.main import app  # noqa: E402
 from app.models import Base  # noqa: E402
@@ -52,6 +52,7 @@ def _clean_state():
     with engine.begin() as conn:
         conn.execute(text(f"TRUNCATE {tables} RESTART IDENTITY CASCADE"))
     auth._failures.clear()
+    bookings._hits.clear()
     campaigns._running.clear()
     campaigns._cancel_requested.clear()
     campaigns._wake_requested.clear()

@@ -222,7 +222,11 @@ class TestDelete:
         assert client.delete("/api/campaigns/999").status_code == 404
 
 
-def test_startup_marks_unfinished_campaigns_interrupted(db, started):
+def test_startup_marks_unfinished_campaigns_interrupted(db, started, monkeypatch):
+    import app.main as main
+
+    # Not the real sweeper: it would outlive the test and wake after the test database is gone.
+    monkeypatch.setattr(main, "start_sweeper", lambda: None)
     c = f.campaign(db, status=CampaignStatus.SENDING)
     with TestClient(app) as client:
         assert client.get(f"/api/campaigns/{c.id}").json()["status"] == "interrupted"

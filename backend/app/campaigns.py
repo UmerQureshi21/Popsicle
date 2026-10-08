@@ -12,11 +12,11 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import func, or_, select, update
 from sqlalchemy.orm import Session
 
-from . import gmail, sending, verification
+from . import bookings, gmail, sending, verification
 from .db import SessionLocal
 from .models import Attachment, Campaign, CampaignStatus, Company, CompanyStatus, Contact, Email, EmailStatus
 from . import safety
-from .rendering import enrich, render
+from .rendering import enrich, placeholders, render
 from .schemas import CampaignDraft, PreviewItem, PreviewOut, SendingQuota, Verification
 
 log = logging.getLogger(__name__)
@@ -40,8 +40,16 @@ def last_sent_by_address(db: Session, addresses: list[str]) -> dict[str, datetim
     return dict(rows.all())
 
 
+def uses_booking_link(draft: CampaignDraft) -> bool:
+    return bookings.VARIABLE in placeholders(draft.subject, draft.body)
+
+
 def prepare(db: Session, draft: CampaignDraft) -> PreviewOut:
     rows = [enrich(r, draft.company) for r in draft.rows]
+    if uses_booking_link(draft):
+        # Each person's own link is made when the batch is created; the preview shows where it goes.
+        for r in rows:
+            r[bookings.VARIABLE] = bookings.preview_url()
     sent = last_sent_by_address(db, [r.get("email", "") for r in rows])
     verdicts = verification.fresh(db, [r.get("email", "") for r in rows])
     seen: set[str] = set()
@@ -144,6 +152,9 @@ def create_campaign(db: Session, draft: CampaignDraft) -> Campaign:
             raise ValueError("Pick a time in the future.")
         if draft.scheduled_for > now() + MAX_SCHEDULE_AHEAD:
             raise ValueError("Schedules can be at most 60 days ahead.")
+    with_booking = uses_booking_link(draft)
+    if with_booking and not bookings.get_settings(db).enabled:
+        raise ValueError("Turn on booking links first (Booking hours, at the top of the Inbox), or remove {{booking_link}}.")
     preview = prepare(db, draft)
     if preview.invalid:
         bad = [f"row {it.index + 1}: {'; '.join(it.issues)}" for it in preview.items if it.status == "invalid"]
@@ -172,6 +183,10 @@ def create_campaign(db: Session, draft: CampaignDraft) -> Campaign:
     for it in preview.items:
         contact = upsert_contact(db, it.values, company)
         skipped = it.status in ("already_sent", "undeliverable")
+        subject, body = it.subject, it.body
+        if with_booking and not skipped:
+            values = {**it.values, bookings.VARIABLE: bookings.url(bookings.link_for(db, contact).token)}
+            subject, body = render(draft.subject, values)[0], render(draft.body, values)[0]
         if it.status == "undeliverable":
             why = f"Hunter says this address doesn't exist (checked {it.verification.checked_at:%b %d, %Y})"
         elif it.last_sent_at:
@@ -182,8 +197,8 @@ def create_campaign(db: Session, draft: CampaignDraft) -> Campaign:
             Email(
                 contact=contact,
                 to_email=it.to_email,
-                subject=it.subject,
-                body=it.body,
+                subject=subject,
+                body=body,
                 variables={k: it.values[k] for k in draft.variables if k in it.values},
                 status=EmailStatus.SKIPPED if skipped else EmailStatus.PENDING,
                 error=why if skipped else None,

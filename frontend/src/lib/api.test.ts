@@ -47,8 +47,10 @@ describe("api", () => {
   });
 
   it("turns validation error lists into text", async () => {
-    fake("post", "/api/x", { detail: [{ msg: "bad" }] }, 422);
-    await expect(api.post("/api/x")).rejects.toThrow('[{"msg":"bad"}]');
+    fake("post", "/api/x", { detail: [{ msg: "Value error, Add your name." }, { msg: "Too long." }] }, 422);
+    await expect(api.post("/api/x")).rejects.toThrow("Add your name. Too long.");
+    fake("post", "/api/y", { detail: [{ loc: ["body"] }] }, 422);
+    await expect(api.post("/api/y")).rejects.toThrow('[{"loc":["body"]}]');
   });
 
   it("falls back to the status text when the error body isn't JSON", async () => {

@@ -9,6 +9,12 @@ export class ApiError extends Error {
   }
 }
 
+/** FastAPI's validation errors are a list of {msg}; show their sentences, not the JSON. */
+function validationMessage(detail: unknown): string | null {
+  if (!Array.isArray(detail) || !detail.every((d) => typeof d?.msg === "string")) return null;
+  return detail.map((d) => d.msg.replace(/^Value error, /, "")).join(" ");
+}
+
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   const isForm = body instanceof FormData;
   const res = await fetch(API_URL + path, {
@@ -25,7 +31,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
     let msg = res.statusText;
     try {
       const data = await res.json();
-      msg = typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail);
+      msg = typeof data.detail === "string" ? data.detail : validationMessage(data.detail) ?? JSON.stringify(data.detail);
     } catch {}
     throw new ApiError(res.status, msg);
   }
@@ -236,6 +242,31 @@ export type Meeting = {
 };
 
 export type ConversationDetail = ConversationSummary & { messages: ConversationMessage[]; meetings: Meeting[] };
+
+/** When people may book a call through their booking link. Times are minutes after midnight. */
+export type BookingSettings = {
+  enabled: boolean;
+  host_name: string;
+  time_zone: string;
+  weekdays: number[]; // 0 = Monday ... 6 = Sunday
+  day_start: number;
+  day_end: number;
+  notice_hours: number;
+  days_ahead: number;
+  can_check_calendar?: boolean; // Popsicle may read your calendar to see when you're busy
+};
+
+export type Booked = { starts_at: string | null; ends_at: string | null };
+
+/** What the public booking page shows. */
+export type BookingPage = {
+  host_name: string;
+  first_name: string;
+  minutes: number;
+  time_zone: string;
+  slots: string[];
+  booked: Booked | null;
+};
 
 export type ConversationSync = {
   running?: boolean; // the check runs in the background; poll until false

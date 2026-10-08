@@ -127,6 +127,8 @@ export function derivedVariables(variables: string[], hasCompany: boolean): stri
     if (!variables.includes("last_name")) out.push("last_name");
   }
   if (hasCompany && !variables.includes("company")) out.push("company");
+  // Each person's own booking link, made when the batch is created (see Booking hours in the Inbox).
+  if (!variables.includes("booking_link")) out.push("booking_link");
   return out;
 }
 
