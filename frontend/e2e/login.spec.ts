@@ -48,6 +48,7 @@ test("sign-ups are closed: the Sign up tab can't send anything", async ({ page }
   await page.getByRole("tab", { name: "Sign up" }).click();
   await expect(page.getByRole("heading", { name: "Sign-ups are closed" })).toBeVisible();
   await expect(page.getByText("Popsicle is invite-only.")).toBeVisible();
+  await expect(page.getByRole("link", { name: "get it on GitHub" })).toHaveAttribute("href", "https://github.com/UmerQureshi21/Popsicle");
   await expect(page.getByPlaceholder("you@example.com")).toBeDisabled();
   await expect(page.getByRole("button", { name: "Create account" })).toBeDisabled();
   await page.keyboard.press("Enter");

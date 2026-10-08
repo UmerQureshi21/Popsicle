@@ -247,6 +247,8 @@ describe("Login page", () => {
     await user.click(await screen.findByRole("tab", { name: "Sign up" }));
     expect(screen.getByRole("heading", { name: "Sign-ups are closed" })).toBeInTheDocument();
     expect(screen.getByText(/Popsicle is invite-only/)).toBeInTheDocument();
+    expect(screen.getByText(/Popsicle is open source, so feel free to run it on your own machine/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "get it on GitHub" })).toHaveAttribute("href", "https://github.com/UmerQureshi21/Popsicle");
     expect(screen.getByPlaceholderText("you@example.com")).toBeDisabled();
     expect(screen.getByLabelText("Password")).toBeDisabled();
     expect(screen.queryByLabelText("Confirm password")).not.toBeInTheDocument();
@@ -264,6 +266,7 @@ describe("Login page", () => {
     await user.click(screen.getByRole("tab", { name: "Log in" }));
     expect(screen.getByRole("heading", { name: "Welcome back" })).toBeInTheDocument();
     expect(screen.getByLabelText("Password")).toBeEnabled();
+    expect(screen.queryByRole("link", { name: "get it on GitHub" })).not.toBeInTheDocument();
   });
 
   it("skips the page when already logged in", async () => {
