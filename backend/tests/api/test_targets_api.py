@@ -38,7 +38,7 @@ class TestStatus:
         c = f.company(db)
         r = client.patch(f"/api/companies/{c.id}", json={"status": "replied"})
         assert r.json()["status"] == "replied"
-        assert client.get("/api/companies").json()[0]["status"] == "replied"
+        assert client.get("/api/companies").json()["items"][0]["status"] == "replied"
 
     def test_unknown_status_is_rejected(self, client, db):
         c = f.company(db)
@@ -89,7 +89,7 @@ class TestFillDomains:
         f.company(db, name="Harvey")
         f.company(db, name="Stripe", domain="stripe.com")
         assert client.post("/api/companies/fill-domains").json() == {"filled": 1, "missing": 1, "next_after": None}
-        assert {c["name"]: c["domain"] for c in client.get("/api/companies").json()} == {
+        assert {c["name"]: c["domain"] for c in client.get("/api/companies").json()["items"]} == {
             "Meta": "meta.com", "Harvey": None, "Stripe": "stripe.com",
         }
         assert suggestions == ["Meta", "Harvey"]

@@ -148,13 +148,13 @@ class TestListAndGet:
         old.created_at = datetime(2020, 1, 1, tzinfo=timezone.utc)
         db.commit()
 
-        listed = client.get("/api/campaigns").json()
+        listed = client.get("/api/campaigns").json()["items"]
         assert [c["name"] for c in listed] == ["New", "Old"]
         assert listed[1]["counts"] == {"total": 2, "pending": 0, "sent": 1, "failed": 1, "skipped": 0, "cancelled": 0}
         assert listed[1]["company_name"] == "Stripe"
         assert listed[0]["counts"]["total"] == 0
 
-        assert [c["id"] for c in client.get(f"/api/campaigns?company_id={stripe.id}").json()] == [old.id]
+        assert [c["id"] for c in client.get(f"/api/campaigns?company_id={stripe.id}").json()["items"]] == [old.id]
         assert new.id
 
     def test_get_one(self, client, db):

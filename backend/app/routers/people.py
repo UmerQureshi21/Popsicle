@@ -7,14 +7,18 @@ from sqlalchemy.orm import Session
 
 from .. import hunter, targets
 from ..db import get_db
-from ..models import Company, Contact, Email, EmailStatus
+from ..models import Company, CompanyStatus, Contact, Email, EmailStatus
+from ..paging import PageParams, next_offset
 from ..schemas import (
     CompaniesBulkIn,
     CompaniesBulkOut,
     CompanyIn,
+    CompanyName,
     CompanyOut,
+    CompanyPage,
     CompanyPatch,
     ContactOut,
+    ContactPage,
     ContactPatch,
     FillDomainsOut,
 )
@@ -25,7 +29,7 @@ router = APIRouter(prefix="/api", tags=["people"])
 # ---- Companies ----------------------------------------------------------
 
 
-def _company_rows(db: Session, company_id: int | None = None) -> list[CompanyOut]:
+def _company_rows(db: Session, *filters, limit: int | None = None, offset: int = 0) -> list[CompanyOut]:
     sent = Email.status == EmailStatus.SENT
     q = (
         select(
@@ -36,11 +40,12 @@ def _company_rows(db: Session, company_id: int | None = None) -> list[CompanyOut
         )
         .outerjoin(Contact, Contact.company_id == Company.id)
         .outerjoin(Email, Email.contact_id == Contact.id)
+        .where(*filters)
         .group_by(Company.id)
-        .order_by(func.max(Email.sent_at).filter(sent).desc().nulls_last(), Company.name)
+        .order_by(func.max(Email.sent_at).filter(sent).desc().nulls_last(), Company.name, Company.id)
+        .offset(offset)
+        .limit(limit)
     )
-    if company_id is not None:
-        q = q.where(Company.id == company_id)
     return [
         CompanyOut.model_validate(c).model_copy(
             update=dict(contact_count=n_contacts, emailed_count=n_emailed, last_sent_at=last)
@@ -49,9 +54,35 @@ def _company_rows(db: Session, company_id: int | None = None) -> list[CompanyOut
     ]
 
 
-@router.get("/companies", response_model=list[CompanyOut])
-def list_companies(db: Session = Depends(get_db)):
-    return _company_rows(db)
+def _company_filters(q: str | None) -> list:
+    if not q or not q.strip():
+        return []
+    like = f"%{q.strip()}%"
+    return [or_(Company.name.ilike(like), Company.domain.ilike(like))]
+
+
+@router.get("/companies", response_model=CompanyPage)
+def list_companies(
+    status: CompanyStatus | None = None, q: str | None = None, page: PageParams = Depends(), db: Session = Depends(get_db)
+):
+    """One page of companies, most recently emailed first. The status counts (for the filter
+    tabs) and the number missing a domain cover every company matching the search."""
+    filters = _company_filters(q)
+    by_status = dict(db.execute(select(Company.status, func.count()).where(*filters).group_by(Company.status)).all())
+    shown = [*filters, Company.status == status] if status else filters
+    total = by_status.get(status, 0) if status else sum(by_status.values())
+    items = _company_rows(db, *shown, limit=page.limit, offset=page.offset)
+    return CompanyPage(
+        items=items, total=total, next_offset=next_offset(page, len(items), total),
+        counts={s.value: by_status.get(s, 0) for s in CompanyStatus}, all=sum(by_status.values()),
+        missing_domains=db.scalar(select(func.count()).select_from(Company).where(*filters, Company.domain.is_(None))),
+    )
+
+
+@router.get("/companies/names", response_model=list[CompanyName])
+def company_names(db: Session = Depends(get_db)):
+    """Just the names, for suggestions and filters: small even with many companies."""
+    return [CompanyName(id=i, name=n) for i, n in db.execute(select(Company.id, Company.name).order_by(Company.name))]
 
 
 @router.post("/companies", response_model=CompanyOut, status_code=201)
@@ -62,14 +93,14 @@ def create_company(body: CompanyIn, db: Session = Depends(get_db)):
         db.commit()
     except IntegrityError as e:
         raise HTTPException(409, f'A company named "{body.name}" already exists.') from e
-    return _company_rows(db, c.id)[0]
+    return _company_rows(db, Company.id == c.id)[0]
 
 
 @router.post("/companies/bulk", response_model=CompaniesBulkOut, status_code=201)
 def add_companies(body: CompaniesBulkIn, db: Session = Depends(get_db)):
     """Add a pasted list of company names or domains to the target list."""
     added, skipped = targets.add_many(db, body.lines)
-    rows = {r.id: r for r in _company_rows(db)}
+    rows = {r.id: r for r in _company_rows(db, Company.id.in_([c.id for c in added]))}
     return CompaniesBulkOut(added=[rows[c.id] for c in added], skipped=skipped)
 
 
@@ -95,7 +126,7 @@ def update_company(company_id: int, body: CompanyPatch, db: Session = Depends(ge
         db.commit()
     except IntegrityError as e:
         raise HTTPException(409, "Another company already has that name.") from e
-    return _company_rows(db, c.id)[0]
+    return _company_rows(db, Company.id == c.id)[0]
 
 
 @router.delete("/companies/{company_id}", status_code=204)
@@ -111,7 +142,7 @@ def delete_company(company_id: int, db: Session = Depends(get_db)):
 # ---- Contacts -----------------------------------------------------------
 
 
-def _contact_rows(db: Session, *filters) -> list[ContactOut]:
+def _contact_rows(db: Session, *filters, limit: int | None = None, offset: int = 0) -> list[ContactOut]:
     sent = Email.status == EmailStatus.SENT
     latest = (
         select(Email.contact_id, Email.status, func.row_number().over(
@@ -126,7 +157,9 @@ def _contact_rows(db: Session, *filters) -> list[ContactOut]:
         .outerjoin(latest, (latest.c.contact_id == Contact.id) & (latest.c.rn == 1))
         .where(*filters)
         .group_by(Contact.id, Company.name, latest.c.status)
-        .order_by(func.max(Email.sent_at).desc().nulls_last(), Contact.created_at.desc())
+        .order_by(func.max(Email.sent_at).desc().nulls_last(), Contact.created_at.desc(), Contact.id.desc())
+        .offset(offset)
+        .limit(limit)
     )
     return [
         ContactOut.model_validate(c).model_copy(
@@ -136,15 +169,20 @@ def _contact_rows(db: Session, *filters) -> list[ContactOut]:
     ]
 
 
-@router.get("/contacts", response_model=list[ContactOut])
-def list_contacts(q: str | None = None, company_id: int | None = None, db: Session = Depends(get_db)):
+@router.get("/contacts", response_model=ContactPage)
+def list_contacts(
+    q: str | None = None, company_id: int | None = None, page: PageParams = Depends(), db: Session = Depends(get_db)
+):
+    """One page of contacts, most recently emailed first."""
     filters = []
     if company_id is not None:
         filters.append(Contact.company_id == company_id)
-    if q:
+    if q and q.strip():
         like = f"%{q.strip()}%"
         filters.append(or_(Contact.email.ilike(like), Contact.full_name.ilike(like), Contact.title.ilike(like)))
-    return _contact_rows(db, *filters)
+    total = db.scalar(select(func.count()).select_from(Contact).where(*filters))
+    items = _contact_rows(db, *filters, limit=page.limit, offset=page.offset)
+    return ContactPage(items=items, total=total, next_offset=next_offset(page, len(items), total))
 
 
 @router.patch("/contacts/{contact_id}", response_model=ContactOut)

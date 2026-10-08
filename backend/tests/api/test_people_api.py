@@ -16,7 +16,7 @@ class TestCompanies:
         f.sent_email(db, "jane@stripe.com", datetime(2026, 2, 1, 12, tzinfo=timezone.utc), contact=jane)
         f.sent_email(db, "ann@acme.com", datetime(2026, 3, 1, 12, tzinfo=timezone.utc), contact=ann)
 
-        rows = client.get("/api/companies").json()
+        rows = client.get("/api/companies").json()["items"]
         assert [(r["name"], r["contact_count"], r["emailed_count"]) for r in rows] == [
             ("Acme", 1, 1),
             ("Stripe", 2, 1),
@@ -68,7 +68,7 @@ class TestContacts:
         db.add(Email(campaign=failed, contact=jane, to_email="jane@stripe.com", subject="s", body="b", status=EmailStatus.FAILED))
         db.commit()
 
-        rows = client.get("/api/contacts").json()
+        rows = client.get("/api/contacts").json()["items"]
         assert [(r["email"], r["company_name"], r["sent_count"], r["last_status"]) for r in rows] == [
             ("jane@stripe.com", "Stripe", 1, "failed"),
             ("sam@acme.com", None, 0, None),
@@ -80,7 +80,7 @@ class TestContacts:
         f.contact(db, email="sam@acme.com", full_name="Sam Lee", title="Engineer")
 
         def emails(query):
-            return [r["email"] for r in client.get(f"/api/contacts?{query}").json()]
+            return [r["email"] for r in client.get(f"/api/contacts?{query}").json()["items"]]
 
         assert emails("q=JANE") == ["jane@stripe.com"]
         assert emails("q=engin") == ["sam@acme.com"]
@@ -98,5 +98,5 @@ class TestContacts:
     def test_delete(self, client, db):
         c = f.contact(db)
         assert client.delete(f"/api/contacts/{c.id}").status_code == 204
-        assert client.get("/api/contacts").json() == []
+        assert client.get("/api/contacts").json()["items"] == []
         assert client.delete(f"/api/contacts/{c.id}").status_code == 404
