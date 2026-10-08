@@ -90,7 +90,7 @@ test("on a phone the cards stack plainly, without trails", async ({ browser }) =
   await context.close();
 });
 
-test("the hero shows the pitch and the four example cards, at every screen size", async ({ browser }) => {
+test("the hero shows the pitch and the three example cards, at every screen size", async ({ browser }) => {
   for (const width of [390, 768, 1024, 1280, 1772]) {
     const context = await browser.newContext({ viewport: { width, height: 900 } });
     const page = await context.newPage();
@@ -101,10 +101,10 @@ test("the hero shows the pitch and the four example cards, at every screen size"
     await expect(page.getByText(/Powered by/)).toHaveCount(0);
     await expect(page.getByRole("link", { name: /Get started/ }).first()).toBeVisible();
     await expect(page.getByText("From cold email to")).toHaveCount(0);
-    // Found (Hunter), sent (Gmail), times offered (Calendar), booked (Meet): the logo says where, so no status icons.
+    // Found (Hunter), sent (Gmail), times and Meet link (Calendar): the logo says where, so no status icons.
     const cards = page.locator("[data-hero-card]");
-    await expect(cards).toHaveCount(4);
-    await expect(cards.locator("[data-title]")).toHaveText(["Email found", "10 emails sent", "Available times sent", "Meet link sent"]);
+    await expect(cards).toHaveCount(3);
+    await expect(cards.locator("[data-title]")).toHaveText(["Email found", "10 emails sent", "Times & Meet link sent"]);
     await expect(cards.locator("svg")).toHaveCount(0);
     // Each title fits inside its card.
     const overflow = await cards.evaluateAll((els) =>
