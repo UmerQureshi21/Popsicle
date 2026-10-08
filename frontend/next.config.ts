@@ -11,6 +11,12 @@ export function apiRewrites(backendOrigin: string | undefined) {
   return [{ source: "/api/:path*", destination: `${backendOrigin.replace(/\/$/, "")}/api/:path*` }];
 }
 
+/** Deployed (BACKEND_ORIGIN set), the browser calls this site's own /api, so NEXT_PUBLIC_API_URL
+ * doesn't need to be set to an empty value by hand. An explicit value still wins. */
+export function apiEnv(backendOrigin: string | undefined, apiUrl: string | undefined): Record<string, string> {
+  return backendOrigin && apiUrl === undefined ? { NEXT_PUBLIC_API_URL: "" } : {};
+}
+
 export const SECURITY_HEADERS = [
   // No other site can show Popsicle inside a frame (to trick you into clicking things).
   { key: "X-Frame-Options", value: "DENY" },
@@ -26,6 +32,7 @@ const nextConfig: NextConfig = {
   // The end-to-end tests build into their own folder so they don't disturb a running `next dev`.
   distDir: process.env.NEXT_DIST_DIR || ".next",
   poweredByHeader: false,
+  env: apiEnv(process.env.BACKEND_ORIGIN, process.env.NEXT_PUBLIC_API_URL),
   images: {
     // Company logos shown in Find people come from Hunter.
     remotePatterns: [new URL("https://logos.hunter.io/**")],

@@ -88,7 +88,8 @@ def is_network_error(e: Exception) -> bool:
 
 
 def credentials_file_present() -> bool:
-    return settings.google_client_secrets.is_file()
+    """The Google OAuth client is set up: GOOGLE_CLIENT_SECRETS_JSON (deployed) or the file."""
+    return bool(settings.google_client_secrets_json) or settings.google_client_secrets.is_file()
 
 
 def safe_return_path(path: str | None) -> str:
@@ -97,9 +98,10 @@ def safe_return_path(path: str | None) -> str:
 
 
 def _flow(**kwargs) -> Flow:
-    return Flow.from_client_secrets_file(
-        str(settings.google_client_secrets), scopes=SCOPES, redirect_uri=settings.backend_url + REDIRECT_PATH, **kwargs
-    )
+    kwargs.update(scopes=SCOPES, redirect_uri=settings.backend_url + REDIRECT_PATH)
+    if settings.google_client_secrets_json:
+        return Flow.from_client_config(json.loads(settings.google_client_secrets_json), **kwargs)
+    return Flow.from_client_secrets_file(str(settings.google_client_secrets), **kwargs)
 
 
 def _live_state(db: Session, state: str) -> OAuthState | None:

@@ -81,6 +81,11 @@ def test_credentials_file_present(settings, tmp_path):
     assert gmail.credentials_file_present()
 
 
+def test_client_json_setting_counts_as_set_up(settings, tmp_path):
+    settings(google_client_secrets=tmp_path / "missing.json", google_client_secrets_json='{"web": {}}')
+    assert gmail.credentials_file_present()
+
+
 class FakeGoogleFlow:
     """Stands in for google_auth_oauthlib's Flow: records how it was made and what it did."""
 
@@ -116,7 +121,12 @@ def google_flow(monkeypatch):
         factory.made.append(dict(path=path, scopes=scopes, redirect_uri=redirect_uri, **kw))
         return factory.next
 
+    def from_client_config(config, scopes, redirect_uri, **kw):
+        factory.made.append(dict(config=config, scopes=scopes, redirect_uri=redirect_uri, **kw))
+        return factory.next
+
     monkeypatch.setattr(gmail.Flow, "from_client_secrets_file", staticmethod(from_client_secrets_file))
+    monkeypatch.setattr(gmail.Flow, "from_client_config", staticmethod(from_client_config))
     return factory
 
 
@@ -132,6 +142,13 @@ class TestStartAuth:
         saved = db.get(OAuthState, "state-1")
         assert (saved.code_verifier, saved.return_to) == ("verifier-123", "/compose")
         assert gmail.return_path(db, "state-1") == "/compose"
+
+    def test_uses_the_client_json_setting_when_deployed(self, db, google_flow, settings):
+        settings(google_client_secrets_json='{"web": {"client_id": "id"}}')
+        gmail.start_auth(db)
+        (made,) = google_flow.made
+        assert made["config"] == {"web": {"client_id": "id"}}
+        assert "path" not in made
 
     def test_remembers_where_to_return_but_only_inside_the_app(self, db, google_flow):
         gmail.start_auth(db, "/conversations")
