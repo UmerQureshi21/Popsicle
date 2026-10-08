@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import nextConfig, { SECURITY_HEADERS, apiRewrites } from "../../next.config";
+import nextConfig, { SECURITY_HEADERS, apiEnv, apiRewrites } from "../../next.config";
 
 describe("next.config", () => {
   it("forwards /api to the backend only when one is set", () => {
@@ -15,8 +15,18 @@ describe("next.config", () => {
     try {
       expect(await nextConfig.rewrites!()).toEqual(apiRewrites("https://api.example"));
     } finally {
-      process.env.BACKEND_ORIGIN = before;
+      // Assigning undefined would store the string "undefined".
+      if (before === undefined) delete process.env.BACKEND_ORIGIN;
+      else process.env.BACKEND_ORIGIN = before;
     }
+  });
+
+  it("calls the site's own /api when deployed, unless told otherwise", () => {
+    expect(apiEnv(undefined, undefined)).toEqual({});
+    expect(apiEnv("https://popsicle.up.railway.app", undefined)).toEqual({ NEXT_PUBLIC_API_URL: "" });
+    expect(apiEnv("https://popsicle.up.railway.app", "")).toEqual({});
+    expect(apiEnv("https://popsicle.up.railway.app", "https://elsewhere.example")).toEqual({});
+    expect(nextConfig.env).toEqual({}); // the tests run without BACKEND_ORIGIN
   });
 
   it("sends security headers on every page", async () => {
