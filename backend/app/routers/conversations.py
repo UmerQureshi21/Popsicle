@@ -92,14 +92,13 @@ def _summary(c: Contact, msgs: list[ConversationMessageOut], next_meeting: datet
     )
 
 
-def _people(db: Session, contact_id: int | None = None) -> list[Contact]:
+def _emailed(db: Session, contact_id: int) -> list[Contact]:
+    """The person, if you've emailed them (else nobody)."""
     q = (
         select(Contact)
-        .where(Contact.id.in_(select(Email.contact_id).where(Email.status == EmailStatus.SENT)))
+        .where(Contact.id == contact_id, Contact.id.in_(select(Email.contact_id).where(Email.status == EmailStatus.SENT)))
         .options(selectinload(Contact.company))
     )
-    if contact_id is not None:
-        q = q.where(Contact.id == contact_id)
     return list(db.scalars(q))
 
 
@@ -231,7 +230,7 @@ def sync_status(db: Session = Depends(get_db)):
 
 @router.get("/{contact_id}", response_model=ConversationDetail)
 def get_conversation(contact_id: int, db: Session = Depends(get_db)):
-    people = _people(db, contact_id)
+    people = _emailed(db, contact_id)
     if not people:
         raise HTTPException(404, "You haven't emailed this person yet.")
     msgs = _messages(db, [contact_id], _me(db))[contact_id]
