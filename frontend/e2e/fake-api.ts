@@ -15,6 +15,11 @@ export type Call = { method: string; path: string; body: unknown; url: URL };
  * function of the request body). Every request is recorded in `calls`; an unexpected one fails
  * with a 599 so a missing route is obvious.
  */
+export const BOOKING_OFF = {
+  enabled: false, host_name: "", time_zone: "America/Toronto", weekdays: [0, 1, 2, 3, 4],
+  day_start: 540, day_end: 1020, notice_hours: 24, days_ahead: 14, can_check_calendar: true,
+};
+
 export class FakeApi {
   calls: Call[] = [];
   private routes = new Map<string, Handler>();
@@ -26,6 +31,7 @@ export class FakeApi {
       "GET /api/companies": [],
       "GET /api/templates": [],
       "GET /api/gmail/status": { connected: true, email: "me@gmail.com", credentials_file_present: true },
+      "GET /api/booking/settings": BOOKING_OFF,
       ...routes,
     });
   }
