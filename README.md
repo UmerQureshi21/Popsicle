@@ -77,19 +77,23 @@ Your remaining credits show in the top nav and update after every search.
 
 ### Accounts and login
 
-Popsicle is invite-only. Accounts are created from the terminal, never from the website. From the `backend/` folder:
+Popsicle is invite-only: only the emails in `ALLOWED_EMAILS` can ever get in (for now, just yours). Accounts are created from the terminal, never from the website. From the `backend/` folder:
 
 ```sh
 .venv/bin/python -m app.manage create-user you@example.com   # asks for a password (typed twice, not shown)
-.venv/bin/python -m app.manage list-users
+.venv/bin/python -m app.manage list-users                    # also flags accounts not in ALLOWED_EMAILS
 .venv/bin/python -m app.manage set-password you@example.com
 .venv/bin/python -m app.manage delete-user someone@example.com
-.venv/bin/python -m app.manage invite friend@example.com     # optional: they choose their own password via Sign up
 ```
 
+- **`ALLOWED_EMAILS`** (comma-separated, e.g. `ALLOWED_EMAILS=you@gmail.com`) is the last word, checked on the server:
+  - Logging in with any other email fails exactly like a wrong password, even if that account exists in the database with the right password.
+  - Taking an email off the list logs it out everywhere on its next request.
+  - `create-user` refuses an email that isn't on the list.
+  - Required when deployed (the backend won't start without it). Locally it's optional; unset, any account in the database can log in.
+- **Sign up is closed.** The Sign up tab says so, and its form is disabled and never contacts the server. Underneath, the server's sign-up only accepts an email that is both on `ALLOWED_EMAILS` and invited from the terminal without a password yet; everyone else is told Popsicle is invite-only.
 - **Locally**, anyone can use the app without logging in (`AUTH_REQUIRED=false`, the default). The login page still works if you want to try it.
-- **When deployed**, set `AUTH_REQUIRED=true` in `backend/.env`. Every page and API call then requires logging in, so only accounts you've created can get in. Serve the site over https and also set `COOKIE_SECURE=true`.
-- **Sign up** never creates an account. It only lets an *invited* email choose a password; anyone else is told Popsicle is invite-only.
+- **When deployed**, login is always required and the session cookie is https-only; neither can be turned off.
 - **Security:** passwords are stored hashed (scrypt). Sessions last 30 days in a cookie that JavaScript can't read. Five wrong passwords lock that email out for 15 minutes.
 
 ## Using it
@@ -181,7 +185,7 @@ Colours are defined once in `frontend/src/app/globals.css`, each with one job (`
 
 Popsicle is built to run as one site: the frontend (Vercel) forwards `/api/*` to the backend (Railway), so the browser only ever talks to the frontend's address and login cookies work in every browser.
 
-Popsicle counts as local only when its addresses and its database are all on your machine; anything else gets the deployed rules: login always on, the session cookie https-only, the API docs hidden. The backend refuses to start if `AUTH_REQUIRED=false`, if `TOKEN_ENCRYPTION_KEY` or `PROXY_SECRET` is missing, or if `BACKEND_URL` or `FRONTEND_URL` is still a localhost address.
+Popsicle counts as local only when its addresses and its database are all on your machine; anything else gets the deployed rules: login always on, the session cookie https-only, the API docs hidden. The backend refuses to start if `AUTH_REQUIRED=false`, if `ALLOWED_EMAILS`, `TOKEN_ENCRYPTION_KEY` or `PROXY_SECRET` is missing, or if `BACKEND_URL` or `FRONTEND_URL` is still a localhost address.
 
 ### 1. Make two secrets
 
@@ -205,6 +209,7 @@ Keep both somewhere safe. Losing `TOKEN_ENCRYPTION_KEY` means reconnecting Gmail
 |---|---|
 | `DATABASE_URL` | `${{Postgres.DATABASE_URL}}` (Railway's `postgresql://` address works as-is) |
 | `FRONTEND_URL`, `BACKEND_URL` | **Both** the Vercel address, e.g. `https://popsicle.vercel.app`. Google returns to `BACKEND_URL/api/gmail/callback`, which the frontend forwards to the backend |
+| `ALLOWED_EMAILS` | Your email: the only one that can log in (comma-separate more later) |
 | `TOKEN_ENCRYPTION_KEY`, `PROXY_SECRET` | From step 1 |
 | `HUNTER_API_KEY` | Your Hunter key |
 | `GOOGLE_CLIENT_SECRETS_JSON` | The whole contents of `backend/credentials.json` (Railway has no secret files). Locally the file is used instead |
