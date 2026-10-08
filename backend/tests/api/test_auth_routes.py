@@ -137,6 +137,49 @@ class TestSignup:
         assert self.signup(client).status_code == 429
 
 
+class TestAllowedEmails:
+    """ALLOWED_EMAILS is the last word: nobody else gets in, even with an account and a password."""
+
+    def test_an_allowed_email_logs_in(self, client, db, settings):
+        settings(allowed_emails=" ME@example.com ,other@x.com")
+        f.user(db)
+        assert login(client).status_code == 200
+
+    def test_an_account_not_on_the_list_is_refused_like_a_wrong_password(self, client, db, settings):
+        settings(allowed_emails="owner@example.com")
+        f.user(db)
+        refused = login(client)
+        assert refused.status_code == 401
+        assert refused.json() == login(client, password="nope").json()
+        assert not client.cookies.get(auth.COOKIE_NAME)
+        assert len(auth._failures["email:me@example.com"]) == 2
+
+    def test_an_invited_email_not_on_the_list_cannot_sign_up(self, client, db, settings):
+        settings(allowed_emails="owner@example.com")
+        f.user(db, email="friend@example.com", password=None)
+        r = client.post("/api/auth/signup", json={"email": "friend@example.com", "password": "long enough"})
+        assert r.status_code == 403
+        assert "invite-only" in r.json()["detail"]
+        db.expire_all()
+        assert db.scalars(select(User)).one().password_hash is None
+        assert not client.cookies.get(auth.COOKIE_NAME)
+
+    def test_an_invited_email_on_the_list_can_sign_up(self, client, db, settings):
+        settings(allowed_emails="friend@example.com")
+        f.user(db, email="friend@example.com", password=None)
+        r = client.post("/api/auth/signup", json={"email": "friend@example.com", "password": "long enough"})
+        assert r.status_code == 200
+
+    def test_taking_someone_off_the_list_ends_their_sessions(self, client, db, settings):
+        settings(auth_required=True, allowed_emails="me@example.com")
+        f.user(db)
+        login(client)
+        assert client.get("/api/stats").status_code == 200
+        settings(allowed_emails="owner@example.com")
+        assert client.get("/api/stats").status_code == 401
+        assert client.get("/api/auth/me").json()["user"] is None
+
+
 def test_logout_ends_the_session(client, db, settings):
     settings(auth_required=True)
     f.user(db)

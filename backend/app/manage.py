@@ -15,7 +15,7 @@ import sys
 
 from sqlalchemy import select
 
-from .auth import hash_password
+from .auth import hash_password, is_allowed
 from .db import SessionLocal, engine
 from .models import Base, User
 from .routers.auth import MIN_PASSWORD_LENGTH
@@ -57,6 +57,8 @@ def main() -> None:
                 print("No accounts yet. Add one with: python -m app.manage create-user you@example.com")
             for u in users:
                 status = "active" if u.password_hash else "invited (no password yet)"
+                if not is_allowed(u.email):
+                    status = "blocked: not in ALLOWED_EMAILS"
                 last = f", last login {u.last_login_at:%Y-%m-%d}" if u.last_login_at else ""
                 print(f"{u.email}  [{status}{last}]")
             return
@@ -69,6 +71,8 @@ def main() -> None:
         if args.cmd in ("create-user", "invite"):
             if user:
                 sys.exit(f"{email} already has an account. Use set-password to change its password.")
+            if not is_allowed(email):
+                sys.exit(f"{email} isn't in ALLOWED_EMAILS, so it couldn't log in. Add it there first.")
             pw_hash = hash_password(ask_password()) if args.cmd == "create-user" else None
             db.add(User(email=email, name=args.name, password_hash=pw_hash))
             db.commit()

@@ -30,6 +30,10 @@ class Settings(BaseSettings):
     # Accounts are invite-only (created with `python -m app.manage`). Unset, login is off on
     # localhost and on everywhere else; it can't be turned off anywhere but localhost.
     auth_required: bool | None = None
+    # The only emails that can log in or sign up, comma-separated (e.g. you@gmail.com). Checked on
+    # every request, so an account that isn't listed is locked out even with a password or an old
+    # session. Required when deployed; unset locally, any account in the database can log in.
+    allowed_emails: str | None = None
     # Session cookie only over https. Unset: off on localhost (plain http), on everywhere else.
     cookie_secure: bool | None = None
     # "none" would let other websites use your session, so it isn't allowed. Keep the frontend
@@ -51,6 +55,10 @@ class Settings(BaseSettings):
             and _is_local_url(self.frontend_url)
             and _database_is_local(self.database_url)
         )
+
+    @property
+    def allowed_email_set(self) -> frozenset[str]:
+        return frozenset(e.strip().lower() for e in (self.allowed_emails or "").split(",") if e.strip())
 
     @field_validator("database_url")
     @classmethod
@@ -89,6 +97,8 @@ class Settings(BaseSettings):
                     raise ValueError(f"Set {name.upper()} to the app's public address when deployed.")
             if not self.auth_required:
                 raise ValueError("AUTH_REQUIRED can only be false on localhost.")
+            if not self.allowed_email_set:
+                raise ValueError("Set ALLOWED_EMAILS (the emails allowed to log in, comma-separated) when deployed.")
             if not self.token_encryption_key:
                 raise ValueError("Set TOKEN_ENCRYPTION_KEY when deployed (see app/config.py for how to make one).")
             if not self.proxy_secret or len(self.proxy_secret) < 32:

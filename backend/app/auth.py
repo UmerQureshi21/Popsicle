@@ -177,6 +177,12 @@ def end_session(db: Session, request: Request, response: Response) -> None:
     response.delete_cookie(COOKIE_NAME, path="/")
 
 
+def is_allowed(email: str) -> bool:
+    """On the ALLOWED_EMAILS list. With no list (only possible locally), any account is."""
+    allowed = settings.allowed_email_set
+    return not allowed or email.strip().lower() in allowed
+
+
 def current_user(request: Request, db: Session = Depends(get_db)) -> User | None:
     token = request.cookies.get(COOKIE_NAME)
     if not token:
@@ -184,7 +190,9 @@ def current_user(request: Request, db: Session = Depends(get_db)) -> User | None
     s = db.scalars(select(AuthSession).where(AuthSession.token_hash == _token_hash(token))).first()
     if s is None or s.expires_at <= datetime.now(timezone.utc):
         return None
-    return db.get(User, s.user_id)
+    user = db.get(User, s.user_id)
+    # Taken off ALLOWED_EMAILS: their sessions stop working at once.
+    return user if user and is_allowed(user.email) else None
 
 
 def require_user(request: Request, user: User | None = Depends(current_user)) -> User | None:
