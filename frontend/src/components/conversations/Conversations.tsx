@@ -251,9 +251,11 @@ export default function Conversations() {
           Everyone you email shows up here, with their replies.
         </EmptyState>
       ) : (
-        <div className="grid gap-4 md:h-[calc(100vh-15rem)] md:min-h-[32rem] md:grid-cols-[320px_1fr]">
+        <div className="grid grid-cols-1 gap-4 md:h-[calc(100vh-15rem)] md:min-h-[32rem] md:grid-cols-[320px_minmax(0,1fr)]">
+          {/* grid-cols-1 caps the phone column at the screen's width; without it the column grows to fit the
+              longest last message before truncating it, and the whole page zooms out. */}
           {/* People */}
-          <section className={`flex min-h-0 flex-col rounded-3xl border border-cloud bg-paper shadow-sm ${selectedId != null ? "hidden md:flex" : ""}`}>
+          <section className={`flex min-h-0 min-w-0 flex-col rounded-3xl border border-cloud bg-paper shadow-sm ${selectedId != null ? "hidden md:flex" : ""}`}>
             <div className="space-y-3 border-b border-cloud p-3">
               <div className="flex items-center gap-2">
                 <label className="flex flex-1 items-center gap-2 rounded-xl bg-cloud/60 px-3 py-2">
@@ -326,7 +328,7 @@ export default function Conversations() {
           </section>
 
           {/* One conversation */}
-          <section className={`flex min-h-0 flex-col rounded-3xl border border-cloud bg-paper shadow-sm ${selectedId == null ? "hidden md:flex" : ""}`}>
+          <section className={`flex min-h-0 min-w-0 flex-col rounded-3xl border border-cloud bg-paper shadow-sm ${selectedId == null ? "hidden md:flex" : ""}`}>
             {selectedId == null || !selected ? (
               <div className="grid flex-1 place-items-center p-10 text-center text-sm text-steel">
                 {selectedId == null ? "Pick someone to see your conversation." : "Loading…"}
