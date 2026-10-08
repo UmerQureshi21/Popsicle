@@ -46,7 +46,7 @@ These come straight from the owner. Breaking them has caused real problems befor
 | Frontend | Next.js 16 (App Router), React 19, Tailwind CSS v4, lucide-react, TypeScript |
 | Tests | pytest + pytest-cov; Vitest + Testing Library + MSW; Playwright (Chromium) |
 | CI | `.github/workflows/test.yml`: backend pytest, frontend lint, `npm run typecheck`, Vitest with coverage, Playwright |
-| External | Gmail API, Google Calendar API (Meet), Hunter.io API |
+| External | Gmail API, Google Calendar API (Meet, busy times for booking links), Hunter.io API |
 
 ```
 backend/app/
@@ -280,6 +280,15 @@ cd frontend && npm run lint && npm run typecheck && npx vitest run --coverage &&
 - **Record and limit**: the meeting is recorded in `meetings` and counts toward the daily limit.
 - **Setup**: needs the **Google Calendar API enabled** in his Cloud project; otherwise there's a clear error with a link.
 
+### 7.5b Booking links (`bookings.py`, `routers/bookings.py`, `app/book/[token]`, `BookingHours.tsx`, `SendBookingLink.tsx`)
+- **Tables**: `booking_settings` (one row: enabled, host name, IANA time zone, weekdays 0=Mon, day start/end in minutes, notice hours, days ahead) and `booking_links` (token, contact, expires_at 60 days, emailed_at, meeting_id, booked_at).
+- **Open times**: 30-minute slots inside the hours, after the notice, minus busy time. Busy = `events.list` on the primary calendar (uses the existing `calendar.events` scope, so no reconnect), skipping cancelled, transparent and declined events; all-day events block the whole day; plus `meetings` rows. Times that don't exist when clocks jump forward are skipped. `tzdata` is pinned so `zoneinfo` works on slim images.
+- **Public API**: `GET/POST /api/book/{token}`, registered **without** `require_user` (it still goes through the proxy-secret gate). Rate-limited per visitor IP (`_hits`, cleared in conftest). Unknown and expired links give the same 404. Google or Gmail problems show visitors a generic 503 and are only logged.
+- **Booking**: under a process lock plus `SELECT … FOR UPDATE` on the settings and link rows, it re-checks the time is still open, then calls `meetings.schedule` (invite + threaded reply with the Meet link) and marks the link used. `meetings.schedule` commits midway, so two server processes overlapping during a redeploy could in theory race; acceptable for one user.
+- **`{{booking_link}}` in batches**: `prepare` fills a preview URL (`/book/…`). `create_campaign` refuses if bookings are off, and re-renders subject and body for each non-skipped person with `link_for(contact)`, which reuses an unused link with 14+ days left.
+- **Inbox**: `POST /api/conversations/{id}/booking-link` emails the link as a reply. `booking_links.emailed_at` counts toward the daily limit in `sending._send_times`.
+- **Frontend**: `/book/` routes are public in `AuthProvider` and hide the Nav. The page reads its token from the address bar after mount, the same as the Inbox reads `?contact=`. `derivedVariables` always offers `booking_link`.
+
 ### 7.6 Companies (`targets.py`, `app/companies/page.tsx`)
 - **Statuses**: `not_started`, `emailed`, `replied`, `not_interested`. A company moves to emailed on its first send and to replied on a reply, unless set by hand.
 - **Paste a list**: sent in pieces of 25. A domain gets Hunter's name for it; a name gets a domain only on an exact match (no guessing).
@@ -340,6 +349,7 @@ Keep that pattern for anything new that might take long.
   - Throttling: 5 wrong passwords per visitor per 15 minutes, and 20 per account, except from a **trusted device** (`popsicle_device` cookie, table `trusted_devices`).
 - **Other**:
   - State-changing requests whose `Origin` isn't the frontend get a 403.
+  - Without a session, only these work: `/api/auth/*`, `/api/health`, the Gmail callback, and the booking page's `/api/book/{token}` (see 7.5b). Anything new that must be public goes on its own router, never on a protected one.
   - `SameSite` is `lax` or `strict` only.
   - Security headers come from `next.config.ts`: no framing, nosniff, `strict-origin-when-cross-origin`, and a CSP with `frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'`.
 - **Injection**:
@@ -393,7 +403,7 @@ Keep that pattern for anything new that might take long.
    - **Railway:** `backend/railway.json` (start command, health check, one replica, no sleeping) and `backend/.python-version`. Set the service's config file path to `/backend/railway.json`. README → Deploying has the click-by-click steps.
    - **Also:** add the Vercel callback URL to the Google OAuth client, copy his local data across, and create his account with `manage.py`.
    - **Before deploying, check** whether Vercel's forwarding caps request bodies, which matters for attachments up to 20 MB.
-2. **Scheduling links** (after deploy): a per-person tokenized booking page where the recipient picks a time from his free slots (Google Calendar free/busy, likely one more scope), with no login. On booking, create the Meet via the existing `meetings.schedule`.
+2. ~~Scheduling links~~: done as booking links (see 7.5b).
 3. **Multi-user** (only if others get accounts): scope all data and the Gmail connection per user; add invite tokens to sign-up.
 4. **Small follow-ups he was offered but hasn't asked for yet**:
    - The role presets in Compose's quick Find people modal.
