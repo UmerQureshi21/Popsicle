@@ -27,7 +27,7 @@ def make(**values) -> Settings:
 
 @pytest.fixture(autouse=True)
 def clean_env(monkeypatch):
-    for name in ("AUTH_REQUIRED", "COOKIE_SECURE", "BACKEND_URL", "FRONTEND_URL", "DATABASE_URL", "TOKEN_ENCRYPTION_KEY", "COOKIE_SAMESITE", "PROXY_SECRET"):
+    for name in ("AUTH_REQUIRED", "COOKIE_SECURE", "BACKEND_URL", "FRONTEND_URL", "DATABASE_URL", "TOKEN_ENCRYPTION_KEY", "COOKIE_SAMESITE", "PROXY_SECRET", "GOOGLE_CLIENT_SECRETS_JSON"):
         monkeypatch.delenv(name, raising=False)
 
 
@@ -84,6 +84,35 @@ class TestDeployed:
         with pytest.raises(ValidationError):
             make(backend_url="http://localhost:8000", cookie_samesite="none")
         assert make(backend_url="http://localhost:8000", cookie_samesite="strict").cookie_samesite == "strict"
+
+
+class TestHostedDatabaseAddress:
+    @pytest.mark.parametrize("prefix", ["postgres://", "postgresql://", "postgresql+psycopg://"])
+    def test_railway_style_addresses_use_psycopg(self, prefix):
+        s = make(**{**DEPLOYED, "database_url": prefix + "u:pw@db.railway.internal:5432/railway"}, token_encryption_key=KEY)
+        assert s.database_url == "postgresql+psycopg://u:pw@db.railway.internal:5432/railway"
+
+    def test_other_drivers_are_left_alone(self):
+        assert make(database_url="sqlite:///x.db").database_url == "sqlite:///x.db"
+
+
+class TestGoogleClientJson:
+    WEB = '{"web": {"client_id": "id", "client_secret": "s"}}'
+
+    def test_unset_by_default(self):
+        assert make().google_client_secrets_json is None
+        assert make(google_client_secrets_json="").google_client_secrets_json is None
+
+    def test_accepts_a_web_client(self):
+        assert make(google_client_secrets_json=self.WEB).google_client_secrets_json == self.WEB
+
+    @pytest.mark.parametrize(
+        "value, message",
+        [("{not json", "isn't valid JSON"), ('{"installed": {}}', "Web application"), ("[1]", "Web application")],
+    )
+    def test_refuses_anything_else(self, value, message):
+        with pytest.raises(ValidationError, match=message):
+            make(google_client_secrets_json=value)
 
 
 def test_api_docs_only_locally():

@@ -111,7 +111,7 @@ def gmail_status(db: Session = Depends(get_db)):
 def gmail_connect(next: str = "/compose", db: Session = Depends(get_db)):
     """Browser navigates here; we bounce it to Google's consent screen, then back to `next`."""
     if not gmail.credentials_file_present():
-        raise HTTPException(400, "backend/credentials.json is missing. See README for Gmail setup.")
+        raise HTTPException(400, "backend/credentials.json is missing (or GOOGLE_CLIENT_SECRETS_JSON when deployed). See README for Gmail setup.")
     return RedirectResponse(gmail.start_auth(db, next))
 
 

@@ -1,8 +1,9 @@
+import json
 from pathlib import Path
 from typing import Literal
 from urllib.parse import urlparse
 
-from pydantic import model_validator
+from pydantic import field_validator, model_validator
 from sqlalchemy import make_url
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -21,6 +22,8 @@ class Settings(BaseSettings):
     backend_url: str = "http://localhost:8000"
     # OAuth client downloaded from Google Cloud Console ("Web application" type).
     google_client_secrets: Path = BACKEND_DIR / "credentials.json"
+    # The same JSON pasted in as a setting, for hosts without secret files (Railway). Wins over the file.
+    google_client_secrets_json: str | None = None
     # https://hunter.io/api-keys, used to find people and emails at a company.
     hunter_api_key: str | None = None
 
@@ -48,6 +51,29 @@ class Settings(BaseSettings):
             and _is_local_url(self.frontend_url)
             and _database_is_local(self.database_url)
         )
+
+    @field_validator("database_url")
+    @classmethod
+    def _psycopg_driver(cls, url: str) -> str:
+        """Hosts (Railway, Heroku) hand out postgres:// or postgresql:// addresses, which would
+        make SQLAlchemy look for psycopg2. Popsicle uses psycopg 3."""
+        for prefix in ("postgres://", "postgresql://"):
+            if url.startswith(prefix):
+                return "postgresql+psycopg://" + url.removeprefix(prefix)
+        return url
+
+    @field_validator("google_client_secrets_json")
+    @classmethod
+    def _client_config(cls, value: str | None) -> str | None:
+        if not value:
+            return None
+        try:
+            config = json.loads(value)
+        except json.JSONDecodeError as e:
+            raise ValueError("GOOGLE_CLIENT_SECRETS_JSON isn't valid JSON: paste the whole credentials.json.") from e
+        if not isinstance(config, dict) or "web" not in config:
+            raise ValueError('GOOGLE_CLIENT_SECRETS_JSON must be a "Web application" OAuth client (its JSON starts with "web").')
+        return value
 
     @model_validator(mode="after")
     def _safe_defaults(self) -> "Settings":
