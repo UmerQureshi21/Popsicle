@@ -9,7 +9,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import select, union_all
 from sqlalchemy.orm import Session
 
-from .models import Email, EmailStatus, Meeting, SendingSettings
+from .models import BookingLink, Email, EmailStatus, Meeting, SendingSettings
 
 WINDOW = timedelta(hours=24)
 DEFAULT_DAILY_LIMIT = 40
@@ -51,14 +51,15 @@ class Quota:
 
 def _send_times(at: datetime):
     """Every email that counts toward the limit: sent ones, ones being handed to Gmail right
-    now (not confirmed yet), and Google Meet link emails."""
+    now (not confirmed yet), Google Meet link emails, and booking links sent from the Inbox."""
     since = at - WINDOW
     sent = select(Email.sent_at.label("t")).where(Email.status == EmailStatus.SENT, Email.sent_at > since)
     in_flight = select(Email.attempted_at.label("t")).where(
         Email.status == EmailStatus.PENDING, Email.attempted_at.is_not(None), Email.attempted_at > since
     )
     meet = select(Meeting.created_at.label("t")).where(Meeting.created_at > since)
-    both = union_all(sent, in_flight, meet).subquery()
+    booking = select(BookingLink.emailed_at.label("t")).where(BookingLink.emailed_at > since)
+    both = union_all(sent, in_flight, meet, booking).subquery()
     return select(both.c.t).order_by(both.c.t)
 
 

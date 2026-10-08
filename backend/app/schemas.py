@@ -1,8 +1,9 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from .bookings import MINUTES, valid_time_zone
 from .safety import has_line_break, link_field
 
 
@@ -480,3 +481,81 @@ class ConversationSyncOut(BaseModel):
     new_messages: int = 0
     synced_at: datetime | None = None
     error: str | None = None  # why the last check failed
+
+
+# ---- Booking links -------------------------------------------------------------
+
+
+class BookingSettingsIn(BaseModel):
+    enabled: bool
+    host_name: str = Field(max_length=100)
+    time_zone: str = Field(max_length=64)
+    weekdays: list[int] = Field(max_length=7)
+    day_start: int = Field(ge=0, le=24 * 60)  # minutes after midnight
+    day_end: int = Field(ge=0, le=24 * 60)
+    notice_hours: int = Field(ge=0, le=14 * 24)
+    days_ahead: int = Field(ge=1, le=60)
+
+    @field_validator("host_name")
+    @classmethod
+    def one_line_name(cls, v: str) -> str:
+        if has_line_break(v):
+            raise ValueError("Your name can't contain a line break.")
+        return v.strip()
+
+    @field_validator("weekdays")
+    @classmethod
+    def real_days(cls, v: list[int]) -> list[int]:
+        if any(d < 0 or d > 6 for d in v):
+            raise ValueError("Days are 0 (Monday) to 6 (Sunday).")
+        return sorted(set(v))
+
+    @field_validator("day_start", "day_end")
+    @classmethod
+    def on_the_half_hour(cls, v: int) -> int:
+        if v % 30:
+            raise ValueError("Times must be on the hour or half hour.")
+        return v
+
+    @model_validator(mode="after")
+    def makes_sense(self) -> "BookingSettingsIn":
+        if not valid_time_zone(self.time_zone):
+            raise ValueError(f"Unknown time zone: {self.time_zone}")
+        if self.day_end - self.day_start < MINUTES:
+            raise ValueError(f"The day has to end at least {MINUTES} minutes after it starts.")
+        if self.enabled and not self.host_name:
+            raise ValueError("Add your name: it's shown on the booking page.")
+        if self.enabled and not self.weekdays:
+            raise ValueError("Pick at least one day.")
+        return self
+
+
+class BookingSettingsOut(BookingSettingsIn):
+    can_check_calendar: bool  # the Google permission that lets Popsicle see when you're busy
+
+
+class BookedOut(BaseModel):
+    starts_at: datetime | None
+    ends_at: datetime | None
+
+
+class BookingPageOut(BaseModel):
+    host_name: str
+    first_name: str
+    minutes: int
+    time_zone: str  # yours; the page shows times in the visitor's own
+    slots: list[datetime]
+    booked: BookedOut | None
+
+
+class BookIn(BaseModel):
+    starts_at: datetime
+
+
+class SendBookingLinkIn(BaseModel):
+    message: str = Field(min_length=1, max_length=20_000)  # {{booking_link}} is replaced with their link
+
+
+class BookingLinkOut(BaseModel):
+    url: str
+    expires_at: datetime
