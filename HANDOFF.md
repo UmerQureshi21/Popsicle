@@ -304,6 +304,12 @@ Every request must finish quickly, because it goes through Vercel's proxy (§9).
 Keep that pattern for anything new that might take long.
 
 ### 7.8 Frontend conventions
+- **Long lists are paged**:
+  - `GET /api/companies`, `/api/contacts`, `/api/conversations` and `/api/campaigns` return `{items, total, next_offset}` (`?limit=` default 30, max 100; `?offset=`), via `app/paging.py`.
+  - Search, filters and tab counts are computed in SQL over every row. The Inbox ranks people by latest activity (sent emails and synced messages) in SQL, then builds summaries only for the page.
+  - Need every company's name? Use `GET /api/companies/names`, never the paged list.
+  - On the frontend, `usePaged` (`src/lib/paged.ts`) loads pages; `reload` refetches exactly what's loaded; `edit` changes loaded items before a reload confirms. `<LoadMore>` loads more when it scrolls into view (IntersectionObserver), with a button fallback. Search boxes use `useDebounced`.
+  - Tests: `src/test/pages.ts` (`companiesApi`, `contactsApi`, `conversationsApi`, `campaignsApi`) and `companiesPage`/`conversationsPage` in `e2e/fake-api.ts` answer like the backend, including filters, search and counts.
 - **Palette**: tokens in `src/app/globals.css`, each with one job:
 
   | Token | Job |

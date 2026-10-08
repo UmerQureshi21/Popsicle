@@ -156,6 +156,7 @@ The **Companies** tab is your list of companies to reach, with each one's logo (
 - **Status:** each company is **Not started**, **Emailed**, **Replied** or **Not a fit**. It moves to Emailed by itself when the first email to it is sent; change it from the card any time. The filters at the top show how many are in each.
 - **Find people at several companies:** tick companies (e.g. under **Not started**) and click **Find people at N companies**. Find people opens with them filled in, keeping your job title and location.
 - **Contacts:** click a company's name to see everyone you have there.
+- **Search:** the search box finds companies by name or domain.
 
 ### Inbox: replies and Google Meet
 
@@ -196,6 +197,10 @@ Recent lookups stay on the page so you can come back to them.
 The sun/moon button at the top right of the app switches between the light and dark palettes. Your choice is remembered in this browser and applied before the page is drawn, so there's no flash. The landing page is always dark: its light trails read best on a dark background. To change that, edit `FIXED_THEME` in `frontend/src/lib/themeScript.ts`.
 
 Colours are defined once in `frontend/src/app/globals.css`, each with one job (`paper` for surfaces, `cloud` for the background, `ink` for text, `steel` for secondary text, `night` for dark accents, plus the brand reds); the dark palette swaps their values.
+
+### Long lists
+
+**Companies**, **Contacts**, the **Inbox** and **Sent** load 30 at a time. The next 30 load by themselves as you scroll to the end of a list, or with **Load more**. Searches, filters and the counts on each tab cover everything, not only what's loaded.
 
 ## Deploying
 
