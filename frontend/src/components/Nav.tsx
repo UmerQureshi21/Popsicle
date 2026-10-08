@@ -84,8 +84,8 @@ export default function Nav() {
   const pathname = usePathname();
   const onCompose = pathname === "/compose";
 
-  // The landing and login pages have their own layout.
-  if (pathname === "/" || pathname === "/login") return null;
+  // The landing, login and booking pages have their own layout.
+  if (pathname === "/" || pathname === "/login" || pathname.startsWith("/book/")) return null;
 
   return (
     <>

@@ -87,16 +87,22 @@ describe("validateRows", () => {
 });
 
 describe("derivedVariables", () => {
+  const B = "booking_link";
+
   it("adds first and last name when there's a full name", () => {
-    expect(derivedVariables(["full_name", "email"], false)).toEqual(["first_name", "last_name"]);
-    expect(derivedVariables(["name", "first_name"], false)).toEqual(["last_name"]);
-    expect(derivedVariables(["name", "first_name", "last_name"], false)).toEqual([]);
+    expect(derivedVariables(["full_name", "email"], false)).toEqual(["first_name", "last_name", B]);
+    expect(derivedVariables(["name", "first_name"], false)).toEqual(["last_name", B]);
+    expect(derivedVariables(["name", "first_name", "last_name"], false)).toEqual([B]);
   });
 
   it("adds company when one is set and isn't already a variable", () => {
-    expect(derivedVariables(["email"], true)).toEqual(["company"]);
-    expect(derivedVariables(["email", "company"], true)).toEqual([]);
-    expect(derivedVariables(["email"], false)).toEqual([]);
+    expect(derivedVariables(["email"], true)).toEqual(["company", B]);
+    expect(derivedVariables(["email", "company"], true)).toEqual([B]);
+    expect(derivedVariables(["email"], false)).toEqual([B]);
+  });
+
+  it("always offers each person's booking link, unless it's a column already", () => {
+    expect(derivedVariables(["email", B], false)).toEqual([]);
   });
 });
 

@@ -15,8 +15,9 @@ const AuthContext = createContext<AuthState>({ me: null, setUser: () => {}, logo
 
 export const useAuth = () => useContext(AuthContext);
 
-/** Pages anyone can see without logging in. */
+/** Pages anyone can see without logging in: the landing page, login, and booking links. */
 const PUBLIC_ROUTES = ["/", "/login"];
+export const isPublicRoute = (pathname: string) => PUBLIC_ROUTES.includes(pathname) || pathname.startsWith("/book/");
 
 /**
  * Knows who's logged in, and sends visitors to /login when the backend requires it
@@ -35,7 +36,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener(UNAUTHORIZED_EVENT, onUnauthorized);
   }, []);
 
-  const isPublic = PUBLIC_ROUTES.includes(pathname);
+  const isPublic = isPublicRoute(pathname);
   const blocked = !!me && me.auth_required && !me.user && !isPublic;
 
   useEffect(() => {

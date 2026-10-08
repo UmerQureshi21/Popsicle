@@ -2,7 +2,7 @@
 
 import { safeHref } from "@/lib/safeUrl";
 import { useCallback, useEffect, useState } from "react";
-import { CalendarDays, Check, ChevronLeft, Copy, ExternalLink, Link2, MessagesSquare, RefreshCw, Search, Video, X } from "lucide-react";
+import { CalendarCheck, CalendarDays, Check, ChevronLeft, Copy, ExternalLink, Link2, MessagesSquare, RefreshCw, Search, Video, X } from "lucide-react";
 import {
   API_URL,
   api,
@@ -18,6 +18,7 @@ import { formatDateTime, timeAgo } from "@/lib/format";
 import { Avatar, Button, EmptyState } from "@/components/ui";
 import { CompanyLogo } from "@/components/CompanyAutocomplete";
 import MeetScheduler from "./MeetScheduler";
+import SendBookingLink from "./SendBookingLink";
 
 type Filter = "all" | "replied" | "waiting";
 const FILTERS: { value: Filter; label: string }[] = [
@@ -144,6 +145,7 @@ export default function Conversations() {
   const [notice, setNotice] = useState<string | null>(() => readGmailNotice());
   const [error, setError] = useState<string | null>(null);
   const [scheduling, setScheduling] = useState(false);
+  const [offeringTimes, setOfferingTimes] = useState(false);
 
   const loadList = useCallback(() => api.get<ConversationSummary[]>("/api/conversations").then(setPeople, (e) => setError(e.message)), []);
   const loadDetail = useCallback(
@@ -355,6 +357,9 @@ export default function Conversations() {
                       {selected.email}
                     </p>
                   </div>
+                  <Button onClick={() => setOfferingTimes(true)} disabled={!detail} aria-label="Send booking link" className="shrink-0">
+                    <CalendarCheck className="size-4" /> <span className="hidden sm:inline">Booking link</span>
+                  </Button>
                   <Button variant="primary" onClick={() => setScheduling(true)} disabled={!detail} aria-label="Send Meet link" className="shrink-0">
                     <Video className="size-4" /> <span className="hidden sm:inline">Send Meet link</span>
                     <span className="sm:hidden">Meet</span>
@@ -397,6 +402,18 @@ export default function Conversations() {
         </div>
       )}
 
+      {offeringTimes && selected && (
+        <SendBookingLink
+          person={selected}
+          onClose={() => setOfferingTimes(false)}
+          onSent={() => {
+            setOfferingTimes(false);
+            setNotice(`Booking link sent to ${nameOf(selected)}. Their call shows up here once they pick a time.`);
+            loadDetail(selected.contact_id);
+            loadList();
+          }}
+        />
+      )}
       {scheduling && selected && (
         <MeetScheduler
           person={selected}

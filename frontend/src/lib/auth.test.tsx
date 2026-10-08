@@ -48,6 +48,14 @@ describe("AuthProvider", () => {
     await waitFor(() => expect(navigation.router.replace).not.toHaveBeenCalled());
   });
 
+  it("booking links work without logging in", async () => {
+    navigation.pathname = "/book/k3J9abc";
+    api("get", "/api/auth/me", { user: null, auth_required: true });
+    renderApp();
+    expect(screen.getByText("user: none")).toBeInTheDocument();
+    await waitFor(() => expect(navigation.router.replace).not.toHaveBeenCalled());
+  });
+
   it("shows the logged-in user", async () => {
     api("get", "/api/auth/me", { user: { email: "me@x.com", name: "Me" }, auth_required: true });
     renderApp();

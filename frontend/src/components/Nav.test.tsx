@@ -17,7 +17,7 @@ function renderNav(user: { email: string; name: string | null } | null = null) {
 }
 
 describe("Nav", () => {
-  it.each(["/", "/login"])("is hidden on %s", (path) => {
+  it.each(["/", "/login", "/book/k3J9abc"])("is hidden on %s", (path) => {
     navigation.pathname = path;
     api("get", "/api/people-search/status", hunterStatus());
     const { container } = renderNav();
