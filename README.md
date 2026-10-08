@@ -80,12 +80,15 @@ Your remaining credits show in the top nav and update after every search.
 Popsicle is invite-only: only the emails in `ALLOWED_EMAILS` can ever get in (for now, just yours). Accounts are created from the terminal, never from the website. From the `backend/` folder:
 
 ```sh
-.venv/bin/python -m app.manage create-user you@example.com   # asks for a password (typed twice, not shown)
+.venv/bin/python -m app.manage new-password                  # a 64-character random password, saved to backend/.owner-password
+.venv/bin/python -m app.manage create-user you@example.com --password-file .owner-password
+.venv/bin/python -m app.manage create-user you@example.com   # or type a password yourself (twice, not shown)
 .venv/bin/python -m app.manage list-users                    # also flags accounts not in ALLOWED_EMAILS
-.venv/bin/python -m app.manage set-password you@example.com
+.venv/bin/python -m app.manage set-password you@example.com [--password-file .owner-password]
 .venv/bin/python -m app.manage delete-user someone@example.com
 ```
 
+- **Your password:** `new-password` makes a long random one and saves it to `backend/.owner-password`. Git ignores that file, only your user can read it, and it's never printed or overwritten, so the password lives only on your machine (put a copy in your password manager too). Only its scrypt hash is stored in the database. Knowing your email isn't enough: logging in needs this password, and Sign up can't set a new one for an account that already has one.
 - **`ALLOWED_EMAILS`** (comma-separated, e.g. `ALLOWED_EMAILS=you@gmail.com`) is the last word, checked on the server:
   - Logging in with any other email fails exactly like a wrong password, even if that account exists in the database with the right password.
   - Taking an email off the list logs it out everywhere on its next request.
@@ -232,7 +235,7 @@ In the Google Cloud OAuth client, add `https://<your-vercel-address>/api/gmail/c
    pg_restore --no-owner --no-acl -d "<Railway Postgres public URL>" popsicle.dump
    ```
    Afterwards, cancel any batches still scheduled in your *local* database, or `./dev.sh` would send them too.
-2. Create your account from the backend service's shell on Railway (`railway ssh`): `python -m app.manage create-user you@example.com`.
+2. Create your account. On your machine, make the password once with `python -m app.manage new-password` (in `backend/`) and copy it with `pbcopy < .owner-password`. Then in the backend service's shell on Railway (`railway ssh`), run `python -m app.manage create-user you@example.com` and paste it at both (hidden) prompts.
 3. Open the Vercel address, log in and click **Connect Gmail** (the local connection doesn't carry over: it's encrypted with a different key).
 
 ### 6. Check it
