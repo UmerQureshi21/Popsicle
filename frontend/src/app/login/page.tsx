@@ -9,6 +9,7 @@ import { api, type AuthUser } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 
 const subscribe = () => () => {};
+const REPO_URL = "https://github.com/UmerQureshi21/Popsicle";
 
 /** Where to go after logging in: ?next=/find, but only paths inside this app. */
 function nextPath(): string {
@@ -120,6 +121,20 @@ function LoginCard() {
               ? "Popsicle is invite-only. New accounts can't be created here; if you have one, log in."
               : "Log in to write and send your emails."}
           </p>
+          {closed && (
+            <p className="mt-3 text-sm text-steel">
+              Popsicle is open source, so feel free to run it on your own machine:{" "}
+              <a
+                href={REPO_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-medium text-ink underline underline-offset-2 hover:text-crimson"
+              >
+                get it on GitHub
+              </a>
+              .
+            </p>
+          )}
 
           <form
             className="mt-6 space-y-4"

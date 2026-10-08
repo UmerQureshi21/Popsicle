@@ -108,3 +108,43 @@ class TestAllowedEmails:
         f.user(db, email="me@example.com")
         settings(allowed_emails="owner@example.com")
         assert run("list-users").splitlines() == ["me@example.com  [blocked: not in ALLOWED_EMAILS]"]
+
+
+class TestOwnerPassword:
+    """A long random password kept in a git-ignored file that only you can read."""
+
+    def test_new_password_is_long_random_private_and_never_printed(self, run, tmp_path, monkeypatch):
+        path = tmp_path / ".owner-password"
+        monkeypatch.setattr(manage, "PASSWORD_FILE", path)
+        out = run("new-password")
+        pw = path.read_text().strip()
+        assert len(pw) == 64
+        assert pw not in out
+        assert path.stat().st_mode & 0o777 == 0o600
+        with pytest.raises(SystemExit, match="already exists"):
+            run("new-password")
+        assert path.read_text().strip() == pw  # never replaced
+
+    def test_create_user_and_set_password_from_the_file(self, run, db, tmp_path):
+        path = tmp_path / ".owner-password"
+        path.write_text("a" * 64 + "\n")
+        run("create-user", "me@example.com", "--password-file", str(path))
+        assert verify_password("a" * 64, users(db)["me@example.com"].password_hash)
+        path.write_text("b" * 64)
+        run("set-password", "me@example.com", "--password-file", str(path))
+        assert verify_password("b" * 64, users(db)["me@example.com"].password_hash)
+
+    def test_a_missing_or_short_file_is_refused(self, run, db, tmp_path):
+        with pytest.raises(SystemExit, match="Couldn't read"):
+            run("create-user", "me@example.com", "--password-file", str(tmp_path / "nope"))
+        short = tmp_path / "short"
+        short.write_text("abc")
+        with pytest.raises(SystemExit, match="shorter than 8"):
+            run("create-user", "me@example.com", "--password-file", str(short))
+        assert users(db) == {}
+
+    def test_the_file_is_git_ignored(self):
+        from app.config import BACKEND_DIR
+
+        assert manage.PASSWORD_FILE == BACKEND_DIR / ".owner-password"
+        assert ".owner-password" in (BACKEND_DIR.parent / ".gitignore").read_text().splitlines()

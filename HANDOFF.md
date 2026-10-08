@@ -67,7 +67,7 @@ backend/app/
   meetings.py        Calendar event + Meet link + threaded reply
   safety.py          strict email regex, safe_url, line-break checks
   auth.py            passwords, sessions, throttling, trusted devices, proxy secret
-  manage.py          CLI: create-user / invite / set-password / list-users / delete-user
+  manage.py          CLI: new-password / create-user / invite / set-password / list-users / delete-user
   routers/           auth, campaigns, conversations, misc (templates, attachments, gmail, stats),
                      people (companies, contacts), people_search (Hunter), sending_limits
 backend/tests/       conftest.py, factories.py, fake_gmail.py, api/, unit/
@@ -334,7 +334,8 @@ Keep that pattern for anything new that might take long.
   - `src/proxy.ts` adds `x-popsicle-proxy: PROXY_SECRET` and the visitor's IP. When deployed, the backend rejects anything without the secret (403 "Use Popsicle through its website"), except `/api/health`.
   - The client IP is believed only from that header.
 - **Logins**:
-  - Accounts are created with `python -m app.manage create-user <email>`. The website's Sign up tab is closed (disabled form, no request).
+  - Accounts are created with `python -m app.manage create-user <email>`. The website's Sign up tab is closed (disabled form, no request) and points to the GitHub repo for running your own copy.
+  - Umer's password is a 64-character random one from `manage.py new-password`, kept in git-ignored `backend/.owner-password` (mode 600). Never read, print or copy that file.
   - **`ALLOWED_EMAILS`** (just Umer's email) is required when deployed and checked in `auth.is_allowed` on login, sign-up and `current_user`, so an unlisted account is refused even with the right password or an existing session. A refused login gives the same 401 as a wrong password and counts toward the lockout. `manage.py` refuses to create unlisted emails.
   - Throttling: 5 wrong passwords per visitor per 15 minutes, and 20 per account, except from a **trusted device** (`popsicle_device` cookie, table `trusted_devices`).
 - **Other**:
