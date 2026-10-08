@@ -9,7 +9,6 @@ Write one email template, paste in a list of people, and send each person a pers
 | UI | Next.js 16 (App Router, Tailwind 4) | `frontend/` |
 | API | FastAPI + SQLAlchemy 2 | `backend/` |
 | Database | Postgres 14, port 5442 | `~/Desktop/personal-projects/psqlConnections/cold-emailer-5442` |
-| Old CLI version | Python script | `cli/` |
 
 ## Running it
 
@@ -230,8 +229,6 @@ cd backend
 ```
 
 To use another server, set `TEST_DATABASE_URL`. Its database name must end in `_test`.
-
-**Old CLI:** `cd cli && ../backend/.venv/bin/pytest`
 
 **Frontend** (Vitest and React Testing Library). The backend is faked at the network level.
 
