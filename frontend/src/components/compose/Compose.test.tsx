@@ -136,10 +136,11 @@ describe("Compose", () => {
     expect(await screen.findByText(/aren’t variables/)).toHaveTextContent("{{a}}, {{b}} aren’t variables");
   });
 
-  it("shows the first three recipients, then a count", async () => {
+  it("doesn't list recipients above the email (they're in the table)", async () => {
     setup({ draft: { rows: [{ email: "a@x.com" }, { email: "nope" }, { full_name: "No Email" }, { email: "d@x.com" }, { email: "e@x.com" }] } });
-    expect(screen.getByText("+2 more")).toBeInTheDocument();
-    expect(screen.getAllByText("missing email")).toHaveLength(2); // the chip and the table row
+    expect(screen.queryByText(/^\+\d+ more$/)).not.toBeInTheDocument();
+    expect(screen.getAllByText("missing email")).toHaveLength(1); // just the table row
+    expect(screen.queryByText("Add recipients below")).not.toBeInTheDocument();
   });
 
   it("estimates how long a batch will take, and the delay can be changed", async () => {

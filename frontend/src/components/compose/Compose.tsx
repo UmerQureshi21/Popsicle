@@ -215,22 +215,9 @@ export default function Compose() {
           {/* To */}
           <div className="flex flex-wrap items-center gap-x-4 gap-y-3 border-b border-cloud py-3">
             <span className="w-16 text-sm text-steel">To</span>
-            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-              {recipients.length === 0 && <span className="text-[15px] text-steel/60">Add recipients below</span>}
-              {recipients.slice(0, 3).map((r, i) => (
-                <span
-                  key={i}
-                  className={`flex max-w-full min-w-0 items-center gap-2 rounded-full border py-1 pr-3 pl-1 text-sm shadow-sm ${
-                    r.error ? "border-crimson/30 bg-crimson/5 text-crimson" : "border-cloud bg-paper text-ink"
-                  }`}
-                >
-                  <Avatar name={r.values.full_name || r.values.name || r.values.email || "?"} size={24} />
-                  <span className="truncate">{r.values.email || "missing email"}</span>
-                </span>
-              ))}
-              {recipients.length > 3 && (
-                <span className="rounded-full bg-cloud px-3 py-1.5 text-sm font-medium text-ink">+{recipients.length - 3} more</span>
-              )}
+            {/* The people themselves are in the Recipients table (its header and the send bar count them). */}
+            <div className="flex min-w-0 flex-1 items-center text-[15px]">
+              {recipients.length === 0 && <span className="text-steel/60">Add recipients below</span>}
             </div>
             {/* On phones these drop to their own row under the recipients */}
             <div className="flex w-full gap-2 sm:w-auto">

@@ -32,7 +32,8 @@ describe("Booking hours", () => {
     expect(screen.getByRole("button", { name: /Booking hours/ })).toBeDisabled();
   });
 
-  it("turns bookings on with your name, days, hours, notice and range", async () => {
+  // Many clicks over a ~400-option time zone list: slow when every test file runs at once.
+  it("turns bookings on with your name, days, hours, notice and range", { timeout: 15_000 }, async () => {
     const saved = api("put", "/api/booking/settings", ({ body }) => ({ ...(body as object), can_check_calendar: true }));
     const { user, dialog } = await openForm();
     // A first-time setup starts in your own time zone.
