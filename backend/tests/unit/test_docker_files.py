@@ -4,9 +4,12 @@ ones that keep a self-hosted copy safe."""
 import json
 import re
 
+import yaml
+
 from app.config import BACKEND_DIR
 
 ROOT = BACKEND_DIR.parent
+SERVICES = yaml.safe_load((ROOT / "compose.yaml").read_text())["services"]
 
 
 def lines(path) -> list[str]:
@@ -74,3 +77,45 @@ def test_frontend_image_holds_no_secrets():
     ignore = lines(ROOT / "frontend" / ".dockerignore")
     assert ignore[0] == "*"
     assert not [line for line in only(ignore, "!") if ".env" in line]
+
+
+def test_only_the_website_and_caddy_can_be_reached():
+    # The API and the database stay on the compose network. The website is published on this
+    # machine only, for your own reverse proxy, and the optional Caddy is the one public door.
+    assert "ports" not in SERVICES["db"]
+    assert "ports" not in SERVICES["backend"]
+    assert [p.startswith("127.0.0.1:") for p in SERVICES["frontend"]["ports"]] == [True]
+    assert SERVICES["caddy"]["profiles"] == ["caddy"]
+
+
+def test_one_always_on_backend():
+    # The same rule as Railway's: sending runs in background threads of one process.
+    assert not {"deploy", "scale"} & SERVICES["backend"].keys()
+    assert {s["restart"] for s in SERVICES.values()} == {"unless-stopped"}
+
+
+def test_one_public_address_for_everything():
+    env = SERVICES["backend"]["environment"]
+    assert env["FRONTEND_URL"].startswith("${POPSICLE_URL:?")  # compose stops if it's missing
+    assert env["BACKEND_URL"] == "${POPSICLE_URL}"  # Google returns to the site, which forwards /api
+    assert SERVICES["caddy"]["environment"]["POPSICLE_URL"] == "${POPSICLE_URL}"
+    assert lines(ROOT / "Caddyfile")[0] == "{$POPSICLE_URL} {"
+    assert SERVICES["frontend"]["build"]["args"] == {"BACKEND_ORIGIN": "http://backend:8000"}
+
+
+def test_website_and_api_share_the_proxy_secret():
+    assert SERVICES["backend"]["environment"]["PROXY_SECRET"].startswith("${PROXY_SECRET:?")
+    assert SERVICES["frontend"]["environment"]["PROXY_SECRET"] == "${PROXY_SECRET}"
+
+
+def test_caddy_passes_on_the_real_visitor_address():
+    # Wrong passwords are limited per visitor by X-Real-IP (src/proxy.ts), and Caddy passes on
+    # whatever a visitor sent in that header unless it's set from the connection here.
+    assert "header_up X-Real-IP {remote_host}" in lines(ROOT / "Caddyfile")
+
+
+def test_env_example_lists_every_setting():
+    used = set(re.findall(r"\$\{(\w+)", (ROOT / "compose.yaml").read_text()))
+    listed = set(re.findall(r"^(?:# )?(\w+)=", (ROOT / ".env.example").read_text(), flags=re.MULTILINE))
+    assert listed == used | {"COMPOSE_PROFILES"}  # read by compose itself: turns on the bundled Caddy
+    assert ".env" in lines(ROOT / ".gitignore")  # the filled-in copy is never committed
