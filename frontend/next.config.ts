@@ -17,6 +17,12 @@ export function apiEnv(backendOrigin: string | undefined, apiUrl: string | undef
   return backendOrigin && apiUrl === undefined ? { NEXT_PUBLIC_API_URL: "" } : {};
 }
 
+/** The API accepts attachments up to 20 MB (MAX_ATTACHMENT_BYTES in backend/app/routers/misc.py).
+ * Every /api call passes through src/proxy.ts, and Next.js keeps only the first 10 MB of a request
+ * body that goes through a proxy, so a bigger attachment arrived cut off and the upload failed.
+ * This leaves room for 20 MB plus the form around the file; the API still refuses anything over 20 MB. */
+export const PROXY_MAX_BODY = "25mb";
+
 export const SECURITY_HEADERS = [
   // No other site can show Popsicle inside a frame (to trick you into clicking things).
   { key: "X-Frame-Options", value: "DENY" },
@@ -36,6 +42,9 @@ const nextConfig: NextConfig = {
   images: {
     // Company logos shown in Find people come from Hunter.
     remotePatterns: [new URL("https://logos.hunter.io/**")],
+  },
+  experimental: {
+    proxyClientMaxBodySize: PROXY_MAX_BODY,
   },
   async rewrites() {
     return apiRewrites(process.env.BACKEND_ORIGIN);

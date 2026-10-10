@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import nextConfig, { SECURITY_HEADERS, apiEnv, apiRewrites } from "../../next.config";
+import nextConfig, { PROXY_MAX_BODY, SECURITY_HEADERS, apiEnv, apiRewrites } from "../../next.config";
 
 describe("next.config", () => {
   it("forwards /api to the backend only when one is set", () => {
@@ -27,6 +27,13 @@ describe("next.config", () => {
     expect(apiEnv("https://popsicle.up.railway.app", "")).toEqual({});
     expect(apiEnv("https://popsicle.up.railway.app", "https://elsewhere.example")).toEqual({});
     expect(nextConfig.env).toEqual({}); // the tests run without BACKEND_ORIGIN
+  });
+
+  it("lets a whole 20 MB attachment through the /api proxy", () => {
+    // Next.js would otherwise cut request bodies off at 10 MB; the API's own limit is 20 MB.
+    expect(nextConfig.experimental?.proxyClientMaxBodySize).toBe(PROXY_MAX_BODY);
+    expect(Number.parseInt(PROXY_MAX_BODY)).toBeGreaterThan(20);
+    expect(PROXY_MAX_BODY.endsWith("mb")).toBe(true);
   });
 
   it("sends security headers on every page", async () => {
