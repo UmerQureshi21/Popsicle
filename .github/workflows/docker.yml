@@ -1,0 +1,86 @@
+name: Docker
+
+# Builds the self-hosting images and checks the whole stack the way a browser uses it:
+# Caddy (HTTPS) → website → API → Postgres. The settings are throwaway values made for each run.
+on:
+  push:
+  pull_request:
+
+jobs:
+  self-hosting:
+    runs-on: ubuntu-latest
+    env:
+      SITE: https://popsicle.localhost
+      COMPOSE_PROFILES: caddy # every docker compose command below includes the bundled Caddy
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Throwaway settings
+        run: |
+          secret() { python3 -c "import secrets; print(secrets.token_urlsafe($1))"; }
+          {
+            echo "POPSICLE_URL=$SITE"
+            echo "ALLOWED_EMAILS=ci@example.com"
+            echo "TOKEN_ENCRYPTION_KEY=$(python3 -c 'import base64, os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())')"
+            echo "PROXY_SECRET=$(secret 32)"
+            echo "POSTGRES_PASSWORD=$(secret 24)"
+            echo "GOOGLE_CLIENT_SECRETS_JSON='{\"web\":{\"client_id\":\"ci.apps.googleusercontent.com\",\"client_secret\":\"ci\",\"auth_uri\":\"https://accounts.google.com/o/oauth2/auth\",\"token_uri\":\"https://oauth2.googleapis.com/token\"}}'"
+          } > .env
+          echo "CI_PASSWORD=$(secret 24)" >> "$GITHUB_ENV"
+
+      - name: Build and start
+        run: docker compose up -d --build --wait --wait-timeout 300
+
+      - name: Trust Caddy's own certificate for popsicle.localhost
+        run: |
+          # Caddy makes the certificate just after starting; wait for its root to exist.
+          for _ in $(seq 30); do docker compose cp caddy:/data/caddy/pki/authorities/local/root.crt caddy-root.crt && break; sleep 1; done
+          # Every curl below then checks the certificate and reaches Caddy on this machine.
+          printf '%s\n' "cacert = $PWD/caddy-root.crt" "resolve = popsicle.localhost:443:127.0.0.1" \
+            "resolve = popsicle.localhost:80:127.0.0.1" "silent" "show-error" > ~/.curlrc
+          # And wait until Caddy serves the site with it.
+          for _ in $(seq 30); do curl -fo /dev/null "$SITE/api/health" 2>/dev/null && break; sleep 1; done
+
+      - name: Reach it through Caddy
+        run: |
+          check() { if [[ "$3" == "$2" ]]; then echo "ok    $1"; else echo "FAIL  $1: expected '$2', got '$3'"; exit 1; fi; }
+          code() { curl -o /dev/null -w '%{http_code}' "$@"; }
+          check "the API answers through Caddy"                   200 "$(code "$SITE/api/health")"
+          check "a protected route asks to log in (secret added)" 401 "$(code "$SITE/api/campaigns")"
+          check "the login page loads"                            200 "$(code "$SITE/login")"
+          check "plain http goes to https"                        308 "$(code http://popsicle.localhost/login)"
+          check "the website is published on 127.0.0.1 only"      127.0.0.1:3000 "$(docker compose port frontend 3000)"
+          check "the API and the database aren't published"       "" "$(docker compose ps --format '{{.Service}} {{.Ports}}' | grep -E '^(backend|db) .*->' || true)"
+
+      - name: Log in
+        run: |
+          # Like `docker compose exec backend python -m app.manage create-user`, without the prompts.
+          docker compose exec -T backend sh -c 'umask 077 && cat > /tmp/pw' <<< "$CI_PASSWORD"
+          docker compose exec -T backend sh -c 'python -m app.manage create-user ci@example.com --password-file /tmp/pw && rm /tmp/pw'
+          curl -D headers.txt -o /dev/null -c cookies.txt -H 'Content-Type: application/json' -H "Origin: $SITE" \
+            -d "{\"email\":\"ci@example.com\",\"password\":\"$CI_PASSWORD\"}" "$SITE/api/auth/login"
+          grep -iq '^set-cookie: popsicle_session=.*secure' headers.txt
+          curl -b cookies.txt "$SITE/api/auth/me" | grep -q '"email":"ci@example.com"'
+          curl -b cookies.txt -o /dev/null -w '%{redirect_url}\n' "$SITE/api/gmail/connect" \
+            | grep -q 'redirect_uri=https%3A%2F%2Fpopsicle.localhost%2Fapi%2Fgmail%2Fcallback'
+          echo "ok    logged in with an https-only cookie; Connect Gmail points Google back at this site"
+
+      - name: Upload a 19 MB attachment
+        run: |
+          head -c 19922944 /dev/urandom > attachment.bin
+          curl -b cookies.txt -H "Origin: $SITE" -F file=@attachment.bin "$SITE/api/attachments" \
+            | python3 -c 'import json, sys; assert json.load(sys.stdin)["size_bytes"] == 19922944'
+          echo "ok    all 19 MB arrived"
+
+      - name: Login limits see the real visitor, not a made-up X-Real-IP
+        run: |
+          try() { curl -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' -H "Origin: $SITE" -H "X-Real-IP: $1" \
+            -d '{"email":"guess@example.com","password":"not-the-password"}' "$SITE/api/auth/login"; }
+          for i in 1 2 3 4 5; do try "203.0.113.$i" > /dev/null; done
+          sixth=$(try 203.0.113.99)
+          if [[ "$sixth" != 429 ]]; then echo "FAIL  the 6th wrong password got $sixth, not 429"; exit 1; fi
+          echo "ok    the 6th wrong password is refused"
+
+      - name: Logs
+        if: failure()
+        run: docker compose logs --no-color

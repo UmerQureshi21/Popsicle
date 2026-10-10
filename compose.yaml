@@ -1,0 +1,87 @@
+# Self-hosting Popsicle with Docker: the database, the API, the website and, optionally, Caddy for
+# HTTPS. Setup: README.md → "Self-hosting with Docker". Settings come from .env (copy .env.example).
+#
+#   docker compose up -d --build
+#
+# With COMPOSE_PROFILES=caddy in .env, that also starts Caddy on ports 80 and 443 for HTTPS;
+# without it, put your own reverse proxy in front of http://127.0.0.1:3000.
+#
+# Only the website (or Caddy) can be reached from outside. The API and the database have no
+# published ports: the website forwards /api to the API over this private network and adds
+# PROXY_SECRET, the same way Vercel forwards to Railway in the hosted setup.
+
+name: popsicle
+
+services:
+  db:
+    image: postgres:14
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: popsicle
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env (see .env.example)}
+      POSTGRES_DB: popsicle
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U popsicle -d popsicle"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://popsicle:${POSTGRES_PASSWORD}@db:5432/popsicle
+      # Both are the site's public address: Google returns to BACKEND_URL/api/gmail/callback, which
+      # the website forwards here.
+      FRONTEND_URL: ${POPSICLE_URL:?Set POPSICLE_URL in .env (see .env.example)}
+      BACKEND_URL: ${POPSICLE_URL}
+      ALLOWED_EMAILS: ${ALLOWED_EMAILS:?Set ALLOWED_EMAILS in .env (see .env.example)}
+      TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY:?Set TOKEN_ENCRYPTION_KEY in .env (see .env.example)}
+      PROXY_SECRET: ${PROXY_SECRET:?Set PROXY_SECRET in .env (see .env.example)}
+      GOOGLE_CLIENT_SECRETS_JSON: ${GOOGLE_CLIENT_SECRETS_JSON:-}
+      HUNTER_API_KEY: ${HUNTER_API_KEY:-}
+    # Exactly one copy, so don't scale this service: batches send from background threads of this
+    # one process (the same rule as backend/railway.json).
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        BACKEND_ORIGIN: http://backend:8000
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      PROXY_SECRET: ${PROXY_SECRET}
+    ports:
+      # This machine only, for your own reverse proxy. Nobody else can skip HTTPS and reach it.
+      - "127.0.0.1:${POPSICLE_PORT:-3000}:3000"
+
+  caddy:
+    image: caddy:2
+    profiles: [caddy]
+    restart: unless-stopped
+    depends_on:
+      - frontend
+    environment:
+      POPSICLE_URL: ${POPSICLE_URL}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Caddy's certificates, kept across restarts.
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  db-data:
+  caddy-data:
+  caddy-config:

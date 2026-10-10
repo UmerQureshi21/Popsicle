@@ -1,0 +1,6 @@
+# Send Docker only what the image needs, so the secrets in this folder (.env, credentials.json,
+# .owner-password) never leave your machine, even by accident.
+*
+!requirements.txt
+!app/
+**/__pycache__
