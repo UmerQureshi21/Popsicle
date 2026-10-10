@@ -45,7 +45,7 @@ These come straight from the owner. Breaking them has caused real problems befor
 | Backend | Python 3.14, FastAPI, SQLAlchemy 2, psycopg 3, Postgres 14, pinned in `backend/requirements*.txt` |
 | Frontend | Next.js 16 (App Router), React 19, Tailwind CSS v4, lucide-react, TypeScript |
 | Tests | pytest + pytest-cov; Vitest + Testing Library + MSW; Playwright (Chromium) |
-| CI | `.github/workflows/test.yml`: backend pytest, frontend lint, `npm run typecheck`, Vitest with coverage, Playwright |
+| CI | `.github/workflows/test.yml`: backend pytest, frontend lint, `npm run typecheck`, Vitest with coverage, Playwright. `.github/workflows/docker.yml`: builds the Docker images and smoke-tests the self-hosted stack (§7.11) |
 | External | Gmail API, Google Calendar API (Meet, busy times for booking links), Hunter.io API |
 
 ```
@@ -82,6 +82,8 @@ frontend/src/
   test/              MSW server (api()/apiError()), fixtures, navigation mock, setup
 frontend/e2e/        Playwright specs + fake-api.ts
 dev.sh               starts Postgres (5442), backend (8000, --reload) and frontend (3000)
+compose.yaml         self-hosting with Docker (§7.11), with Caddyfile, .env.example (its settings)
+                     and backend/Dockerfile, frontend/Dockerfile
 ```
 
 ---
@@ -379,6 +381,17 @@ Keep that pattern for anything new that might take long.
 - **Shared code**: `landing/beams.ts` (pure geometry, unit-tested). Both trails show everything lit under reduced motion.
 - **Removed on purpose**: the Hunter badge and the "Cold email, simplified" eyebrow. Don't add them back.
 
+### 7.11 Self-hosting with Docker (`compose.yaml`, `Caddyfile`, `.env.example`, the two Dockerfiles)
+An alternative to Vercel + Railway for running your own copy; `README.md` → Self-hosting with Docker has the steps.
+- **Same deployed rules**: Postgres, the backend and the frontend run in the normal deployed mode (login on, https-only cookie, proxy secret). One `POPSICLE_URL` in `.env` becomes `FRONTEND_URL`, `BACKEND_URL` and Caddy's site address. The database's host is `db`, so the backend never counts as local (§7.9), by design.
+- **What's reachable**: only the frontend, on `127.0.0.1` (for the owner's own reverse proxy), and the optional Caddy (the `caddy` profile, switched on by `COMPOSE_PROFILES=caddy` in `.env`; ports 80/443, automatic HTTPS). The backend and Postgres have no published ports; the frontend forwards `/api` to `http://backend:8000` over the compose network, adding `PROXY_SECRET`.
+- **Rules the tests enforce** (`backend/tests/unit/test_docker_files.py`):
+  - One backend process and copy (no `--workers`, no scaling), as on Railway.
+  - The Caddyfile sets `X-Real-IP` from the connection. `src/proxy.ts` trusts that header first, and Caddy otherwise passes on whatever a visitor sent, which would get around the per-visitor login limit. Anyone using their own proxy must do the same (README).
+  - Python and Node versions match CI; secrets stay out of the images (both `.dockerignore` files are whitelists; `PROXY_SECRET` is only given at runtime); `.env.example` lists exactly the settings `compose.yaml` uses.
+- **Frontend image**: built with `NEXT_OUTPUT=standalone` (`outputMode` in `next.config.ts`; only the Dockerfile sets it) and `BACKEND_ORIGIN=http://backend:8000`. Next.js serializes the config into the build, so the `/api` forwarding is fixed at build time; `PROXY_SECRET` is read at runtime by `proxy.ts` (Node.js runtime in Next 16).
+- **CI** (`.github/workflows/docker.yml`): builds both images, starts the stack with Caddy at `https://popsicle.localhost` (Caddy's own CA), then checks health, the proxy secret, which ports are published, login with a Secure cookie, the Connect Gmail callback address, a 19 MB attachment and the X-Real-IP limit. Change those checks together with the setup.
+
 ---
 
 ## 8. Gotchas that have already bitten
@@ -397,6 +410,8 @@ Keep that pattern for anything new that might take long.
 - **FastAPI route order matters**: register `/sync` before `/{contact_id}`.
 - **Running the backend tests while his backend is up** is fine: tests use the `_test` database and their own settings.
 - **Earlier miscounts**: report exact test numbers from the actual run output.
+- **Request bodies through `proxy.ts`** are buffered by Next.js and cut off at 10 MB by default, which broke attachments between 10 and 20 MB on a self-run Next.js server. `experimental.proxyClientMaxBodySize` is `PROXY_MAX_BODY` (25mb) in `next.config.ts`; keep it above the API's 20 MB `MAX_ATTACHMENT_BYTES`.
+- **`next build` downloads the Google font** (Montserrat, via `next/font/google`), so every build, including the Docker image's, needs internet access.
 
 ---
 
