@@ -17,6 +17,13 @@ export function apiEnv(backendOrigin: string | undefined, apiUrl: string | undef
   return backendOrigin && apiUrl === undefined ? { NEXT_PUBLIC_API_URL: "" } : {};
 }
 
+/** The Docker image (frontend/Dockerfile) builds with NEXT_OUTPUT=standalone, which makes Next.js
+ * also write a small self-contained server to .next/standalone, so the image needs no node_modules.
+ * Vercel and the end-to-end tests build without it, exactly as before. */
+export function outputMode(value: string | undefined): NextConfig["output"] {
+  return value === "standalone" ? "standalone" : undefined;
+}
+
 /** The API accepts attachments up to 20 MB (MAX_ATTACHMENT_BYTES in backend/app/routers/misc.py).
  * Every /api call passes through src/proxy.ts, and Next.js keeps only the first 10 MB of a request
  * body that goes through a proxy, so a bigger attachment arrived cut off and the upload failed.
@@ -37,6 +44,7 @@ export const SECURITY_HEADERS = [
 const nextConfig: NextConfig = {
   // The end-to-end tests build into their own folder so they don't disturb a running `next dev`.
   distDir: process.env.NEXT_DIST_DIR || ".next",
+  output: outputMode(process.env.NEXT_OUTPUT),
   poweredByHeader: false,
   env: apiEnv(process.env.BACKEND_ORIGIN, process.env.NEXT_PUBLIC_API_URL),
   images: {

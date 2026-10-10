@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import nextConfig, { PROXY_MAX_BODY, SECURITY_HEADERS, apiEnv, apiRewrites } from "../../next.config";
+import nextConfig, { PROXY_MAX_BODY, SECURITY_HEADERS, apiEnv, apiRewrites, outputMode } from "../../next.config";
 
 describe("next.config", () => {
   it("forwards /api to the backend only when one is set", () => {
@@ -27,6 +27,14 @@ describe("next.config", () => {
     expect(apiEnv("https://popsicle.up.railway.app", "")).toEqual({});
     expect(apiEnv("https://popsicle.up.railway.app", "https://elsewhere.example")).toEqual({});
     expect(nextConfig.env).toEqual({}); // the tests run without BACKEND_ORIGIN
+  });
+
+  it("builds the standalone server only for the Docker image", () => {
+    expect(outputMode(undefined)).toBeUndefined();
+    expect(outputMode("")).toBeUndefined();
+    expect(outputMode("export")).toBeUndefined();
+    expect(outputMode("standalone")).toBe("standalone");
+    expect(nextConfig.output).toBeUndefined(); // the tests run without NEXT_OUTPUT, like Vercel
   });
 
   it("lets a whole 20 MB attachment through the /api proxy", () => {

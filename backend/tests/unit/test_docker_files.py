@@ -2,10 +2,16 @@
 ones that keep a self-hosted copy safe."""
 
 import json
+import re
 
 from app.config import BACKEND_DIR
 
 ROOT = BACKEND_DIR.parent
+
+
+def lines(path) -> list[str]:
+    """A file's lines, without blank lines and comments."""
+    return [line.strip() for line in path.read_text().splitlines() if line.strip() and not line.lstrip().startswith("#")]
 
 
 def instructions(dockerfile) -> list[str]:
@@ -19,6 +25,7 @@ def only(items: list[str], prefix: str) -> list[str]:
 
 
 BACKEND = instructions(BACKEND_DIR / "Dockerfile")
+FRONTEND = instructions(ROOT / "frontend" / "Dockerfile")
 
 
 def test_backend_python_matches_ci():
@@ -42,7 +49,28 @@ def test_backend_health_check_is_the_open_endpoint():
 def test_backend_secrets_stay_out_of_the_image():
     # .env, credentials.json and .owner-password sit right next to the code on a developer's
     # machine. Only requirements.txt and app/ are sent to Docker, and only those are copied in.
-    ignore = [line for line in (BACKEND_DIR / ".dockerignore").read_text().splitlines() if line and not line.startswith("#")]
+    ignore = lines(BACKEND_DIR / ".dockerignore")
     assert ignore[0] == "*"
     assert only(ignore, "!") == ["!requirements.txt", "!app/"]
     assert only(BACKEND, "COPY ") == ["COPY requirements.txt .", "COPY app ./app"]
+
+
+def test_frontend_node_matches_ci():
+    [node] = re.findall(r"node-version: (\d+)", (ROOT / ".github" / "workflows" / "test.yml").read_text())
+    assert {i.split()[1] for i in only(FRONTEND, "FROM ")} == {f"node:{node}-slim"}
+
+
+def test_frontend_forwards_api_to_the_backend_service():
+    # Next.js fixes the /api forwarding at build time, so the compose network's address is built in.
+    assert "ARG BACKEND_ORIGIN=http://backend:8000" in FRONTEND
+    assert any("NEXT_OUTPUT=standalone" in i for i in only(FRONTEND, "ENV "))
+    assert only(FRONTEND, "CMD ") == ['CMD ["node", "server.js"]']
+
+
+def test_frontend_image_holds_no_secrets():
+    # PROXY_SECRET is read when the server runs (src/proxy.ts). Built into the image, anyone with a
+    # copy of the image could read it.
+    assert not [i for i in FRONTEND if "PROXY_SECRET" in i]
+    ignore = lines(ROOT / "frontend" / ".dockerignore")
+    assert ignore[0] == "*"
+    assert not [line for line in only(ignore, "!") if ".env" in line]
