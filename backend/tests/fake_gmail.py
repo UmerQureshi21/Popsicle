@@ -20,6 +20,7 @@ def message(
     sent: bool = False,
     cc: str = "",
     html: bool = False,
+    draft: bool = False,
 ) -> dict:
     headers = [{"name": "From", "value": frm}, {"name": "To", "value": to}, {"name": "Subject", "value": subject},
                {"name": "Message-ID", "value": f"<{id}@mail.gmail.com>"}]
@@ -28,7 +29,7 @@ def message(
     part = {"mimeType": "text/html" if html else "text/plain", "body": {"data": b64(body)}}
     return {
         "id": id,
-        "labelIds": ["SENT"] if sent else ["INBOX"],
+        "labelIds": ["DRAFT"] if draft else ["SENT"] if sent else ["INBOX"],
         "snippet": body[:100],
         "internalDate": str(int(at.timestamp() * 1000)),
         "payload": {"mimeType": "multipart/alternative", "headers": headers, "parts": [part]},

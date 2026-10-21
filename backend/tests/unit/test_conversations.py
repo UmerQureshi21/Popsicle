@@ -132,6 +132,45 @@ class TestSync:
         conv.sync(db, FakeGmail({"t1": [message("m1", ME, "jane@stripe.com")]}), account)
         assert stored(db)[0][2] is True
 
+    def test_unsent_drafts_are_skipped(self, db, account):
+        jane = emailed(db, "jane@stripe.com")
+        gmail = FakeGmail({"t1": [
+            message("m1", ME, "jane@stripe.com", "Hi Jane", sent=True),
+            message("m2", ME, "jane@stripe.com", "Following up...", at=at(3), draft=True),
+        ]})
+        assert conv.sync(db, gmail, account).new_messages == 1
+        assert stored(db) == [(jane.id, "m1", True, ME, "Hi Jane")]
+
+    def test_a_draft_copied_before_drafts_were_skipped_is_removed(self, db, account):
+        jane = emailed(db, "jane@stripe.com")
+        gmail = FakeGmail({"t1": [
+            message("m1", ME, "jane@stripe.com", "Hi Jane", sent=True),
+            message("m2", ME, "jane@stripe.com", "Following up...", at=at(3), draft=True),
+        ]})
+        # As an earlier version left it: the draft copied, the thread marked as synced.
+        db.add(ConversationMessage(
+            contact_id=jane.id, gmail_message_id="m2", gmail_thread_id="t1", from_me=True, from_addr=ME,
+            to_addrs="jane@stripe.com", subject="Quick question", snippet="", body="Following up...", sent_at=at(3),
+        ))
+        db.add(MailThread(gmail_thread_id="t1", history_id="1", skips_drafts=False))
+        db.commit()
+
+        result = conv.sync(db, gmail, account)
+
+        assert (result.threads_downloaded, result.new_messages) == (1, 1)
+        assert stored(db) == [(jane.id, "m1", True, ME, "Hi Jane")]
+        assert db.get(MailThread, "t1").skips_drafts is True
+        assert conv.sync(db, gmail, account).threads_downloaded == 0
+
+    def test_a_message_gone_from_the_thread_is_removed(self, db, account):
+        emailed(db, "jane@stripe.com")
+        gmail = FakeGmail({"t1": [message("m1", ME, "jane@stripe.com", sent=True), message("m2", ME, "jane@stripe.com", at=at(3))]})
+        conv.sync(db, gmail, account)
+        gmail.data["t1"]["messages"].pop()  # e.g. a draft that was deleted or sent
+        gmail.add("t1")
+        conv.sync(db, gmail, account)
+        assert [r[1] for r in stored(db)] == ["m1"]
+
     def test_unchanged_threads_are_not_downloaded_again(self, db, account):
         emailed(db, "jane@stripe.com")
         gmail = FakeGmail({"t1": [message("m1", ME, "jane@stripe.com", sent=True)]})

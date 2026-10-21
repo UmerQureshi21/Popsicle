@@ -266,6 +266,7 @@ cd frontend && npm run lint && npm run typecheck && npx vitest run --coverage &&
   - People are searched a few addresses at a time.
   - Only well-formed addresses go into the search, each in quotes (to block query injection).
   - Only threads whose Gmail `historyId` changed are downloaded (`mail_threads`).
+  - **Drafts are skipped.** Gmail returns unsent drafts inside threads (label `DRAFT`, from you), so they used to show as sent. A re-downloaded thread also removes stored messages that are gone from it or are drafts. `mail_threads.skips_drafts` (false on rows from before the fix) makes those older threads download once more.
 - **Message bodies**:
   - Prefer text/plain; HTML is converted with Python's `HTMLParser` (single pass, ReDoS-safe).
   - Capped at 200 000 characters.

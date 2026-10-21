@@ -46,3 +46,16 @@ def test_company_status_starts_as_emailed_for_companies_already_emailed(db):
     with engine.connect() as conn:
         rows = dict(conn.execute(text("SELECT name, status FROM companies")).all())
     assert rows == {"Stripe": "emailed", "Acme": "not_started"}
+
+
+def test_threads_synced_before_drafts_were_skipped_are_downloaded_again(db):
+    from app.models import MailThread
+
+    db.add(MailThread(gmail_thread_id="t1", history_id="5"))
+    db.commit()
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE mail_threads DROP COLUMN skips_drafts"))
+
+    assert migrations.run(engine) == ["mail_threads.skips_drafts"]
+    with engine.connect() as conn:
+        assert conn.execute(text("SELECT skips_drafts FROM mail_threads")).scalar() is False

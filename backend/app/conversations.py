@@ -13,7 +13,7 @@ from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
 from email.utils import getaddresses, parseaddr
 
-from sqlalchemy import or_, select, update
+from sqlalchemy import delete, or_, select, update
 from sqlalchemy.orm import Session
 
 from .safety import is_email
@@ -195,7 +195,17 @@ def _query(addresses: list[str]) -> str:
 
 
 def _store_thread(db: Session, thread: dict, me: str, people: dict[str, Contact]) -> int:
-    """Copy a thread's messages for each person on them. Returns how many were new."""
+    """Copy a thread's messages for each person on them. Returns how many were new.
+    Drafts are skipped: Gmail lists them in the thread like any message, but they haven't
+    been sent. A copied message that's gone from the thread or is now a draft (copied
+    before drafts were skipped) is removed."""
+    messages = [m for m in thread.get("messages") or [] if "DRAFT" not in (m.get("labelIds") or [])]
+    db.execute(
+        delete(ConversationMessage).where(
+            ConversationMessage.gmail_thread_id == thread["id"],
+            ConversationMessage.gmail_message_id.not_in([m["id"] for m in messages]),
+        )
+    )
     known = {
         (cid, mid)
         for cid, mid in db.execute(
@@ -205,7 +215,7 @@ def _store_thread(db: Session, thread: dict, me: str, people: dict[str, Contact]
         )
     }
     new = 0
-    for msg in thread.get("messages") or []:
+    for msg in messages:
         payload = msg.get("payload") or {}
         h = _headers(payload)
         from_name, from_addr = parseaddr(h.get("from", ""))
@@ -255,7 +265,7 @@ def sync(db: Session, service, account: GmailAccount, contact_ids: list[int] | N
             seen.add(t["id"])
             result.threads_checked += 1
             stored = db.get(MailThread, t["id"])
-            if stored and stored.history_id == t.get("historyId"):
+            if stored and stored.history_id == t.get("historyId") and stored.skips_drafts:
                 continue
             thread = service.users().threads().get(userId="me", id=t["id"], format="full").execute()
             result.new_messages += _store_thread(db, thread, me, people)
@@ -268,6 +278,7 @@ def sync(db: Session, service, account: GmailAccount, contact_ids: list[int] | N
                     db.add(MailThread(gmail_thread_id=t["id"], history_id=history))
                 else:
                     stored.history_id = history
+                    stored.skips_drafts = True
             db.commit()
     db.commit()
     return result

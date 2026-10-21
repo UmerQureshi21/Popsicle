@@ -17,6 +17,7 @@ COLUMNS = [
     ("emails", "attempted_at", "TIMESTAMPTZ"),  # handed to Gmail, not yet confirmed
     ("gmail_accounts", "sync_started_at", "TIMESTAMPTZ"),  # a conversation sync in progress
     ("gmail_accounts", "sync_result", "JSONB"),  # how the last one went
+    ("mail_threads", "skips_drafts", "BOOLEAN NOT NULL DEFAULT false"),  # downloaded since drafts were skipped
 ]
 
 # Run once, right after a column is added, to give existing rows a sensible value.
