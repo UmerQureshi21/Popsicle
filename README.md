@@ -162,7 +162,7 @@ The **Companies** tab is your list of companies to reach, with each one's logo (
 
 The **Inbox** tab lists everyone you've emailed. Open someone to see the whole conversation with them, your emails and their replies, in order.
 
-- **Replies:** Popsicle checks Gmail for new replies when you open the tab, and when you click the refresh icon. It reads only mail to or from people you've emailed, and only downloads conversations that changed since the last check. Quoted earlier messages are hidden so each reply is easy to read.
+- **Replies:** Popsicle checks Gmail for new replies when you open the tab, and when you click the refresh icon. It reads only mail to or from people you've emailed, and only downloads conversations that changed since the last check. Quoted earlier messages are hidden so each reply is easy to read. Drafts you haven't sent yet aren't shown.
 - **Filters:** **Replied** or **No reply yet**, plus search by name, email or company. A red dot marks people who replied.
 - **Company status:** when someone replies, their company moves to **Replied** on the Companies tab, unless you set its status yourself.
 - **Send Meet link:** pick a date, time and length (in your timezone), and edit the email if you like. `{{meet_link}}` becomes the link. Popsicle creates a Google Calendar event with a Google Meet link, then emails it as a reply in your conversation. By default they also get a Google Calendar invite; untick that to send only the email. Meetings show at the top of the conversation with the link, a copy button and a link to the calendar event.
