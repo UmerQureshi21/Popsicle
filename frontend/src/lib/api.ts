@@ -280,6 +280,8 @@ export type ConversationSync = {
   threads_checked: number;
   threads_downloaded: number;
   new_messages: number;
+  people_checked?: number; // how far a running check has got
+  people_total?: number;
   synced_at: string | null;
   error?: string | null;
 };
