@@ -101,3 +101,24 @@ test("scrolling to the end of the list loads the next people by itself", async (
   const offsets = api.called("GET /api/conversations").map((c) => c.url.searchParams.get("offset"));
   expect(offsets).toContain("30");
 });
+
+test("a long Gmail check shows how far it's got, and filtering doesn't start another", async ({ page }) => {
+  let polls = 0;
+  const api = await new FakeApi({
+    "GET /api/gmail/status": { connected: true, email: "me@gmail.com", credentials_file_present: true, can_read: true, can_meet: true },
+    "POST /api/conversations/sync": { running: true, threads_checked: 0, threads_downloaded: 0, new_messages: 0, synced_at: null,
+      people_checked: 0, people_total: 721 },
+    "GET /api/conversations/sync": () =>
+      ++polls < 3
+        ? { running: true, threads_checked: 90, threads_downloaded: 12, new_messages: 0, synced_at: null, people_checked: 120, people_total: 721 }
+        : { running: false, threads_checked: 700, threads_downloaded: 40, new_messages: 1, synced_at: "2026-10-06T12:00:00Z", error: null },
+    "GET /api/conversations": conversationsPage([douglas]),
+  }).install(page);
+  await page.goto("/conversations");
+  await expect(page.getByText("Checking Gmail for replies… 120 of 721 people")).toBeVisible();
+  await page.getByRole("tab", { name: /Replied/ }).click();
+  await expect(page.getByText("1 new message from Gmail.")).toBeVisible();
+  await page.getByRole("tab", { name: /All/ }).click();
+  await expect(page.getByRole("button", { name: /Douglas Quan/ })).toBeVisible();
+  expect(api.called("POST /api/conversations/sync")).toHaveLength(1);
+});

@@ -267,6 +267,9 @@ cd frontend && npm run lint && npm run typecheck && npx vitest run --coverage &&
   - Only well-formed addresses go into the search, each in quotes (to block query injection).
   - Only threads whose Gmail `historyId` changed are downloaded (`mail_threads`).
   - **Drafts are skipped.** Gmail returns unsent drafts inside threads (label `DRAFT`, from you), so they used to show as sent. A re-downloaded thread also removes stored messages that are gone from it or are drafts. `mail_threads.skips_drafts` (false on rows from before the fix) makes those older threads download once more.
+  - **Gmail's quota is per minute and small**: 6,000 units per user per minute; `threads.list` 10, `threads.get` 40 (`minimal`) or 120 (`full`), `messages.send` 100. A sync paces itself with `Pace` (token bucket: 1,200-unit burst, then 4,200/min, leaving room for sending) and retries "slow down" errors (`gmail.is_rate_limited`: 429, or 403 rateLimitExceeded/quota exceeded) with backoff. Older threads that only need the draft re-check use `format="minimal"`. Tests: the autouse `sync_waits` fixture replaces `conversations._wait`.
+  - A sync renews its claim and saves progress (`people_checked`/`people_total` in `sync_result`) after each thread, so a long one isn't taken for dead after `SYNC_STALE`.
+  - The Inbox page must not start a check when the filter or search changes: `usePaged`'s `reload` changes with the path, so the page keeps it in a ref (`reloadList`) instead of depending on it.
 - **Message bodies**:
   - Prefer text/plain; HTML is converted with Python's `HTMLParser` (single pass, ReDoS-safe).
   - Capped at 200 000 characters.
