@@ -298,6 +298,9 @@ class MailThread(Base):
 
     gmail_thread_id: Mapped[str] = mapped_column(String(100), primary_key=True)
     history_id: Mapped[str] = mapped_column(String(40))
+    # Downloaded since drafts were skipped. Threads synced before that are downloaded once
+    # more, so drafts copied by mistake are removed.
+    skips_drafts: Mapped[bool] = mapped_column(Boolean, default=True, server_default=text("false"))
 
 
 class ConversationMessage(Base):
