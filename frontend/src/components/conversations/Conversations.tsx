@@ -1,7 +1,7 @@
 "use client";
 
 import { safeHref } from "@/lib/safeUrl";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { CalendarCheck, CalendarDays, Check, ChevronLeft, Copy, ExternalLink, Link2, MessagesSquare, RefreshCw, Search, Video, X } from "lucide-react";
 import {
   API_URL,
@@ -113,10 +113,12 @@ let inflight: Promise<ConversationSync> | null = null;
 
 export const POLL_MS = 1500;
 
-/** Start a Gmail check (it runs in the background on the server) and wait for it to finish. */
-async function runCheck(): Promise<ConversationSync> {
+/** Start a Gmail check (it runs in the background on the server) and wait for it to finish,
+ * passing on how far it's got while it runs (a big one is paced to stay under Gmail's limit). */
+async function runCheck(onProgress: (status: ConversationSync) => void): Promise<ConversationSync> {
   let status = await api.post<ConversationSync>("/api/conversations/sync");
   while (status.running) {
+    onProgress(status);
     await sleep(POLL_MS);
     status = await api.get<ConversationSync>("/api/conversations/sync");
   }
@@ -124,8 +126,8 @@ async function runCheck(): Promise<ConversationSync> {
   return status;
 }
 
-function checkGmail(): Promise<ConversationSync> {
-  inflight ??= runCheck().finally(() => {
+function checkGmail(onProgress: (status: ConversationSync) => void): Promise<ConversationSync> {
+  inflight ??= runCheck(onProgress).finally(() => {
     inflight = null;
   });
   return inflight;
@@ -143,6 +145,7 @@ export default function Conversations() {
   });
   const [detail, setDetail] = useState<ConversationDetail | null>(null);
   const [syncing, setSyncing] = useState(false);
+  const [progress, setProgress] = useState<ConversationSync | null>(null);
   const [syncedAt, setSyncedAt] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(() => readGmailNotice());
   const [error, setError] = useState<string | null>(null);
@@ -152,6 +155,12 @@ export default function Conversations() {
   // One page at a time; the filter and search run on the server, so they cover everyone.
   const list = usePaged<ConversationPage>(`/api/conversations?${new URLSearchParams({ filter, ...(search ? { q: search } : {}) })}`);
   const { reload: loadList } = list;
+  // The latest reload, for the Gmail check: `loadList` changes with the filter and search, and
+  // depending on it would start a whole new check of Gmail at every filter click or keystroke.
+  const reloadList = useRef(loadList);
+  useEffect(() => {
+    reloadList.current = loadList;
+  }, [loadList]);
   const people = list.items;
   const loadDetail = useCallback(
     (id: number) => api.get<ConversationDetail>(`/api/conversations/${id}`).then(setDetail, (e) => setError(e.message)),
@@ -160,9 +169,18 @@ export default function Conversations() {
 
   const sync = useCallback(async () => {
     setSyncing(true);
+    setProgress(null);
     setError(null);
+    let found = 0;
     try {
-      const res = await checkGmail();
+      const res = await checkGmail((status) => {
+        setProgress(status);
+        // A long check: show replies as they come in rather than at the end.
+        if (status.new_messages > found) {
+          found = status.new_messages;
+          reloadList.current();
+        }
+      });
       setSyncedAt(res.synced_at ?? new Date().toISOString());
       if (res.new_messages) setNotice(`${res.new_messages} new message${res.new_messages === 1 ? "" : "s"} from Gmail.`);
     } catch (e) {
@@ -180,12 +198,12 @@ export default function Conversations() {
         setGmail(g);
         if (g.can_read) {
           await sync();
-          loadList();
+          reloadList.current();
         }
       },
       () => setGmail(null),
     );
-  }, [loadList, sync]);
+  }, [sync]);
 
   useEffect(() => {
     if (selectedId != null) loadDetail(selectedId);
@@ -290,7 +308,12 @@ export default function Conversations() {
                   </button>
                 ))}
               </div>
-              {syncing && <p className="text-xs text-steel">Checking Gmail for replies…</p>}
+              {syncing && (
+                <p className="text-xs text-steel">
+                  Checking Gmail for replies…
+                  {progress?.people_total ? ` ${progress.people_checked ?? 0} of ${progress.people_total} people` : ""}
+                </p>
+              )}
             </div>
             <ul className="min-h-0 flex-1 divide-y divide-cloud overflow-y-auto">
               {!people && !list.error && <li className="p-4 text-sm text-steel">Loading…</li>}

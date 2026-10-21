@@ -7,7 +7,9 @@ downloads only threads that changed since the last sync.
 
 import base64
 import html
+import random
 import re
+import time
 from html.parser import HTMLParser
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
@@ -16,6 +18,7 @@ from email.utils import getaddresses, parseaddr
 from sqlalchemy import delete, or_, select, update
 from sqlalchemy.orm import Session
 
+from . import gmail
 from .safety import is_email
 from .models import (
     CompanyStatus,
@@ -30,9 +33,20 @@ from .models import (
 ADDRESSES_PER_SEARCH = 15  # Gmail search queries have a length limit
 MAX_THREADS_PER_SEARCH = 300
 
+# Gmail allows each account 6,000 "quota units" a minute. A search costs 10 units, and
+# downloading a whole thread 120 (40 for just its labels), so a big sync would blow through
+# that in seconds. Requests are paced to stay under it, with room left for sending email:
+# a burst up to BURST_UNITS for an ordinary sync, then UNITS_PER_MINUTE.
+UNITS_PER_MINUTE = 4200
+BURST_UNITS = 1200
+COST_SEARCH, COST_THREAD, COST_LABELS = 10, 120, 40
+# If Google still says "slow down", wait and try again: 2, 4, 8… seconds, up to a minute.
+RATE_LIMIT_RETRIES = 6
+MAX_BACKOFF = 64
+
 # A sync runs in the background (it can take a while), one at a time across every server
-# process: it's claimed on the Gmail account's row. A claim older than this belonged to a
-# process that died, and can be taken over.
+# process: it's claimed on the Gmail account's row, and the claim is renewed as it goes. A
+# claim not renewed for this long belonged to a process that died, and can be taken over.
 SYNC_STALE = timedelta(minutes=10)
 
 
@@ -41,10 +55,46 @@ class SyncResult:
     threads_checked: int = 0
     threads_downloaded: int = 0
     new_messages: int = 0
+    people_checked: int = 0  # progress while it runs
+    people_total: int = 0
 
 
 def now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _wait(seconds: float) -> None:
+    time.sleep(seconds)
+
+
+class Pace:
+    """Spends Gmail quota units no faster than UNITS_PER_MINUTE, after an initial burst."""
+
+    def __init__(self, clock=time.monotonic):
+        self.clock = clock
+        self.units = float(BURST_UNITS)
+        self.at = clock()
+
+    def spend(self, units: int) -> None:
+        t = self.clock()
+        self.units = min(BURST_UNITS, self.units + (t - self.at) * UNITS_PER_MINUTE / 60)
+        self.at = t
+        if self.units < units:
+            _wait((units - self.units) * 60 / UNITS_PER_MINUTE)
+            self.units, self.at = float(units), self.clock()
+        self.units -= units
+
+
+def _call(pace: Pace, units: int, request):
+    """Run a Gmail request within the pace, waiting and retrying if Google says to slow down."""
+    for attempt in range(RATE_LIMIT_RETRIES + 1):
+        pace.spend(units)
+        try:
+            return request.execute()
+        except Exception as e:
+            if not gmail.is_rate_limited(e) or attempt == RATE_LIMIT_RETRIES:
+                raise
+            _wait(min(MAX_BACKOFF, 2 ** (attempt + 1)) + random.random())
 
 
 def sync_running(account: GmailAccount) -> bool:
@@ -176,10 +226,10 @@ def people_emailed(db: Session, contact_ids: list[int] | None = None) -> dict[st
     return {c.email.lower(): c for c in db.scalars(q)}
 
 
-def _search(service, query: str) -> list[dict]:
+def _search(service, pace: Pace, query: str) -> list[dict]:
     threads, token = [], None
     while len(threads) < MAX_THREADS_PER_SEARCH:
-        res = service.users().threads().list(userId="me", q=query, maxResults=100, pageToken=token).execute()
+        res = _call(pace, COST_SEARCH, service.users().threads().list(userId="me", q=query, maxResults=100, pageToken=token))
         threads += res.get("threads") or []
         token = res.get("nextPageToken")
         if not token:
@@ -194,11 +244,10 @@ def _query(addresses: list[str]) -> str:
     return f"from:({any_of}) OR to:({any_of}) OR cc:({any_of})"
 
 
-def _store_thread(db: Session, thread: dict, me: str, people: dict[str, Contact]) -> int:
-    """Copy a thread's messages for each person on them. Returns how many were new.
-    Drafts are skipped: Gmail lists them in the thread like any message, but they haven't
-    been sent. A copied message that's gone from the thread or is now a draft (copied
-    before drafts were skipped) is removed."""
+def _drop_unsent(db: Session, thread: dict) -> list[dict]:
+    """A thread's messages without drafts: Gmail lists them in the thread like any message,
+    but they haven't been sent. A copied message that's gone from the thread or is now a
+    draft (copied before drafts were skipped) is removed."""
     messages = [m for m in thread.get("messages") or [] if "DRAFT" not in (m.get("labelIds") or [])]
     db.execute(
         delete(ConversationMessage).where(
@@ -206,6 +255,12 @@ def _store_thread(db: Session, thread: dict, me: str, people: dict[str, Contact]
             ConversationMessage.gmail_message_id.not_in([m["id"] for m in messages]),
         )
     )
+    return messages
+
+
+def _store_thread(db: Session, thread: dict, me: str, people: dict[str, Contact]) -> int:
+    """Copy a thread's messages (not drafts) for each person on them. Returns how many were new."""
+    messages = _drop_unsent(db, thread)
     known = {
         (cid, mid)
         for cid, mid in db.execute(
@@ -252,22 +307,37 @@ def _store_thread(db: Session, thread: dict, me: str, people: dict[str, Contact]
 
 def sync(db: Session, service, account: GmailAccount, contact_ids: list[int] | None = None) -> SyncResult:
     """Bring conversations up to date with Gmail, for everyone emailed (or just `contact_ids`).
-    The caller holds the sync claim (claim_sync)."""
+    The caller holds the sync claim (claim_sync); it's renewed after each piece of work, along
+    with the progress so far, so a long sync isn't mistaken for a dead one."""
     people = people_emailed(db, contact_ids)
     me = account.email.lower()
-    result = SyncResult()
+    result = SyncResult(people_total=len(people))
+    pace = Pace()
     addresses = sorted(people)
     seen: set[str] = set()
+
+    def checkpoint():
+        account.sync_started_at = now()
+        account.sync_result = {**asdict(result), "error": None}
+        db.commit()
+
     for i in range(0, len(addresses), ADDRESSES_PER_SEARCH):
-        for t in _search(service, _query(addresses[i : i + ADDRESSES_PER_SEARCH])):
+        for t in _search(service, pace, _query(addresses[i : i + ADDRESSES_PER_SEARCH])):
             if t["id"] in seen:
                 continue
             seen.add(t["id"])
             result.threads_checked += 1
             stored = db.get(MailThread, t["id"])
-            if stored and stored.history_id == t.get("historyId") and stored.skips_drafts:
+            if stored and stored.history_id == t.get("historyId"):
+                if not stored.skips_drafts:
+                    # Unchanged, but synced before drafts were skipped: its labels are enough
+                    # to remove any draft copied then, at a third of the cost.
+                    threads = service.users().threads()
+                    _drop_unsent(db, _call(pace, COST_LABELS, threads.get(userId="me", id=t["id"], format="minimal")))
+                    stored.skips_drafts = True
+                    checkpoint()
                 continue
-            thread = service.users().threads().get(userId="me", id=t["id"], format="full").execute()
+            thread = _call(pace, COST_THREAD, service.users().threads().get(userId="me", id=t["id"], format="full"))
             result.new_messages += _store_thread(db, thread, me, people)
             result.threads_downloaded += 1
             # Only a full sync records the thread as done: a sync for some people may have
@@ -279,7 +349,7 @@ def sync(db: Session, service, account: GmailAccount, contact_ids: list[int] | N
                 else:
                     stored.history_id = history
                     stored.skips_drafts = True
-            db.commit()
-    db.commit()
+            checkpoint()
+        result.people_checked = min(len(addresses), i + ADDRESSES_PER_SEARCH)
+        checkpoint()
     return result
-

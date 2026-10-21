@@ -479,6 +479,8 @@ class ConversationSyncOut(BaseModel):
     threads_checked: int = 0
     threads_downloaded: int = 0
     new_messages: int = 0
+    people_checked: int = 0  # how far it's got, while it runs
+    people_total: int = 0
     synced_at: datetime | None = None
     error: str | None = None  # why the last check failed
 

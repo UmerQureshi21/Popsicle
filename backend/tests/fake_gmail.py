@@ -37,10 +37,14 @@ def message(
 
 
 class _Call:
-    def __init__(self, result):
+    def __init__(self, result, fail_next: list[Exception] | None = None):
         self.result = result
+        self.fail_next = fail_next if fail_next is not None else []
 
     def execute(self):
+        # Like Google's client, running the same request again tries again.
+        if self.fail_next:
+            raise self.fail_next.pop(0)
         if isinstance(self.result, Exception):
             raise self.result
         return self.result
@@ -55,6 +59,7 @@ class FakeGmail:
         self.searches: list[str] = []
         self.downloads: list[str] = []
         self.error: Exception | None = None
+        self.fail_next: list[Exception] = []  # errors for the next requests, one each
         for tid, msgs in (threads or {}).items():
             self.add(tid, *msgs)
 
@@ -86,8 +91,8 @@ class FakeGmail:
         res = {"threads": page}
         if start + self.page_size < len(hits):
             res["nextPageToken"] = str(start + self.page_size)
-        return _Call(res)
+        return _Call(res, self.fail_next)
 
     def get(self, userId, id, format):
-        self.downloads.append(id)
-        return _Call(self.data[id])
+        self.downloads.append(id if format == "full" else f"{id} ({format})")
+        return _Call(self.data[id], self.fail_next)

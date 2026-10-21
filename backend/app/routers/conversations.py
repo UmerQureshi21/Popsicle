@@ -33,6 +33,7 @@ router = APIRouter(prefix="/api/conversations", tags=["conversations"])
 log = logging.getLogger(__name__)
 
 NEEDS_READ = "Popsicle can't read your Gmail yet. Reconnect Gmail and allow “Read your email” to see replies."
+SLOW_DOWN = "Gmail asked Popsicle to slow down. What was checked is saved; refresh in a few minutes to carry on."
 
 
 def _messages(db: Session, contact_ids: list[int], me: str) -> dict[int, list[ConversationMessageOut]]:
@@ -177,6 +178,8 @@ def _status(acct) -> ConversationSyncOut:
         threads_checked=last.get("threads_checked", 0),
         threads_downloaded=last.get("threads_downloaded", 0),
         new_messages=last.get("new_messages", 0),
+        people_checked=last.get("people_checked", 0),
+        people_total=last.get("people_total", 0),
         synced_at=acct.synced_at if acct else None,
         error=last.get("error"),
     )
@@ -192,7 +195,12 @@ def _run_sync(account_id: int) -> None:
         except gmail.GmailNotConnected as e:
             error = str(e)
         except HttpError as e:
-            error = NEEDS_READ if gmail.is_auth_error(e) else f"Gmail error: {e.reason}"
+            if gmail.is_auth_error(e):
+                error = NEEDS_READ
+            elif gmail.is_rate_limited(e):
+                error = SLOW_DOWN
+            else:
+                error = f"Gmail error: {e.reason}"
         except Exception as e:
             if gmail.is_network_error(e):
                 error = gmail.UNREACHABLE  # GmailUnreachable too: no internet isn't a bad login

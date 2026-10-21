@@ -172,6 +172,33 @@ describe("Conversations: checking Gmail", () => {
     expect(polls).toBe(2);
   }, 10_000);
 
+  it("shows how far a long check has got, and replies as they come in", async () => {
+    api("post", "/api/conversations/sync", { running: true, threads_checked: 0, threads_downloaded: 0, new_messages: 0, synced_at: null,
+      people_checked: 0, people_total: 721 });
+    let polls = 0;
+    api("get", "/api/conversations/sync", () =>
+      ++polls < 2
+        ? { running: true, threads_checked: 40, threads_downloaded: 9, new_messages: 2, synced_at: null, people_checked: 120, people_total: 721 }
+        : { running: false, threads_checked: 700, threads_downloaded: 30, new_messages: 2, synced_at: "2026-10-06T12:00:00Z", error: null },
+    );
+    const { list } = setup({ gmail: ALLOWED });
+    expect(await screen.findByText("Checking Gmail for replies… 0 of 721 people")).toBeInTheDocument();
+    const before = list.length;
+    expect(await screen.findByText("Checking Gmail for replies… 120 of 721 people", {}, { timeout: 4000 })).toBeInTheDocument();
+    await waitFor(() => expect(list.length).toBeGreaterThan(before));
+    expect(await screen.findByText("2 new messages from Gmail.", {}, { timeout: 4000 })).toBeInTheDocument();
+  }, 10_000);
+
+  it("changing the filter or search doesn't start another check of Gmail", async () => {
+    const sync = api("post", "/api/conversations/sync", { threads_checked: 0, threads_downloaded: 0, new_messages: 0, synced_at: "2026-10-06T12:00:00Z" });
+    const { user, list } = setup({ gmail: ALLOWED });
+    expect(await screen.findByText("Douglas Quan")).toBeInTheDocument();
+    await user.click(screen.getByRole("tab", { name: /Replied/ }));
+    await user.type(screen.getByRole("textbox", { name: "Search people" }), "ibm");
+    await waitFor(() => expect(list.at(-1)!.url.searchParams.get("q")).toBe("ibm"));
+    expect(sync).toHaveLength(1);
+  });
+
   it("shows why the background check failed", async () => {
     api("post", "/api/conversations/sync", { running: false, threads_checked: 0, threads_downloaded: 0, new_messages: 0, synced_at: null,
       error: "Gmail error: Backend Error" });

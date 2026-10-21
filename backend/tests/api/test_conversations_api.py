@@ -131,6 +131,7 @@ class TestSync:
         body = client.get("/api/conversations/sync").json()
         assert body["running"] is False
         assert (body["threads_checked"], body["threads_downloaded"], body["new_messages"], body["error"]) == (1, 1, 2, None)
+        assert (body["people_checked"], body["people_total"]) == (1, 1)
         assert body["synced_at"] is not None
         assert client.get("/api/conversations").json()["items"][0]["replied"] is True
 
@@ -148,7 +149,8 @@ class TestSync:
 
     def test_status_without_gmail(self, client):
         assert client.get("/api/conversations/sync").json() == {
-            "running": False, "threads_checked": 0, "threads_downloaded": 0, "new_messages": 0, "synced_at": None, "error": None,
+            "running": False, "threads_checked": 0, "threads_downloaded": 0, "new_messages": 0,
+            "people_checked": 0, "people_total": 0, "synced_at": None, "error": None,
         }
 
     def test_needs_gmail(self, client):
@@ -183,6 +185,7 @@ class TestSync:
         [
             (http_error(403, "Request had insufficient authentication scopes."), "Reconnect Gmail"),
             (http_error(500, "Backend Error"), "Gmail error"),
+            (http_error(429, "Quota exceeded for quota metric 'Total Query Cost'"), "slow down"),
             (RuntimeError("boom"), "failed unexpectedly"),
             (httplib2.ServerNotFoundError("Unable to find the server at gmail.googleapis.com"), "internet connection"),
         ],
