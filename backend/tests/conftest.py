@@ -23,7 +23,7 @@ import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 from sqlalchemy import create_engine, make_url, text  # noqa: E402
 
-from app import auth, bookings, campaigns, gmail  # noqa: E402
+from app import auth, bookings, campaigns, conversations, gmail  # noqa: E402
 from app.db import SessionLocal, engine  # noqa: E402
 from app.main import app  # noqa: E402
 from app.models import Base  # noqa: E402
@@ -57,6 +57,14 @@ def _clean_state():
     campaigns._cancel_requested.clear()
     campaigns._wake_requested.clear()
     yield
+
+
+@pytest.fixture(autouse=True)
+def sync_waits(monkeypatch):
+    """How long a Gmail sync waited (pacing, or Google saying slow down), without sleeping."""
+    waits: list[float] = []
+    monkeypatch.setattr(conversations, "_wait", waits.append)
+    return waits
 
 
 @pytest.fixture

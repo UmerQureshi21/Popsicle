@@ -77,6 +77,14 @@ def is_auth_error(e: Exception) -> bool:
     )
 
 
+def is_rate_limited(e: Exception) -> bool:
+    """Google saying "too many requests, slow down": nothing is wrong, try again shortly."""
+    if not isinstance(e, HttpError):
+        return False
+    text = str(e).lower()
+    return e.resp.status == 429 or (e.resp.status == 403 and ("ratelimitexceeded" in text or "quota exceeded" in text))
+
+
 def is_network_error(e: Exception) -> bool:
     """Errors that mean the request never reached Google, so nothing was sent and it's safe to
     try again: the address couldn't be looked up, the connection was refused, or renewing the

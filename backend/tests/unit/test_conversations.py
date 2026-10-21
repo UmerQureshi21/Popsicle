@@ -6,6 +6,7 @@ import pytest
 from sqlalchemy import select
 
 from app import conversations as conv
+from app.conversations import _wait as real_wait  # before the sync_waits fixture replaces it
 from app.db import SessionLocal
 from app.models import ConversationMessage, GmailAccount, MailThread
 from tests import factories as f
@@ -141,26 +142,37 @@ class TestSync:
         assert conv.sync(db, gmail, account).new_messages == 1
         assert stored(db) == [(jane.id, "m1", True, ME, "Hi Jane")]
 
-    def test_a_draft_copied_before_drafts_were_skipped_is_removed(self, db, account):
+    def test_a_draft_copied_before_drafts_were_skipped_is_removed_by_checking_labels_only(self, db, account):
         jane = emailed(db, "jane@stripe.com")
         gmail = FakeGmail({"t1": [
             message("m1", ME, "jane@stripe.com", "Hi Jane", sent=True),
             message("m2", ME, "jane@stripe.com", "Following up...", at=at(3), draft=True),
         ]})
         # As an earlier version left it: the draft copied, the thread marked as synced.
-        db.add(ConversationMessage(
-            contact_id=jane.id, gmail_message_id="m2", gmail_thread_id="t1", from_me=True, from_addr=ME,
-            to_addrs="jane@stripe.com", subject="Quick question", snippet="", body="Following up...", sent_at=at(3),
-        ))
+        for mid, body, when in (("m1", "Hi Jane", at(1)), ("m2", "Following up...", at(3))):
+            db.add(ConversationMessage(
+                contact_id=jane.id, gmail_message_id=mid, gmail_thread_id="t1", from_me=True, from_addr=ME,
+                to_addrs="jane@stripe.com", subject="Quick question", snippet="", body=body, sent_at=when,
+            ))
         db.add(MailThread(gmail_thread_id="t1", history_id="1", skips_drafts=False))
         db.commit()
 
         result = conv.sync(db, gmail, account)
 
-        assert (result.threads_downloaded, result.new_messages) == (1, 1)
+        assert (result.threads_downloaded, result.new_messages) == (0, 0)
+        assert gmail.downloads == ["t1 (minimal)"]
         assert stored(db) == [(jane.id, "m1", True, ME, "Hi Jane")]
         assert db.get(MailThread, "t1").skips_drafts is True
-        assert conv.sync(db, gmail, account).threads_downloaded == 0
+        conv.sync(db, gmail, account)
+        assert gmail.downloads == ["t1 (minimal)"]
+
+    def test_a_changed_thread_synced_before_drafts_were_skipped_is_downloaded_in_full(self, db, account):
+        emailed(db, "jane@stripe.com")
+        gmail = FakeGmail({"t1": [message("m1", ME, "jane@stripe.com", sent=True)]})
+        db.add(MailThread(gmail_thread_id="t1", history_id="0", skips_drafts=False))
+        db.commit()
+        assert conv.sync(db, gmail, account).new_messages == 1
+        assert db.get(MailThread, "t1").skips_drafts is True
 
     def test_a_message_gone_from_the_thread_is_removed(self, db, account):
         emailed(db, "jane@stripe.com")
@@ -236,6 +248,105 @@ class TestSync:
 
 
 
+def rate_limited(status=429):
+    from googleapiclient.errors import HttpError
+
+    resp = type("Resp", (), {"status": status, "reason": "Too Many Requests"})()
+    return HttpError(resp, b'{"error": {"message": "Quota exceeded for quota metric \'Total Query Cost\'"}}')
+
+
+class TestPacing:
+    def test_an_ordinary_sync_doesnt_wait(self, db, account, sync_waits):
+        emailed(db, "jane@stripe.com")
+        conv.sync(db, FakeGmail({f"t{i}": [message(f"m{i}", ME, "jane@stripe.com", sent=True)] for i in range(5)}), account)
+        assert sync_waits == []
+
+    def test_a_big_sync_slows_down_to_stay_under_gmails_limit(self, db, account, sync_waits):
+        emailed(db, "jane@stripe.com")
+        threads = 50
+        conv.sync(db, FakeGmail({f"t{i}": [message(f"m{i}", ME, "jane@stripe.com", sent=True)] for i in range(threads)}), account)
+        # The burst covers the search and 9 threads; the other 41 wait their turn.
+        assert len(sync_waits) == threads - 9
+        assert sync_waits[-1] == pytest.approx(conv.COST_THREAD * 60 / conv.UNITS_PER_MINUTE, rel=0.05)
+
+    def test_no_minute_ever_goes_over_gmails_limit(self, monkeypatch):
+        clock, spent = [0.0], []
+        monkeypatch.setattr(conv, "_wait", lambda seconds: clock.__setitem__(0, clock[0] + seconds))
+        pace = conv.Pace(clock=lambda: clock[0])
+        for i in range(500):
+            cost = conv.COST_SEARCH if i % 10 == 0 else conv.COST_THREAD
+            pace.spend(cost)
+            spent.append((clock[0], cost))
+            clock[0] += 0.05  # each request takes a moment
+        busiest = max(sum(c for t, c in spent if start <= t < start + 60) for start, _ in spent)
+        assert 5000 < busiest < 6000  # close to the limit, never over it
+
+    def test_waiting_really_sleeps(self, monkeypatch):
+        slept = []
+        monkeypatch.setattr(conv.time, "sleep", slept.append)
+        real_wait(1.5)
+        assert slept == [1.5]
+
+    def test_units_come_back_with_time(self, monkeypatch, sync_waits):
+        clock = [0.0]
+        pace = conv.Pace(clock=lambda: clock[0])
+        pace.spend(conv.BURST_UNITS)
+        clock[0] += 60 * conv.COST_THREAD / conv.UNITS_PER_MINUTE  # exactly enough for one thread
+        pace.spend(conv.COST_THREAD)
+        assert sync_waits == []
+        pace.spend(conv.BURST_UNITS)  # more than ever builds up: waits for the rest
+        assert sync_waits == [pytest.approx(conv.BURST_UNITS * 60 / conv.UNITS_PER_MINUTE)]
+
+    @pytest.mark.parametrize("error", [rate_limited(429), rate_limited(403)])
+    def test_when_gmail_says_slow_down_it_waits_and_tries_again(self, db, account, sync_waits, error):
+        emailed(db, "jane@stripe.com")
+        gmail = FakeGmail({"t1": [message("m1", ME, "jane@stripe.com", sent=True)]})
+        gmail.fail_next = [error, error]
+        assert conv.sync(db, gmail, account).new_messages == 1
+        assert [round(w) for w in sync_waits] in ([2, 4], [3, 4], [2, 5], [3, 5])
+
+    def test_gives_up_after_a_few_tries(self, db, account, monkeypatch, sync_waits):
+        monkeypatch.setattr(conv, "RATE_LIMIT_RETRIES", 2)
+        emailed(db, "jane@stripe.com")
+        gmail = FakeGmail({"t1": [message("m1", ME, "jane@stripe.com", sent=True)]})
+        gmail.fail_next = [rate_limited()] * 3
+        with pytest.raises(Exception, match="Quota exceeded"):
+            conv.sync(db, gmail, account)
+        assert len(sync_waits) == 2
+
+    def test_other_errors_arent_retried(self, db, account, sync_waits):
+        from googleapiclient.errors import HttpError
+
+        emailed(db, "jane@stripe.com")
+        gmail = FakeGmail()
+        gmail.fail_next = [HttpError(type("Resp", (), {"status": 500, "reason": "Oops"})(), b"Oops")]
+        with pytest.raises(HttpError):
+            conv.sync(db, gmail, account)
+        assert sync_waits == []
+
+    def test_progress_is_saved_as_it_goes_and_keeps_the_claim_fresh(self, db, account, monkeypatch):
+        monkeypatch.setattr(conv, "ADDRESSES_PER_SEARCH", 2)
+        for i in range(3):
+            emailed(db, f"p{i}@x.com")
+        gmail = FakeGmail({"t1": [message("m1", ME, "p0@x.com", sent=True)]})
+        seen = []
+        real_search = conv._search
+
+        def search(service, pace, query):
+            db.refresh(account)
+            seen.append((account.sync_result or {}).get("people_checked"))
+            return real_search(service, pace, query)
+
+        monkeypatch.setattr(conv, "_search", search)
+        conv.claim_sync(db, account)
+        account.sync_started_at = conv.now() - conv.SYNC_STALE / 2
+        db.commit()
+        conv.sync(db, gmail, account)
+        assert seen == [None, 2]
+        assert account.sync_result["people_checked"] == account.sync_result["people_total"] == 3
+        assert account.sync_started_at > conv.now() - conv.timedelta(seconds=30)
+
+
 class TestSyncClaim:
     """One sync at a time, across every server process, claimed on the account's row."""
 
@@ -255,7 +366,9 @@ class TestSyncClaim:
         conv.claim_sync(db, account)
         conv.finish_sync(db, account, conv.SyncResult(threads_checked=3, threads_downloaded=1, new_messages=2))
         assert not conv.sync_running(account)
-        assert account.sync_result == {"threads_checked": 3, "threads_downloaded": 1, "new_messages": 2, "error": None}
+        assert account.sync_result == {
+            "threads_checked": 3, "threads_downloaded": 1, "new_messages": 2, "people_checked": 0, "people_total": 0, "error": None,
+        }
         assert account.synced_at is not None
 
     def test_a_failure_is_recorded_without_moving_the_last_sync_time(self, db, account):
