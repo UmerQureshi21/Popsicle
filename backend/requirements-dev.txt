@@ -3,3 +3,4 @@ pytest-cov==7.1.0
 responses==0.26.3
 freezegun==1.5.5
 httpx==0.28.1  # FastAPI's TestClient
+pyyaml==6.0.3  # reading compose.yaml in tests/unit/test_docker_files.py

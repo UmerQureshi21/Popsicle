@@ -1,0 +1,10 @@
+# The bundled HTTPS front door, used when .env has COMPOSE_PROFILES=caddy (see compose.yaml).
+# Caddy gets a free certificate for POPSICLE_URL by itself once your domain points at this server
+# and ports 80 and 443 are open to the internet.
+{$POPSICLE_URL} {
+	reverse_proxy frontend:3000 {
+		# Popsicle limits wrong passwords per visitor by this header, so it must come from the real
+		# connection. Left alone, Caddy would pass on whatever a visitor sent in it.
+		header_up X-Real-IP {remote_host}
+	}
+}

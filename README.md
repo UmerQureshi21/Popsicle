@@ -204,7 +204,7 @@ Colours are defined once in `frontend/src/app/globals.css`, each with one job (`
 
 ## Deploying
 
-Popsicle is built to run as one site: the frontend (Vercel) forwards `/api/*` to the backend (Railway), so the browser only ever talks to the frontend's address and login cookies work in every browser.
+Popsicle is built to run as one site: the frontend (Vercel) forwards `/api/*` to the backend (Railway), so the browser only ever talks to the frontend's address and login cookies work in every browser. To run everything on one server of your own instead, see [Self-hosting with Docker](#self-hosting-with-docker).
 
 Popsicle counts as local only when its addresses and its database are all on your machine; anything else gets the deployed rules: login always on, the session cookie https-only, the API docs hidden. The backend refuses to start if `AUTH_REQUIRED=false`, if `ALLOWED_EMAILS`, `TOKEN_ENCRYPTION_KEY` or `PROXY_SECRET` is missing, or if `BACKEND_URL` or `FRONTEND_URL` is still a localhost address.
 
@@ -269,6 +269,82 @@ In the Google Cloud OAuth client, add `https://<your-vercel-address>/api/gmail/c
 
 **Sending safely across restarts.** Each batch is claimed in the database by the server process sending it, and the claim is renewed while it works. During a redeploy, when the old and new servers overlap, a batch is only ever sent by one of them. An email that was being handed to Gmail when a server stopped is marked failed ("may have gone out, check Gmail's Sent folder") rather than resent. Waiting and scheduled batches whose server stopped are picked up again within a minute. The daily limit holds even when several batches send at once (it's checked and taken in one locked step), and Google Meet link emails count toward it. A Gmail connection in progress is kept in the database, so it finishes even if a redeploy happens in the middle.
 
+## Self-hosting with Docker
+
+Instead of Vercel and Railway, you can run your own copy on any server with Docker. `compose.yaml` starts Postgres, the API and the website, plus Caddy for HTTPS if you want it. Only the website (or Caddy) can be reached from outside; the API and the database stay on Docker's private network, and the website forwards `/api` to the API with the proxy secret, just as Vercel does.
+
+It runs with the deployed rules above (login always on, the session cookie https-only), so you need a domain with HTTPS. Gmail needs one too: when you connect it, Google will only send you back to an `https` address on a real domain name, never to an IP address.
+
+### 1. Settings
+
+On the server, in this repo's folder, copy `.env.example` to `.env` and fill it in:
+
+| Setting | Value |
+|---|---|
+| `POPSICLE_URL` | Your site's address, e.g. `https://popsicle.example.com`, with no slash at the end |
+| `ALLOWED_EMAILS` | Your email: the only one that can log in |
+| `TOKEN_ENCRYPTION_KEY`, `PROXY_SECRET`, `POSTGRES_PASSWORD` | Random secrets: run the command above each one in `.env.example` |
+| `GOOGLE_CLIENT_SECRETS_JSON` | The whole contents of your Google OAuth client's JSON file, inside the single quotes |
+| `HUNTER_API_KEY` | Your Hunter key |
+
+Keep `.env` safe (git ignores it). Losing `TOKEN_ENCRYPTION_KEY` means reconnecting Gmail. If a required setting is missing, `docker compose` stops and says which one.
+
+### 2. Google
+
+Set up the OAuth client as in [Connecting Gmail](#connecting-gmail-once), with `https://<your domain>/api/gmail/callback` as its **Authorized redirect URI**.
+
+### 3. Start it
+
+```sh
+docker compose up -d --build
+```
+
+**With the bundled Caddy**, which gets the HTTPS certificate by itself: point your domain at the server, open ports 80 and 443, and uncomment `COMPOSE_PROFILES=caddy` in `.env` before running that. Every `docker compose` command then includes Caddy.
+
+**Behind your own reverse proxy**, leave that line commented out. The website listens on `http://127.0.0.1:3000` on the server (set `POPSICLE_PORT` to change the port). Point your proxy at it, and make sure it:
+
+- **Sets `X-Real-IP` to the visitor's address**, replacing anything the visitor sent. Wrong passwords are limited per visitor by this header, so a value a visitor makes up would get around the limit.
+- **Accepts requests up to 25 MB**, for attachments.
+
+For example, with nginx:
+
+```nginx
+client_max_body_size 25m;  # nginx's default is 1 MB
+
+location / {
+    proxy_pass http://127.0.0.1:3000;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+```
+
+If your proxy runs in Docker itself (Traefik, say), add the `frontend` service to its network in a `compose.override.yaml` instead.
+
+### 4. Your account
+
+```sh
+docker compose exec backend python -m app.manage create-user you@example.com
+```
+
+Type your password at both (hidden) prompts. Then open your site, log in and click **Connect Gmail**.
+
+### Trying it on your own computer
+
+To try the whole stack before using a server, fill in `.env` as in step 1 but with `POPSICLE_URL=https://popsicle.localhost` and `COMPOSE_PROFILES=caddy`, then follow steps 3 and 4. You can leave out step 2 and the Google and Hunter settings. Caddy makes its own certificate for `.localhost` names, so your browser shows a certificate warning to click through.
+
+Use `popsicle.localhost`, not `localhost`: deployed mode refuses `localhost` addresses, while `popsicle.localhost` still points at your own machine. Everything that doesn't need Google or Hunter works. `docker compose down -v` removes it all again.
+
+### Good to know
+
+- **Updating:** `git pull`, then `docker compose up -d --build` again.
+- **Your data** lives in Docker volumes (Postgres in `db-data`, Caddy's certificates in `caddy-data`), so rebuilding or restarting keeps it. `docker compose down -v` deletes them.
+- **`POSTGRES_PASSWORD`** is only used when the database is first created. If you change it in `.env` later, change it in Postgres too (`ALTER ROLE popsicle PASSWORD '…'`), or the backend stops with "password authentication failed".
+- **Backups:** `docker compose exec -T db pg_dump -U popsicle -Fc popsicle > popsicle.dump` (the `-T` keeps the file intact).
+- **Logs:** `docker compose logs -f backend` (or `frontend`, `db`, `caddy`). If `up` says the backend is unhealthy, its log says why.
+- **Always on:** every service restarts by itself after a crash or a reboot (as long as Docker starts on boot), so scheduled batches still go out.
+- **One API:** don't scale the `backend` service. Sending runs in its background threads, the same reason Railway runs exactly one copy.
+
 ## Security
 
 Popsicle shows data it doesn't control: replies from strangers, Hunter's people data, pasted tables, Google's links. It's handled as follows:
@@ -285,7 +361,7 @@ Popsicle shows data it doesn't control: replies from strangers, Hunter's people 
 
 ## Testing
 
-None of the tests reach Hunter or Gmail: Hunter calls and sends are faked, so no credits are spent and no email goes out. Each suite fails if coverage drops below 90%. GitHub Actions runs all of them on every push (`.github/workflows/test.yml`).
+None of the tests reach Hunter or Gmail: Hunter calls and sends are faked, so no credits are spent and no email goes out. Each suite fails if coverage drops below 90%. GitHub Actions runs all of them on every push (`.github/workflows/test.yml`), and also builds the Docker images and checks the whole self-hosted stack through HTTPS (`.github/workflows/docker.yml`).
 
 **Backend** (pytest). The tests use a `cold_emailer_test` database on the 5442 cluster, which they create at the start and drop at the end, so your real data is never touched. Postgres must be running.
 

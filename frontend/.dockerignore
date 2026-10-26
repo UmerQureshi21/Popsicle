@@ -1,0 +1,13 @@
+# Send Docker only what the website's build needs: no node_modules, earlier builds, tests or
+# .env files.
+*
+!package.json
+!package-lock.json
+!next.config.ts
+!tsconfig.json
+!postcss.config.mjs
+!public/
+!src/
+src/test/
+src/**/*.test.ts
+src/**/*.test.tsx
