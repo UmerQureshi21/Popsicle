@@ -69,7 +69,7 @@ export default function PersonRow({
           )}
           {p.in_batch && !emailed && (
             <span
-              className="flex shrink-0 items-center gap-1 rounded-full bg-night px-2 py-0.5 text-[11px] font-semibold whitespace-nowrap text-white"
+              className="flex shrink-0 items-center gap-1 rounded-full bg-ink px-2 py-0.5 text-[11px] font-semibold whitespace-nowrap text-paper"
               title="A batch you started will email this person soon"
             >
               <Clock className="size-3" aria-hidden />
