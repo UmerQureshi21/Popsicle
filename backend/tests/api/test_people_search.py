@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 import pytest
 
 from app import hunter
-from app.models import Company
+from app.models import CampaignStatus, Company, EmailStatus
 from tests import factories as f
 
 
@@ -144,13 +144,21 @@ class TestSearchCompany:
             "email": "jane@stripe.com", "first_name": "Jane", "last_name": "Doe", "full_name": "Jane Doe",
             "position": "Engineer", "department": "it", "seniority": "senior", "confidence": 97,
             "verification_status": "valid", "linkedin_url": "https://linkedin.com/in/jane",
-            "already_emailed_at": jane["already_emailed_at"],
+            "already_emailed_at": jane["already_emailed_at"], "in_batch": False,
         }
         assert jane["already_emailed_at"].startswith("2026-03-01")
         assert (sam["full_name"], sam["already_emailed_at"], sam["verification_status"]) == ("Sam", None, None)
         _, params, location = hunter_api.calls[0]
         assert params["job_titles"] == "engineer"
         assert location == {"location": {"include": [{"city": "Toronto", "country": "CA"}]}}
+
+    def test_people_waiting_in_a_batch_are_marked(self, client, db, hunter_api):
+        hunter_api["/domain-search"] = SEARCH_RESULT
+        f.campaign(db, [("sam@stripe.com", EmailStatus.PENDING)], status=CampaignStatus.SENDING)
+
+        jane, sam = client.post("/api/people-search/company", json={"query": "stripe.com"}).json()["people"]
+
+        assert (jane["in_batch"], sam["in_batch"], sam["already_emailed_at"]) == (False, True, None)
 
     def test_repeat_search_is_cached(self, client, hunter_api):
         hunter_api["/domain-search"] = SEARCH_RESULT
@@ -227,3 +235,45 @@ class TestFindPerson:
         assert r.status_code == 422
         assert message in r.json()["detail"]
         assert hunter_api.calls == []
+
+
+class TestEmailed:
+    """Re-checking saved Find people results: free, never calls Hunter."""
+
+    def check(self, client, *addresses):
+        r = client.post("/api/people-search/emailed", json={"emails": list(addresses)})
+        assert r.status_code == 200, r.text
+        return {p["email"]: p for p in r.json()["people"]}
+
+    def test_reports_sent_and_waiting_people(self, client, db, hunter_api):
+        f.sent_email(db, "jane@stripe.com", datetime(2026, 3, 1, 12, tzinfo=timezone.utc))
+        f.campaign(db, [("sam@stripe.com", EmailStatus.PENDING)], status=CampaignStatus.SCHEDULED)
+
+        res = self.check(client, "Jane@Stripe.com ", "sam@stripe.com", "new@stripe.com", "jane@stripe.com")
+
+        assert list(res) == ["jane@stripe.com", "sam@stripe.com", "new@stripe.com"]
+        assert res["jane@stripe.com"]["already_emailed_at"].startswith("2026-03-01")
+        assert res["jane@stripe.com"]["in_batch"] is False
+        assert (res["sam@stripe.com"]["already_emailed_at"], res["sam@stripe.com"]["in_batch"]) == (None, True)
+        assert res["new@stripe.com"] == {"email": "new@stripe.com", "already_emailed_at": None, "in_batch": False}
+        assert hunter_api.calls == []
+
+    @pytest.mark.parametrize(
+        "email_status, batch_status, waiting",
+        [
+            (EmailStatus.PENDING, CampaignStatus.QUEUED, True),
+            (EmailStatus.PENDING, CampaignStatus.WAITING, True),
+            (EmailStatus.PENDING, CampaignStatus.INTERRUPTED, True),
+            (EmailStatus.PENDING, CampaignStatus.CANCELLED, False),
+            (EmailStatus.CANCELLED, CampaignStatus.CANCELLED, False),
+            (EmailStatus.FAILED, CampaignStatus.COMPLETED, False),
+            (EmailStatus.SKIPPED, CampaignStatus.COMPLETED, False),
+        ],
+    )
+    def test_only_emails_that_may_still_go_out_count_as_waiting(self, client, db, email_status, batch_status, waiting):
+        f.campaign(db, [("sam@stripe.com", email_status)], status=batch_status)
+        assert self.check(client, "sam@stripe.com")["sam@stripe.com"]["in_batch"] is waiting
+
+    @pytest.mark.parametrize("emails", [[], [f"p{i}@x.com" for i in range(501)]])
+    def test_bounds_the_list(self, client, emails):
+        assert client.post("/api/people-search/emailed", json={"emails": emails}).status_code == 422

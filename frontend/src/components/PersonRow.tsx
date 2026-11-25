@@ -1,7 +1,7 @@
 "use client";
 
 import { safeHref } from "@/lib/safeUrl";
-import { ExternalLink, TriangleAlert } from "lucide-react";
+import { Clock, ExternalLink, TriangleAlert } from "lucide-react";
 import type { FoundPerson } from "@/lib/api";
 import { formatDate } from "@/lib/format";
 import { Avatar } from "@/components/ui";
@@ -27,7 +27,8 @@ export function EmailedCount({ people }: { people: FoundPerson[] }) {
 /**
  * One person found on Hunter, as a selectable row. People you've already emailed are flagged in
  * red (tinted background, red edge, "Already emailed" badge) as an early warning before you
- * email them again. Red is reserved for that warning; a ticked row is tinted grey.
+ * email them again. Red is reserved for that warning; a ticked row is tinted grey. People waiting
+ * in a batch that's still sending get a dark "In a batch" badge until it reaches them.
  */
 export default function PersonRow({
   person: p,
@@ -65,6 +66,15 @@ export default function PersonRow({
             >
               <ExternalLink className="size-3.5" />
             </a>
+          )}
+          {p.in_batch && !emailed && (
+            <span
+              className="flex shrink-0 items-center gap-1 rounded-full bg-ink px-2 py-0.5 text-[11px] font-semibold whitespace-nowrap text-paper"
+              title="A batch you started will email this person soon"
+            >
+              <Clock className="size-3" aria-hidden />
+              In a batch
+            </span>
           )}
           {p.already_emailed_at && (
             <span

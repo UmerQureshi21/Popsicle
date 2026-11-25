@@ -240,6 +240,8 @@ cd frontend && npm run lint && npm run typecheck && npx vitest run --coverage &&
 - **Already emailed**:
   - Someone counts as emailed if any `emails` row to their address has status `sent`.
   - Their row is shown with a red flag and starts unticked.
+  - Someone with a `pending` email in a batch that may still send (queued, sending, waiting, scheduled, interrupted) has `in_batch`: an "In a batch" badge, unticked, and skipped by Get new people.
+  - Find people keeps results in localStorage, so on opening (and on tab focus/visibility) it re-checks every saved address with the free `POST /api/people-search/emailed` (500 per request) and applies it with `lib/emailed.ts` `applyEmailed`, unticking newly emailed or batched people. Only the newest check's answer is used.
 - **Handoff to Compose**: `lib/people.ts` (`saveHandoff`/`readHandoff`, via localStorage).
 
 ### 7.3 Gmail and Google (`gmail.py`, `secrets_box.py`)

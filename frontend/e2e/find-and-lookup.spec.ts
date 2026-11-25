@@ -109,3 +109,42 @@ test("get a fresh batch of people you haven't emailed yet", async ({ page }) => 
   await expect(page.getByRole("textbox", { name: "Row 1 email" })).toHaveValue("alex@stripe.com");
   await expect(page.getByRole("textbox", { name: "Row 2 email" })).toHaveValue("priya@stripe.com");
 });
+
+test("people emailed since a search show as emailed and unticked when you come back to Find people", async ({ page }) => {
+  const sam = person({ email: "sam@stripe.com", full_name: "Sam Lee", first_name: "Sam" });
+  let emailed: Record<string, { already_emailed_at: string | null; in_batch: boolean }> = {};
+  await new FakeApi({
+    "GET /api/people-search/suggest": [],
+    "POST /api/people-search/company": {
+      domain: "stripe.com", organization: "Stripe", pattern: "{first}", total: 2, offset: 0, limit: 10, cached: false,
+      people: [person(), sam],
+    },
+    "POST /api/people-search/emailed": (body) => ({
+      people: (body as { emails: string[] }).emails.map((email) => ({
+        email, ...(emailed[email] ?? { already_emailed_at: null, in_batch: false }),
+      })),
+    }),
+  }).install(page);
+
+  await page.goto("/find");
+  await page.getByRole("combobox", { name: "Add a company" }).fill("stripe.com");
+  await page.keyboard.press("Enter");
+  await page.getByRole("button", { name: /^Search/ }).click();
+  await expect(page.getByRole("button", { name: /Email 2 people/ })).toBeVisible();
+
+  // Jane gets emailed, and Sam is waiting in a batch that's still sending.
+  emailed = {
+    "jane@stripe.com": { already_emailed_at: "2026-11-25T14:00:00Z", in_batch: false },
+    "sam@stripe.com": { already_emailed_at: null, in_batch: true },
+  };
+  await page.reload();
+
+  const jane = page.locator("label", { hasText: "Jane Doe" });
+  const samRow = page.locator("label", { hasText: "Sam Lee" });
+  await expect(jane).toHaveAttribute("data-already-emailed", "true");
+  await expect(jane.getByText(/Already emailed · Nov 25/)).toBeVisible();
+  await expect(jane.getByRole("checkbox")).not.toBeChecked();
+  await expect(samRow.getByText("In a batch")).toBeVisible();
+  await expect(samRow.getByRole("checkbox")).not.toBeChecked();
+  await expect(page.getByRole("button", { name: /Email 0 people/ })).toBeDisabled();
+});

@@ -5,7 +5,7 @@ import pytest
 from sqlalchemy import select
 
 from app import hunter
-from app.models import SeenPerson
+from app.models import EmailStatus, SeenPerson
 from app.routers import people_search
 from tests import factories as f
 
@@ -54,6 +54,10 @@ def emailed(db, *numbers):
 
 
 class TestNewPeople:
+    def test_skips_people_waiting_in_a_batch(self, client, db, stripe):
+        f.campaign(db, [("p0@stripe.com", EmailStatus.PENDING), ("p1@stripe.com", EmailStatus.PENDING)])
+        assert emails(ask(client, want=2)) == ["p2@stripe.com", "p3@stripe.com"]
+
     def test_skips_people_already_emailed(self, client, db, stripe):
         emailed(db, *range(10))  # the first 10 were emailed last week
         res = ask(client, want=10)

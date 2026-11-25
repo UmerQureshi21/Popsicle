@@ -320,7 +320,11 @@ export type FoundPerson = {
   verification_status: string | null;
   linkedin_url: string | null;
   already_emailed_at: string | null;
+  in_batch?: boolean; // waiting to be sent in a batch that's still going (missing in older saved results)
 };
+
+/** Whether an address has been emailed since a search (see the backend's /people-search/emailed). */
+export type EmailedStatus = { email: string; already_emailed_at: string | null; in_batch: boolean };
 
 export type PeopleSearch = {
   domain: string | null;
