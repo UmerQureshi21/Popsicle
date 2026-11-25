@@ -306,6 +306,23 @@ class FoundPerson(BaseModel):
     verification_status: str | None = None  # valid | accept_all | unknown | ...
     linkedin_url: str | None = None
     already_emailed_at: datetime | None = None
+    in_batch: bool = False  # waiting to be sent in a batch that's still going
+
+
+class EmailedIn(BaseModel):
+    """Addresses from saved Find people results, to re-check who has been emailed since."""
+
+    emails: list[str] = Field(min_length=1, max_length=500)
+
+
+class EmailedStatus(BaseModel):
+    email: str
+    already_emailed_at: datetime | None
+    in_batch: bool
+
+
+class EmailedOut(BaseModel):
+    people: list[EmailedStatus]
 
 
 class LocationFilter(BaseModel):

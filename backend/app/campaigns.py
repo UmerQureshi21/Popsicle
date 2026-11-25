@@ -40,6 +40,28 @@ def last_sent_by_address(db: Session, addresses: list[str]) -> dict[str, datetim
     return dict(rows.all())
 
 
+# Batches whose pending emails may still go out (by themselves, or when resumed or sent now).
+OPEN_BATCH = (
+    CampaignStatus.QUEUED, CampaignStatus.SENDING, CampaignStatus.WAITING,
+    CampaignStatus.SCHEDULED, CampaignStatus.INTERRUPTED,
+)
+
+
+def queued_addresses(db: Session, addresses: list[str]) -> set[str]:
+    """Which of these addresses are waiting to be sent in a batch that's still going, so Find
+    people can treat them like emailed people before the batch reaches them."""
+    if not addresses:
+        return set()
+    return set(
+        db.scalars(
+            select(Email.to_email)
+            .join(Campaign, Email.campaign_id == Campaign.id)
+            .where(Email.to_email.in_(addresses), Email.status == EmailStatus.PENDING, Campaign.status.in_(OPEN_BATCH))
+            .distinct()
+        )
+    )
+
+
 def uses_booking_link(draft: CampaignDraft) -> bool:
     return bookings.VARIABLE in placeholders(draft.subject, draft.body)
 

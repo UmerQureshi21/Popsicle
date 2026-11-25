@@ -6,11 +6,15 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from .. import hunter, verification
-from ..campaigns import last_sent_by_address
+from ..campaigns import last_sent_by_address, queued_addresses
 from ..db import get_db
 from ..models import Company, SeenPerson
 from ..schemas import (
     CompanySuggestion,
+    EmailFinderIn,
+    EmailedIn,
+    EmailedOut,
+    EmailedStatus,
     EmailFinderIn,
     EmailFinderOut,
     FoundPerson,
@@ -48,9 +52,11 @@ def _person(raw: dict, email_key: str) -> FoundPerson | None:
 
 
 def _mark_already_emailed(db: Session, people: list[FoundPerson]) -> list[FoundPerson]:
-    sent = last_sent_by_address(db, [p.email for p in people])
+    addresses = [p.email for p in people]
+    sent, queued = last_sent_by_address(db, addresses), queued_addresses(db, addresses)
     for p in people:
         p.already_emailed_at = sent.get(p.email)
+        p.in_batch = p.email in queued
     return people
 
 
@@ -170,6 +176,18 @@ NEW_PAGE = 10  # Hunter charges per page of up to 10 people found, so walk 10 at
 NEW_MAX_PAGES = 10  # per click: bounds the cost and how long the request takes
 
 
+@router.post("/emailed", response_model=EmailedOut)
+def emailed(body: EmailedIn, db: Session = Depends(get_db)):
+    """Who among these addresses has been emailed, or is waiting in a batch. Free (no Hunter call):
+    Find people keeps its results in the browser and re-checks them with this when it opens, so
+    people emailed since the search show as emailed and aren't left ticked."""
+    addresses = list(dict.fromkeys(a.strip().lower() for a in body.emails))
+    sent, queued = last_sent_by_address(db, addresses), queued_addresses(db, addresses)
+    return EmailedOut(
+        people=[EmailedStatus(email=a, already_emailed_at=sent.get(a), in_batch=a in queued) for a in addresses]
+    )
+
+
 @router.post("/company/new", response_model=NewPeopleOut)
 def new_people(body: NewPeopleIn, db: Session = Depends(get_db)):
     """The next people at a company you haven't emailed yet (and, with hide_seen, haven't been
@@ -193,7 +211,7 @@ def new_people(body: NewPeopleIn, db: Session = Depends(get_db)):
         total = meta.get("results") or 0
         page = _mark_already_emailed(db, [p for p in (_person(e, "value") for e in data.get("emails") or []) if p])
         for p in page:
-            if p.already_emailed_at or p.email in taken or p.email.lower() in hidden:
+            if p.already_emailed_at or p.in_batch or p.email in taken or p.email.lower() in hidden:
                 continue
             taken.add(p.email)
             found.append(p)
