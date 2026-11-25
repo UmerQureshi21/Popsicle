@@ -148,3 +148,42 @@ test("people emailed since a search show as emailed and unticked when you come b
   await expect(samRow.getByRole("checkbox")).not.toBeChecked();
   await expect(page.getByRole("button", { name: /Email 0 people/ })).toBeDisabled();
 });
+
+test("get 100 new people at a company and take them all to Compose", async ({ page }) => {
+  const api = await new FakeApi({
+    "GET /api/people-search/suggest": [],
+    "POST /api/people-search/company": {
+      domain: "stripe.com", organization: "Stripe", pattern: "{first}", total: 300, offset: 0, limit: 100, cached: true, people: [person()],
+    },
+    // Like the backend: up to 25 a time, carrying on after the people the page already has.
+    "POST /api/people-search/company/new": (body) => {
+      const { want, skip } = body as { want: number; skip: string[] };
+      return {
+        domain: "stripe.com", organization: "Stripe", pattern: "{first}", total: 300, reached_end: false,
+        pages_checked: 3, pages_paid: 1, next_offset: skip.length + 20,
+        people: Array.from({ length: want }, (_, i) => {
+          const n = skip.length + i;
+          return person({ email: `p${n}@stripe.com`, full_name: `Person ${n}`, first_name: `P${n}` });
+        }),
+      };
+    },
+  }).install(page);
+
+  await page.goto("/find");
+  await page.getByRole("combobox", { name: "Add a company" }).fill("stripe.com");
+  await page.keyboard.press("Enter");
+  await page.getByRole("button", { name: "People per company" }).click();
+  await page.getByRole("option", { name: /Up to 100/ }).click();
+  await page.getByRole("button", { name: /^Search/ }).click();
+  await expect(page.getByText("Jane Doe")).toBeVisible();
+  expect(api.called("POST /api/people-search/company")[0].body).toMatchObject({ limit: 100 });
+
+  await page.getByRole("button", { name: /Get 100 new people/ }).click();
+  await expect(page.getByText("100 people you haven’t emailed. Used about 4 credits.")).toBeVisible();
+  expect(api.called("POST /api/people-search/company/new")).toHaveLength(4);
+
+  await page.getByRole("button", { name: /Email 100 people/ }).click();
+  await expect(page).toHaveURL(/\/compose$/);
+  await expect(page.getByText("Loaded 100 people from Stripe.")).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "Row 100 email" })).toHaveValue("p99@stripe.com");
+});

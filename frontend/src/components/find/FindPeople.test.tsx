@@ -354,12 +354,30 @@ describe("FindPeople: get new people", () => {
     expect(screen.getByRole("button", { name: /Email 2 people/ })).toBeEnabled();
     expect(screen.queryByRole("button", { name: /Load more/ })).not.toBeInTheDocument();
     expect(calls[0].body).toEqual({
-      query: "stripe.com", want: 10, job_titles: DEFAULT_TITLES,
+      query: "stripe.com", want: 10, offset: 0, skip: [], job_titles: DEFAULT_TITLES,
       location: expect.any(Array), hide_seen: false,
     });
     // And again for the next batch.
     await user.click(screen.getByRole("button", { name: /Get 10 new people/ }));
     await waitFor(() => expect(calls).toHaveLength(2));
+  });
+
+  it("gets 100 new people in pieces of 25", async () => {
+    const many = (from: number, n: number) => Array.from({ length: n }, (_, i) => person({ email: `p${from + i}@stripe.com`, full_name: `P ${from + i}` }));
+    const calls = api("post", "/api/people-search/company/new", ({ body }) => {
+      const { skip } = body as { skip: string[] };
+      return fresh(many(skip.length, 25), { next_offset: skip.length + 20 });
+    });
+    const user = setup();
+    await searched(user);
+    await user.click(screen.getByRole("button", { name: "People per company" }));
+    await user.click(screen.getByRole("option", { name: /Up to 100/ }));
+    await user.click(screen.getByRole("button", { name: /Get 100 new people/ }));
+
+    expect(await screen.findByRole("button", { name: /Email 100 people/ })).toBeEnabled();
+    expect(screen.getByText("100 people you haven’t emailed. Used about 4 credits.")).toBeInTheDocument();
+    expect(calls.map((c) => (c.body as { offset: number; skip: string[] }).skip.length)).toEqual([0, 25, 50, 75]);
+    expect(calls.map((c) => (c.body as { offset: number }).offset)).toEqual([0, 20, 45, 70]);
   });
 
   it("can also skip people already seen, and remembers that choice", async () => {

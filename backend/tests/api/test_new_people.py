@@ -125,6 +125,32 @@ class TestNewPeople:
         res = ask(client, want=12)
         assert emails(res).count("p9@stripe.com") == 1 and len(res["people"]) == 12
 
+    def test_next_offset_is_the_page_it_stopped_in(self, client, stripe):
+        assert ask(client, want=3)["next_offset"] == 0  # p3–p9 on the first page weren't looked at yet
+        assert ask(client, want=10)["next_offset"] == 10  # the whole first page was used
+        stripe.size = 12
+        assert ask(client, want=25)["next_offset"] == 20  # reached the end
+
+    def test_carries_on_from_where_the_last_ask_stopped(self, client, db, stripe):
+        """The page asks in pieces of up to 25 to get 100 new people, without anyone twice."""
+        stripe.size = 140
+        emailed(db, 1, 30, 31)
+        got: list[str] = []
+        offset, reached_end, asks = 0, False, 0
+        while len(got) < 100 and not reached_end:
+            res = ask(client, want=min(25, 100 - len(got)), offset=offset, skip=got)
+            got += emails(res)
+            offset, reached_end, asks = res["next_offset"], res["reached_end"], asks + 1
+        expected = [f"p{i}@stripe.com" for i in range(140) if i not in (1, 30, 31)][:100]
+        assert (got, asks) == (expected, 4)
+        # Every page was fetched once: later asks reuse the page an earlier one stopped in, for free.
+        assert stripe.pages == [(o, 10) for o in range(0, 110, 10)]
+
+    @pytest.mark.parametrize("body", [{"offset": 5}, {"offset": -10}, {"skip": [f"p{i}@x.com" for i in range(101)]}])
+    def test_offset_and_skip_are_checked(self, client, body):
+        r = client.post("/api/people-search/company/new", json={"query": "stripe.com", **body})
+        assert r.status_code == 422
+
     def test_uses_the_search_filters(self, client, stripe):
         ask(client, want=5, job_titles="software engineer", location=[{"city": "Toronto", "country": "CA"}])
         params, body = stripe.bodies[0]
