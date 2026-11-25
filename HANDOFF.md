@@ -234,7 +234,8 @@ cd frontend && npm run lint && npm run typecheck && npx vitest run --coverage &&
   - An old saved "software engineer" is upgraded to the default.
 - **Get new people** (`POST /api/people-search/company/new`):
   - Walks results 10 per page from the top, skipping people already emailed (and, with `hide_seen`, anyone in `seen_people`).
-  - Stops at `want`, or after 10 pages per click.
+  - Stops at `want` (max 25 per request), or after 10 pages per request.
+  - For more (the "Up to 100" option), the page asks in pieces of 25 (`lib/newPeople.ts` `gatherNewPeople`): each passes `offset` (whole pages, so saved pages stay free) and `skip` (people it already has), and continues from `next_offset`. A piece that comes back short ends the click, so one click can't walk every page.
   - Saved pages are free, so usually only one new page costs a credit.
   - Every search records who was shown in `seen_people`.
 - **Already emailed**:
