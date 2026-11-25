@@ -28,6 +28,27 @@ const contact = (overrides: Partial<Contact> = {}): Contact => ({
 });
 
 describe("Contacts page", () => {
+  it("opens your notes on someone, which save as you type", async () => {
+    api("get", "/api/companies/names", []);
+    contactsApi(() => [contact({ notes: "- Ask about payments" }), contact({ id: 2, email: "sam@x.com", full_name: "Sam Lee" })]);
+    const saves = api("patch", "/api/contacts/1", { id: 1 });
+    render(<ContactsPage />);
+    const user = userEvent.setup();
+    await screen.findByText("Jane Doe");
+    const [janeNotes, samNotes] = screen.getAllByRole("button", { name: "Notes" });
+    expect(janeNotes).toHaveAttribute("title", "Your notes");
+    expect(samNotes).toHaveAttribute("title", "Write notes");
+    await user.click(janeNotes);
+    expect(screen.getByRole("dialog")).toHaveTextContent("Notes on Jane Doe");
+    const box = screen.getByRole("textbox", { name: "Coffee chat notes" });
+    expect(box).toHaveValue("- Ask about payments");
+    await user.type(box, "!");
+    await waitFor(() => expect(saves[0]?.body).toEqual({ notes: "- Ask about payments!" }));
+    await user.click(screen.getByRole("button", { name: "Close" }));
+    await user.click(screen.getAllByRole("button", { name: "Notes" })[0]);
+    expect(screen.getByRole("textbox", { name: "Coffee chat notes" })).toHaveValue("- Ask about payments!");
+  });
+
   it("lists contacts, searches, filters by company and removes", async () => {
     api("get", "/api/companies/names", [{ id: 1, name: "Stripe" }]);
     let list = [contact(), contact({ id: 2, email: "sam@x.com", full_name: null, title: null, linkedin_url: null, company_name: null, sent_count: 0, last_status: null })];

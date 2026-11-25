@@ -2,7 +2,22 @@
 
 import { safeHref } from "@/lib/safeUrl";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { CalendarCheck, CalendarDays, Check, ChevronLeft, Copy, ExternalLink, Link2, MessagesSquare, RefreshCw, Search, Video, X } from "lucide-react";
+import {
+  CalendarCheck,
+  CalendarDays,
+  Check,
+  ChevronLeft,
+  Copy,
+  ExternalLink,
+  Link2,
+  MessagesSquare,
+  NotebookPen,
+  Paperclip,
+  RefreshCw,
+  Search,
+  Video,
+  X,
+} from "lucide-react";
 import {
   API_URL,
   api,
@@ -21,6 +36,7 @@ import { CompanyLogo } from "@/components/CompanyAutocomplete";
 import LoadMore from "@/components/LoadMore";
 import MeetScheduler from "./MeetScheduler";
 import SendBookingLink from "./SendBookingLink";
+import CoffeeNotes from "@/components/coffee/CoffeeNotes";
 
 type Filter = "all" | "replied" | "waiting";
 const FILTERS: { value: Filter; label: string }[] = [
@@ -59,6 +75,11 @@ function MeetingCard({ m }: { m: Meeting }) {
           {meetingRange(m)}
           {past && " · done"}
         </p>
+        {m.attachment_name && (
+          <p className="mt-0.5 flex items-center gap-1 truncate text-xs text-steel">
+            <Paperclip className="size-3 shrink-0" /> {m.attachment_name}
+          </p>
+        )}
       </div>
       <div className="flex items-center gap-1">
         <a href={safeHref(m.meet_url)} target="_blank" rel="noreferrer" className="rounded-lg px-2 py-1 text-xs font-medium text-crimson hover:bg-paper">
@@ -151,6 +172,7 @@ export default function Conversations() {
   const [error, setError] = useState<string | null>(null);
   const [scheduling, setScheduling] = useState(false);
   const [offeringTimes, setOfferingTimes] = useState(false);
+  const [notesOpen, setNotesOpen] = useState(false);
 
   // One page at a time; the filter and search run on the server, so they cover everyone.
   const list = usePaged<ConversationPage>(`/api/conversations?${new URLSearchParams({ filter, ...(search ? { q: search } : {}) })}`);
@@ -216,6 +238,7 @@ export default function Conversations() {
 
   const select = (id: number | null) => {
     setDetail(null);
+    setNotesOpen(false);
     setSelectedId(id);
   };
 
@@ -393,6 +416,15 @@ export default function Conversations() {
                       {selected.email}
                     </p>
                   </div>
+                  <Button
+                    onClick={() => setNotesOpen((o) => !o)}
+                    disabled={!detail}
+                    aria-label="Notes"
+                    aria-pressed={notesOpen}
+                    className={`shrink-0 ${notesOpen ? "bg-cloud" : ""}`}
+                  >
+                    <NotebookPen className="size-4" /> <span className="hidden sm:inline">Notes</span>
+                  </Button>
                   <Button onClick={() => setOfferingTimes(true)} disabled={!detail} aria-label="Send booking link" className="shrink-0">
                     <CalendarCheck className="size-4" /> <span className="hidden sm:inline">Booking link</span>
                   </Button>
@@ -404,6 +436,14 @@ export default function Conversations() {
                 <div className="min-h-0 flex-1 space-y-5 overflow-y-auto bg-cloud/30 p-4 sm:p-6">
                   {!detail ? (
                     <p className="text-sm text-steel">Loading…</p>
+                  ) : notesOpen ? (
+                    <CoffeeNotes
+                      key={detail.contact_id}
+                      contactId={detail.contact_id}
+                      initial={detail.notes ?? ""}
+                      onSaved={(notes) => setDetail((d) => (d && d.contact_id === detail.contact_id ? { ...d, notes } : d))}
+                      className="h-full"
+                    />
                   ) : (
                     <>
                       {detail.meetings.length > 0 && (
@@ -452,7 +492,7 @@ export default function Conversations() {
       )}
       {scheduling && selected && (
         <MeetScheduler
-          person={selected}
+          person={detail && detail.contact_id === selected.contact_id ? detail : selected}
           gmail={gmail}
           onClose={() => setScheduling(false)}
           onScheduled={(m) => {

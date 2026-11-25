@@ -244,10 +244,19 @@ export type Meeting = {
   meet_url: string;
   calendar_url: string | null;
   calendar_invite: boolean;
+  attachment_name?: string | null; // e.g. the coffee chat sheet sent with the link
   created_at: string;
 };
 
-export type ConversationDetail = ConversationSummary & { messages: ConversationMessage[]; meetings: Meeting[] };
+export type ConversationDetail = ConversationSummary & {
+  messages: ConversationMessage[];
+  meetings: Meeting[];
+  notes?: string | null; // your coffee chat notes on them
+  coffee_chat_file?: string; // what their coffee chat sheet is called
+};
+
+/** About me: the part of every coffee chat sheet that's the same for everyone. */
+export type Profile = { about: string };
 export type ConversationPage = Page<ConversationSummary> & { counts: { all: number; replied: number; waiting: number } };
 
 /** When people may book a call through their booking link. Times are minutes after midnight. */

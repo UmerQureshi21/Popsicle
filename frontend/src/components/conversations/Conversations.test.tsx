@@ -271,6 +271,28 @@ describe("Conversations: one person", () => {
     expect(await screen.findByText("No reply yet.")).toBeInTheDocument();
   });
 
+  it("Notes opens your notepad for them, and a Meet link shows what was attached", async () => {
+    api("get", "/api/conversations/3", detail({ notes: "- Ask about AI", meetings: [meeting({ attachment_name: "Coffee_Chat_With_Douglas.pdf" })] }));
+    const saves = api("patch", "/api/contacts/3", { id: 3 });
+    const { user } = setup();
+    await user.click(await screen.findByRole("button", { name: /Douglas Quan/ }));
+    expect(await screen.findByText("Coffee_Chat_With_Douglas.pdf")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Notes" }));
+    expect(screen.getByRole("button", { name: "Notes" })).toHaveAttribute("aria-pressed", "true");
+    const notes = screen.getByRole("textbox", { name: "Coffee chat notes" });
+    expect(notes).toHaveValue("- Ask about AI");
+    expect(screen.queryByText("Hi Douglas, would you have 30 minutes?")).not.toBeInTheDocument();
+    await user.type(notes, "\n- And testing");
+    await waitFor(() => expect(saves).toHaveLength(1));
+
+    // Back to the conversation; opening the notes again shows what was saved.
+    await user.click(screen.getByRole("button", { name: "Notes" }));
+    expect(await screen.findByText("Hi Douglas, would you have 30 minutes?")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Notes" }));
+    await waitFor(() => expect(screen.getByRole("textbox", { name: "Coffee chat notes" })).toHaveValue("- Ask about AI\n- And testing"));
+  });
+
   it("copying can fail quietly", async () => {
     api("get", "/api/conversations/3", detail({ meetings: [meeting()] }));
     const { user } = setup();

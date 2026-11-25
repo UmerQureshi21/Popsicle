@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Video } from "lucide-react";
-import { API_URL, api, type ConversationSummary, type GmailStatus, type Meeting } from "@/lib/api";
+import { FileText, Video } from "lucide-react";
+import { API_URL, api, type ConversationDetail, type ConversationSummary, type GmailStatus, type Meeting } from "@/lib/api";
+import { coffeeChatUrl } from "@/lib/coffeeChat";
 import { DURATIONS, LINK, combine, defaultMessage, defaultTitle, firstName, nextWeekday, timeSlots, timeZone, toDateInput } from "@/lib/meet";
 import { Button, Modal } from "@/components/ui";
 import Select from "@/components/Select";
@@ -18,7 +19,7 @@ export default function MeetScheduler({
   onClose,
   onScheduled,
 }: {
-  person: ConversationSummary;
+  person: ConversationSummary & Partial<Pick<ConversationDetail, "notes" | "coffee_chat_file">>;
   gmail: GmailStatus | null;
   onClose: () => void;
   onScheduled: (m: Meeting) => void;
@@ -29,6 +30,7 @@ export default function MeetScheduler({
   const [time, setTime] = useState("10:00");
   const [minutes, setMinutes] = useState<number>(30);
   const [invite, setInvite] = useState(true);
+  const [attach, setAttach] = useState(false);
   // The message follows the chosen time until it's edited by hand.
   const [edited, setEdited] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
@@ -51,6 +53,7 @@ export default function MeetScheduler({
         time_zone: timeZone(),
         message,
         calendar_invite: invite,
+        attach_coffee_chat: attach,
       });
       onScheduled(meeting);
     } catch (e) {
@@ -139,6 +142,25 @@ export default function MeetScheduler({
           <input type="checkbox" checked={invite} onChange={(e) => setInvite(e.target.checked)} className="size-4 accent-crimson" />
           Also send {name} a Google Calendar invite
         </label>
+
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-ink">
+          <label className="flex items-center gap-2">
+            <input type="checkbox" checked={attach} onChange={(e) => setAttach(e.target.checked)} className="size-4 accent-crimson" />
+            Attach coffee chat PDF
+            {person.coffee_chat_file && <span className="text-steel"> ({person.coffee_chat_file})</span>}
+          </label>
+          <a
+            href={coffeeChatUrl(person.contact_id)}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1 font-medium text-crimson underline-offset-2 hover:underline"
+          >
+            <FileText className="size-3.5" /> Preview
+          </a>
+          {!person.notes?.trim() && (
+            <p className="w-full text-xs text-steel">You haven’t written notes on {name} yet, so the PDF has only your About me.</p>
+          )}
+        </div>
 
         {error && <p className="text-sm text-crimson">{error}</p>}
       </div>
