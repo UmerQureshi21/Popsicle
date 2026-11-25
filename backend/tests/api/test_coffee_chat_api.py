@@ -21,9 +21,10 @@ def test_notes_are_saved_on_the_contact(client, db):
 def test_notes_come_with_their_conversation(client, db):
     from datetime import datetime, timezone
 
-    c = f.contact(db, email="maggy@cibc.com", notes="- Ask about payments")
+    c = f.contact(db, email="maggy@cibc.com", first_name="Maggy", notes="- Ask about payments")
     f.sent_email(db, "maggy@cibc.com", datetime(2026, 11, 1, tzinfo=timezone.utc), contact=c)
-    assert client.get(f"/api/conversations/{c.id}").json()["notes"] == "- Ask about payments"
+    detail = client.get(f"/api/conversations/{c.id}").json()
+    assert (detail["notes"], detail["coffee_chat_file"]) == ("- Ask about payments", "Coffee_Chat_With_Maggy.pdf")
 
 
 def test_the_sheet_opens_in_the_browser_or_downloads(client, db, monkeypatch):

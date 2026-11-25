@@ -248,6 +248,7 @@ def get_conversation(contact_id: int, db: Session = Depends(get_db)):
         messages=msgs,
         meetings=[MeetingOut.model_validate(m) for m in calls],
         notes=people[0].notes,
+        coffee_chat_file=coffee_chat.filename(people[0]),
     )
 
 

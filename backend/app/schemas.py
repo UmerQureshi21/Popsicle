@@ -501,6 +501,7 @@ class ConversationDetail(ConversationSummary):
     messages: list[ConversationMessageOut]
     meetings: list[MeetingOut] = []
     notes: str | None = None  # your coffee chat notes on them
+    coffee_chat_file: str = ""  # what their coffee chat sheet is called
 
 
 class ConversationSyncOut(BaseModel):
