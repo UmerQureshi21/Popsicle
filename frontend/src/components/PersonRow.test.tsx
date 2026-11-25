@@ -98,3 +98,15 @@ describe("PersonRow", () => {
     expect(screen.getByRole("checkbox")).not.toBeChecked();
   });
 });
+
+describe("PersonRow: waiting in a batch", () => {
+  it("shows an In a batch badge until the email goes out", () => {
+    const { rerender } = render(<PersonRow person={person({ in_batch: true })} selected={false} onToggle={() => {}} />);
+    expect(screen.getByText("In a batch")).toBeInTheDocument();
+    rerender(
+      <PersonRow person={person({ in_batch: true, already_emailed_at: "2026-03-01T12:00:00Z" })} selected={false} onToggle={() => {}} />,
+    );
+    expect(screen.queryByText("In a batch")).not.toBeInTheDocument();
+    expect(screen.getByText(/Already emailed/)).toBeInTheDocument();
+  });
+});

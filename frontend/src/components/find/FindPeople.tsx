@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ArrowRight, Loader2, Search, Sparkles, UserSearch, X } from "lucide-react";
 import { api, type FoundPerson, type NewPeople, type PeopleSearch } from "@/lib/api";
 import { creditsChanged, creditsText, searchCost, useHunterStatus } from "@/lib/credits";
@@ -9,6 +9,7 @@ import { formatDate } from "@/lib/format";
 import { DEFAULT_LOCATION, LOCATIONS, locationById, type LocationId } from "@/lib/locations";
 import { DEFAULT_TITLES, ROLES, roleOf, roleTitles, titleLabel, type RoleId } from "@/lib/roles";
 import { textChip, textToChips, type Chip } from "@/lib/chips";
+import { applyEmailed, checkEmailed } from "@/lib/emailed";
 import { saveHandoff } from "@/lib/people";
 import { Button, EmptyState } from "@/components/ui";
 import CompanyAutocomplete, { CompanyLogo } from "@/components/CompanyAutocomplete";
@@ -105,9 +106,39 @@ export default function FindPeople() {
   const [perCompany, setPerCompany] = useState(initial.perCompany);
   const [hideSeen, setHideSeen] = useState(initial.hideSeen);
   const [results, setResults] = useState<CompanyResult[]>(initial.results);
+  const resultsRef = useRef(initial.results);
   const status = useHunterStatus();
   const [searching, setSearching] = useState(false);
 
+  // Results are kept in the browser, so people emailed since the search would still look new (and
+  // ticked). Re-check them when the page opens and whenever you come back to the tab.
+  useEffect(() => {
+    let latest = 0; // only the newest check's answer is used, even if an older one arrives after it
+    const recheck = async () => {
+      const emails = resultsRef.current.flatMap((r) => r.people.map((p) => p.email));
+      if (!emails.length) return;
+      const mine = ++latest;
+      try {
+        const statuses = await checkEmailed(emails);
+        if (mine === latest) setResults((prev) => applyEmailed(prev, statuses));
+      } catch {} // the saved flags stay as they were; the next visit tries again
+    };
+    const onVisible = () => {
+      if (document.visibilityState === "visible") recheck();
+    };
+    recheck();
+    window.addEventListener("focus", recheck);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      latest = -1;
+      window.removeEventListener("focus", recheck);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, []);
+
+  useEffect(() => {
+    resultsRef.current = results;
+  }, [results]);
 
   useEffect(() => {
     try {
@@ -142,7 +173,7 @@ export default function FindPeople() {
         const known = new Set(base.map((p) => p.email));
         const fresh = res.people.filter((p) => !known.has(p.email));
         // New people start selected unless they've already been emailed.
-        const autoSelect = fresh.filter((p) => !p.already_emailed_at).map((p) => p.email);
+        const autoSelect = fresh.filter((p) => !p.already_emailed_at && !p.in_batch).map((p) => p.email);
         return {
           state: "done",
           search: res,

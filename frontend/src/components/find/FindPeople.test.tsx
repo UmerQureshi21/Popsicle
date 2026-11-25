@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { readHandoff } from "@/lib/people";
 import { DEFAULT_TITLES, roleTitles } from "@/lib/roles";
 import { hunterStatus, person, search } from "@/test/fixtures";
@@ -12,9 +12,16 @@ const STORAGE_KEY = "popsicle:find-people:v1";
 const JANE = person();
 const SAM = person({ email: "sam@stripe.com", full_name: "Sam Lee", already_emailed_at: "2026-03-01T12:00:00Z" });
 
+/** Nobody emailed since the search, unless a test says otherwise. */
+const nothingNew = () =>
+  api("post", "/api/people-search/emailed", ({ body }) => ({
+    people: (body as { emails: string[] }).emails.map((email) => ({ email, already_emailed_at: null, in_batch: false })),
+  }));
+
 function setup({ status = hunterStatus(), saved }: { status?: ReturnType<typeof hunterStatus>; saved?: object } = {}) {
   if (saved) localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
   api("get", "/api/people-search/status", status);
+  nothingNew();
   render(<FindPeople />);
   return userEvent.setup();
 }
@@ -184,6 +191,96 @@ describe("FindPeople", () => {
     localStorage.setItem(STORAGE_KEY, "{bad");
     setup();
     expect(screen.getByRole("textbox", { name: /Job titles/ })).toHaveValue(DEFAULT_TITLES);
+  });
+});
+
+describe("FindPeople: people emailed since the search", () => {
+  const stripe = (people = [JANE, SAM], selected = [JANE.email, SAM.email]) => ({
+    chips: [{ query: "stripe.com", label: "stripe.com", domain: "stripe.com" }],
+    results: [{ query: "stripe.com", state: "done", people, selected, search: search(people) }],
+  });
+  const rowOf = (name: string) => screen.getByText(name).closest("label")!;
+  const now = { email: JANE.email, already_emailed_at: "2026-11-25T14:00:00Z", in_batch: false };
+
+  it("re-checks saved results on opening: emailed people are flagged and unticked", async () => {
+    setup({ saved: stripe() });
+    const calls = api("post", "/api/people-search/emailed", { people: [now] });
+    // setup's default answered the check on opening; coming back to the tab asks again.
+    expect(screen.getByRole("button", { name: /Email 2 people/ })).toBeEnabled();
+    window.dispatchEvent(new Event("focus"));
+    await waitFor(() => expect(rowOf("Jane Doe")).toHaveAttribute("data-already-emailed", "true"));
+    expect(within(rowOf("Jane Doe")).getByRole("checkbox")).not.toBeChecked();
+    expect(screen.getByRole("button", { name: /Email 1 person/ })).toBeEnabled();
+    expect(calls[0].body).toEqual({ emails: [JANE.email, SAM.email] });
+    expect(saved().results[0].selected).toEqual([SAM.email]);
+  });
+
+  it("checks as soon as the page opens", async () => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(stripe()));
+    api("get", "/api/people-search/status", hunterStatus());
+    api("post", "/api/people-search/emailed", { people: [{ ...now, already_emailed_at: null, in_batch: true }] });
+    render(<FindPeople />);
+    expect(await within(rowOf("Jane Doe")).findByText("In a batch")).toBeInTheDocument();
+    expect(within(rowOf("Jane Doe")).getByRole("checkbox")).not.toBeChecked();
+  });
+
+  it("checks again when you come back to the tab, but not while it's hidden", async () => {
+    setup({ saved: stripe() });
+    const calls = api("post", "/api/people-search/emailed", { people: [now] });
+    const visibility = vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
+    document.dispatchEvent(new Event("visibilitychange"));
+    visibility.mockReturnValue("visible");
+    document.dispatchEvent(new Event("visibilitychange"));
+    await waitFor(() => expect(within(rowOf("Jane Doe")).getByRole("checkbox")).not.toBeChecked());
+    expect(calls).toHaveLength(1);
+    visibility.mockRestore();
+  });
+
+  it("an older answer arriving late doesn't undo a newer one", async () => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(stripe()));
+    api("get", "/api/people-search/status", hunterStatus());
+    let release!: () => void;
+    const slow = new Promise<void>((r) => (release = r));
+    let n = 0;
+    api("post", "/api/people-search/emailed", async () => {
+      if (++n === 1) {
+        await slow; // the check on opening is slow, and says nobody was emailed
+        return { people: [{ ...now, already_emailed_at: null }] };
+      }
+      return { people: [now] };
+    });
+    render(<FindPeople />);
+    window.dispatchEvent(new Event("focus"));
+    await waitFor(() => expect(rowOf("Jane Doe")).toHaveAttribute("data-already-emailed", "true"));
+    release();
+    await new Promise((r) => setTimeout(r, 20));
+    expect(rowOf("Jane Doe")).toHaveAttribute("data-already-emailed", "true");
+  });
+
+  it("keeps the saved flags when the check fails, and skips it with no results", async () => {
+    apiError("post", "/api/people-search/emailed", 500);
+    setup({ saved: stripe() });
+    window.dispatchEvent(new Event("focus"));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(screen.getByRole("button", { name: /Email 2 people/ })).toBeEnabled();
+  });
+
+  it("doesn't ask when there are no saved results", async () => {
+    const calls = api("post", "/api/people-search/emailed", { people: [] });
+    api("get", "/api/people-search/status", hunterStatus());
+    render(<FindPeople />);
+    window.dispatchEvent(new Event("focus"));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(calls).toHaveLength(0);
+  });
+
+  it("a new search leaves people waiting in a batch unticked", async () => {
+    const user = setup();
+    api("post", "/api/people-search/company", search([JANE, { ...SAM, already_emailed_at: null, in_batch: true }]));
+    await user.type(companyBox(), "stripe.com{Enter}");
+    await user.click(searchButton());
+    expect(await screen.findByRole("button", { name: /Email 1 person/ })).toBeEnabled();
+    expect(within(rowOf("Sam Lee")).getByText("In a batch")).toBeInTheDocument();
   });
 });
 
