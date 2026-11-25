@@ -247,6 +247,7 @@ def get_conversation(contact_id: int, db: Session = Depends(get_db)):
         **_summary(people[0], msgs, _next_meetings(db, [contact_id]).get(contact_id)),
         messages=msgs,
         meetings=[MeetingOut.model_validate(m) for m in calls],
+        notes=people[0].notes,
     )
 
 

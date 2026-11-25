@@ -500,6 +500,7 @@ class MeetingIn(BaseModel):
 class ConversationDetail(ConversationSummary):
     messages: list[ConversationMessageOut]
     meetings: list[MeetingOut] = []
+    notes: str | None = None  # your coffee chat notes on them
 
 
 class ConversationSyncOut(BaseModel):
