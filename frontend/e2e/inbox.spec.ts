@@ -122,3 +122,57 @@ test("a long Gmail check shows how far it's got, and filtering doesn't start ano
   await expect(page.getByRole("button", { name: /Douglas Quan/ })).toBeVisible();
   expect(api.called("POST /api/conversations/sync")).toHaveLength(1);
 });
+
+test("write notes on someone, then send the Meet link with their coffee chat PDF", async ({ page }) => {
+  let notes = "";
+  let about = "";
+  const api = await new FakeApi({
+    "GET /api/gmail/status": { connected: true, email: "me@gmail.com", credentials_file_present: true, can_read: true, can_meet: true },
+    "POST /api/conversations/sync": { threads_checked: 0, threads_downloaded: 0, new_messages: 0, synced_at: null },
+    "GET /api/conversations": conversationsPage([douglas]),
+    "GET /api/conversations/3": () => ({
+      ...douglas, meetings: [], notes, coffee_chat_file: "Coffee_Chat_With_Douglas.pdf",
+      messages: [{ id: "m2", from_me: false, from_name: "Douglas Quan", from_addr: douglas.email, to: "me@gmail.com", subject: "Re: Coffee chat",
+        body: "Happy to chat!", sent_at: "2026-10-05T14:00:00Z", gmail_thread_id: "t1" }],
+    }),
+    "GET /api/profile": () => ({ about }),
+    "PUT /api/profile": (body) => {
+      about = (body as { about: string }).about;
+      return { about };
+    },
+    "PATCH /api/contacts/3": (body) => {
+      notes = (body as { notes: string }).notes;
+      return { id: 3, notes };
+    },
+    "POST /api/conversations/3/meeting": (body) => ({
+      id: 1, title: "Coffee chat with Douglas", starts_at: (body as { starts_at: string }).starts_at, ends_at: (body as { starts_at: string }).starts_at,
+      time_zone: "America/Toronto", meet_url: "https://meet.google.com/abc-defg-hij", calendar_url: null, calendar_invite: true,
+      attachment_name: "Coffee_Chat_With_Douglas.pdf", created_at: "2026-10-06T12:00:00Z",
+    }),
+  }).install(page);
+
+  await page.goto("/conversations");
+  await page.getByRole("button", { name: "About me" }).click();
+  await page.getByRole("textbox", { name: "About me" }).fill("Who I am:\n- A CS student");
+  await page.getByRole("button", { name: "Save" }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+
+  await page.getByRole("button", { name: /Douglas Quan/ }).click();
+  await page.getByRole("button", { name: "Notes" }).click();
+  await page.getByRole("textbox", { name: "Coffee chat notes" }).fill("What I am curious about:\n- How does IBM test AI code?");
+  await expect(page.getByText(/is a heading/)).toBeVisible();
+  await expect(page.getByRole("link", { name: /Download PDF/ })).toHaveAttribute("href", /\/api\/contacts\/3\/coffee-chat\.pdf\?download=1$/);
+
+  await page.getByRole("button", { name: "Send Meet link" }).click();
+  const dialog = page.getByRole("dialog");
+  const attach = dialog.getByRole("checkbox", { name: /Attach coffee chat PDF/ });
+  await expect(attach).not.toBeChecked();
+  await expect(dialog.getByText("(Coffee_Chat_With_Douglas.pdf)")).toBeVisible();
+  await attach.check();
+  await dialog.getByRole("button", { name: /Send Meet link/ }).click();
+
+  await expect(page.getByText(/Meet link sent to Douglas Quan/)).toBeVisible();
+  expect(api.called("PUT /api/profile")[0].body).toEqual({ about: "Who I am:\n- A CS student" });
+  expect(api.called("PATCH /api/contacts/3").at(-1)!.body).toEqual({ notes: "What I am curious about:\n- How does IBM test AI code?" });
+  expect(api.called("POST /api/conversations/3/meeting")[0].body).toMatchObject({ attach_coffee_chat: true });
+});

@@ -168,6 +168,17 @@ The **Inbox** tab lists everyone you've emailed. Open someone to see the whole c
 - **Send Meet link:** pick a date, time and length (in your timezone), and edit the email if you like. `{{meet_link}}` becomes the link. Popsicle creates a Google Calendar event with a Google Meet link, then emails it as a reply in your conversation. By default they also get a Google Calendar invite; untick that to send only the email. Meetings show at the top of the conversation with the link, a copy button and a link to the calendar event.
 - **Replying in your own words:** use **Reply in Gmail** at the bottom of a conversation.
 
+### Coffee chat notes and PDF
+
+Before a call it helps to send a short sheet about yourself and the questions you'd like to ask. Popsicle writes it for you as a PDF:
+
+1. **About me** (top of the Inbox): who you are and what you're working on. Written once; it's the top of every sheet.
+2. **Notes** on someone: the notepad button in their Inbox conversation, or on their row in **Contacts**. Write why you're reaching out and your questions. It saves as you type.
+3. **Preview PDF** or **Download PDF** under the notes. The sheet is your About me followed by your notes, in plain black text with bold headings, named like `Coffee_Chat_With_Maggy.pdf`.
+4. **Attach it to the Meet link email:** in **Send Meet link**, tick **Attach coffee chat PDF** (it starts unticked; **Preview** shows it first). It goes in the same reply as the Meet link, so it still counts as one email.
+
+Formatting: a line ending in `:` is a heading, a line starting with `-` is a bullet, and web addresses become clickable links. Characters outside Western European alphabets (for example Chinese or Arabic) show as `?` in the PDF.
+
 ### Booking links: let them pick the time
 
 Instead of choosing a time yourself, send someone a link to a page where they pick a 30-minute slot that suits them. The call is then set up exactly like **Send Meet link**.

@@ -397,7 +397,7 @@ export default function Conversations() {
                     <ChevronLeft className="size-5" />
                   </button>
                   <Avatar name={nameOf(selected)} size={40} />
-                  <div className="min-w-0 flex-1">
+                  <div className="min-w-0 flex-1 basis-48">
                     <p className="flex items-center gap-2 truncate font-semibold text-ink">
                       {nameOf(selected)}
                       {safeHref(selected.linkedin_url) && (
@@ -416,22 +416,25 @@ export default function Conversations() {
                       {selected.email}
                     </p>
                   </div>
-                  <Button
-                    onClick={() => setNotesOpen((o) => !o)}
-                    disabled={!detail}
-                    aria-label="Notes"
-                    aria-pressed={notesOpen}
-                    className={`shrink-0 ${notesOpen ? "bg-cloud" : ""}`}
-                  >
-                    <NotebookPen className="size-4" /> <span className="hidden sm:inline">Notes</span>
-                  </Button>
-                  <Button onClick={() => setOfferingTimes(true)} disabled={!detail} aria-label="Send booking link" className="shrink-0">
-                    <CalendarCheck className="size-4" /> <span className="hidden sm:inline">Booking link</span>
-                  </Button>
-                  <Button variant="primary" onClick={() => setScheduling(true)} disabled={!detail} aria-label="Send Meet link" className="shrink-0">
-                    <Video className="size-4" /> <span className="hidden sm:inline">Send Meet link</span>
-                    <span className="sm:hidden">Meet</span>
-                  </Button>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <Button
+                      onClick={() => setNotesOpen((o) => !o)}
+                      disabled={!detail}
+                      aria-label="Notes"
+                      aria-pressed={notesOpen}
+                      title="Your notes on them, for a coffee chat PDF"
+                      className={`shrink-0 ${notesOpen ? "bg-cloud" : ""}`}
+                    >
+                      <NotebookPen className="size-4" /> <span className="hidden 2xl:inline">Notes</span>
+                    </Button>
+                    <Button onClick={() => setOfferingTimes(true)} disabled={!detail} aria-label="Send booking link" className="shrink-0">
+                      <CalendarCheck className="size-4" /> <span className="hidden sm:inline">Booking link</span>
+                    </Button>
+                    <Button variant="primary" onClick={() => setScheduling(true)} disabled={!detail} aria-label="Send Meet link" className="shrink-0">
+                      <Video className="size-4" /> <span className="hidden sm:inline">Send Meet link</span>
+                      <span className="sm:hidden">Meet</span>
+                    </Button>
+                  </div>
                 </header>
                 <div className="min-h-0 flex-1 space-y-5 overflow-y-auto bg-cloud/30 p-4 sm:p-6">
                   {!detail ? (

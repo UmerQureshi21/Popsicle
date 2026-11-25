@@ -287,6 +287,13 @@ cd frontend && npm run lint && npm run typecheck && npx vitest run --coverage &&
 - **Record and limit**: the meeting is recorded in `meetings` and counts toward the daily limit.
 - **Setup**: needs the **Google Calendar API enabled** in his Cloud project; otherwise there's a clear error with a link.
 
+### 7.5a Coffee chat sheets (`coffee_chat.py`, `routers/coffee_chat.py`, `components/coffee/`)
+- **Data**: About me is one row in `profile` (id=1). Notes on a person are the existing `contacts.notes` (saved with `PATCH /api/contacts/{id}`, max 20 000 chars). The conversation detail returns `notes` and `coffee_chat_file`.
+- **PDF**: `coffee_chat.render(about, notes)` with fpdf2 (pinned, plus Pillow/fonttools/defusedxml). Letter, 25 mm margins, Helvetica 11 pt: lines ending in `:` are bold headings, `-` lines are hanging bullets, URLs are links. Helvetica is Latin-1 only, so typed punctuation is mapped to plain equivalents and anything else becomes `?` (embed a TTF if he needs other scripts). Tests set `coffee_chat.COMPRESS = False` to read the text back.
+- **Routes**: `GET/PUT /api/profile`; `GET /api/contacts/{id}/coffee-chat.pdf` (inline; `?download=1` for a file; `no-store`). The frontend links to it directly (`lib/coffeeChat.ts`), like `/api/gmail/connect`.
+- **Meet**: `MeetingIn.attach_coffee_chat` (default false) → the router passes `attachments=[coffee_chat.sheet(...)]` (an unsaved `Attachment`) to `meetings.schedule`, which sends them and records `meetings.attachment_name`.
+- **UI**: About me button next to Booking hours; a Notes toggle in the conversation header (label only at 2xl; the header's name block has `basis-48` so the button group wraps on phones); a Notes button per row in Contacts (modal). `CoffeeNotes` autosaves after 600 ms and saves anything pending when it closes.
+
 ### 7.5b Booking links (`bookings.py`, `routers/bookings.py`, `app/book/[token]`, `BookingHours.tsx`, `SendBookingLink.tsx`)
 - **Tables**: `booking_settings` (one row: enabled, host name, IANA time zone, weekdays 0=Mon, day start/end in minutes, notice hours, days ahead) and `booking_links` (token, contact, expires_at 60 days, emailed_at, meeting_id, booked_at).
 - **Open times**: 30-minute slots inside the hours, after the notice, minus busy time. Busy = `events.list` on the primary calendar (uses the existing `calendar.events` scope, so no reconnect), skipping cancelled, transparent and declined events; all-day events block the whole day; plus `meetings` rows. Times that don't exist when clocks jump forward are skipped. `tzdata` is pinned so `zoneinfo` works on slim images.
