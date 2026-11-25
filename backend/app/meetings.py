@@ -11,7 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from . import gmail
-from .models import Contact, ConversationMessage, Email, EmailStatus, Meeting
+from .models import Attachment, Contact, ConversationMessage, Email, EmailStatus, Meeting
 
 LINK = "{{meet_link}}"
 MEET_POLLS = 3  # Google usually has the link ready at once; otherwise ask again a few times
@@ -120,6 +120,7 @@ def schedule(
     time_zone: str,
     message: str,
     invite: bool,
+    attachments: list[Attachment] | None = None,
 ) -> Meeting:
     acct = gmail.current_account(db)
     if acct is None:
@@ -153,7 +154,8 @@ def schedule(
     subject = reply_subject(subject, title)
     try:
         sent = gmail.send(
-            gmail.gmail_service(creds), contact.email, subject, body, [], thread_id=thread_id, in_reply_to=in_reply_to
+            gmail.gmail_service(creds), contact.email, subject, body, attachments or [],
+            thread_id=thread_id, in_reply_to=in_reply_to,
         )
     except Exception as e:
         _delete_event(cal, event["id"], invite)
@@ -163,7 +165,7 @@ def schedule(
     meeting = Meeting(
         contact_id=contact.id, title=title, starts_at=start, ends_at=end, time_zone=time_zone, meet_url=link,
         calendar_event_id=event["id"], calendar_url=event.get("htmlLink"), calendar_invite=invite,
-        gmail_message_id=sent.get("id"),
+        gmail_message_id=sent.get("id"), attachment_name=", ".join(a.filename for a in attachments or []) or None,
     )
     db.add(meeting)
     # Show the email in the conversation right away; the next sync finds it already there.

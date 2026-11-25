@@ -214,7 +214,7 @@ class ContactPatch(BaseModel):
     last_name: str | None = None
     title: str | None = None
     linkedin_url: str | None = None
-    notes: str | None = None
+    notes: str | None = Field(default=None, max_length=20_000)  # the coffee chat notepad
     company_id: int | None = None
 
     @field_validator("linkedin_url")
@@ -452,7 +452,14 @@ class MeetingOut(ORM):
     meet_url: str
     calendar_url: str | None
     calendar_invite: bool
+    attachment_name: str | None = None
     created_at: datetime
+
+
+class ProfileIo(BaseModel):
+    """About me: the part of every coffee chat sheet that's the same for everyone."""
+
+    about: str = Field(default="", max_length=20_000)
 
 
 class MeetingIn(BaseModel):
@@ -462,6 +469,7 @@ class MeetingIn(BaseModel):
     time_zone: str  # IANA name, e.g. America/Toronto
     message: str = Field(min_length=1, max_length=20_000)  # {{meet_link}} is replaced with the link
     calendar_invite: bool = True  # also send them a Google Calendar invite
+    attach_coffee_chat: bool = False  # attach their coffee chat sheet (About me + your notes) as a PDF
 
     @field_validator("title")
     @classmethod

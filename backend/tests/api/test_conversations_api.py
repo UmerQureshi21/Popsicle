@@ -258,13 +258,23 @@ class TestMeetings:
         assert r.json()["meet_url"] == "https://meet.google.com/abc"
         assert datetime.fromisoformat(r.json()["ends_at"]) == datetime(2030, 10, 7, 13, 30, tzinfo=timezone.utc)
         assert scheduled[0] == dict(title="Coffee chat", start=datetime(2030, 10, 7, 13, tzinfo=timezone.utc), minutes=30,
-                                    time_zone="America/Toronto", message="Here's the link: {{meet_link}}", invite=True)
+                                    time_zone="America/Toronto", message="Here's the link: {{meet_link}}", invite=True,
+                                    attachments=None)
 
         detail = client.get(f"/api/conversations/{douglas.id}").json()
         assert [m["title"] for m in detail["meetings"]] == ["Coffee chat"]
         nine_toronto = datetime(2030, 10, 7, 13, tzinfo=timezone.utc)
         assert datetime.fromisoformat(detail["next_meeting_at"]) == nine_toronto
         assert datetime.fromisoformat(client.get("/api/conversations").json()["items"][0]["next_meeting_at"]) == nine_toronto
+
+    def test_their_coffee_chat_sheet_can_go_with_it(self, client, db, scheduled):
+        douglas, _ = emailed(db, "douglas@harvey.ai", "Douglas Quan")
+        douglas.notes = "What I am curious about:\n- How do you test payments?"
+        db.commit()
+        assert client.post(f"/api/conversations/{douglas.id}/meeting", json={**self.BODY, "attach_coffee_chat": True}).status_code == 201
+        (sheet,) = scheduled[0]["attachments"]
+        assert (sheet.filename, sheet.content_type) == ("Coffee_Chat_With_Douglas.pdf", "application/pdf")
+        assert sheet.data.startswith(b"%PDF") and sheet.size_bytes == len(sheet.data)
 
     def test_past_meetings_are_listed_but_not_next(self, client, db, scheduled):
         from app.models import Meeting

@@ -12,7 +12,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from .. import conversations as svc
-from .. import bookings, gmail, meetings
+from .. import bookings, coffee_chat, gmail, meetings
 from ..db import SessionLocal, get_db
 from ..models import Company, Contact, ConversationMessage, Email, EmailStatus, GmailAccount, Meeting
 from ..paging import PageParams, next_offset
@@ -262,6 +262,7 @@ def schedule_meeting(contact_id: int, body: MeetingIn, db: Session = Depends(get
         meeting = meetings.schedule(
             db, contact, title=body.title.strip(), start=body.starts_at, minutes=body.duration_minutes,
             time_zone=body.time_zone, message=body.message, invite=body.calendar_invite,
+            attachments=[coffee_chat.sheet(db, contact)] if body.attach_coffee_chat else None,
         )
     except meetings.MeetingError as e:
         raise HTTPException(e.status, str(e)) from e
