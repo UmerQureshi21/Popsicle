@@ -40,7 +40,36 @@ describe("MeetScheduler", () => {
       time_zone: timeZone(),
       message: message().value,
       calendar_invite: true,
+      attach_coffee_chat: false,
     });
+  });
+
+  it("can attach their coffee chat PDF (unticked to start)", async () => {
+    const calls = api("post", "/api/conversations/3/meeting", meeting(), 201);
+    const onScheduled = vi.fn();
+    render(
+      <MeetScheduler
+        person={{ ...person(), notes: "- Ask about AI", coffee_chat_file: "Coffee_Chat_With_Douglas.pdf" }}
+        gmail={ALLOWED}
+        onClose={vi.fn()}
+        onScheduled={onScheduled}
+      />,
+    );
+    const user = userEvent.setup();
+    const box = screen.getByRole("checkbox", { name: /Attach coffee chat PDF/ });
+    expect(box.closest("label")).toHaveTextContent("Attach coffee chat PDF (Coffee_Chat_With_Douglas.pdf)");
+    expect(box).not.toBeChecked();
+    expect(screen.getByRole("link", { name: "Preview" })).toHaveAttribute("href", expect.stringMatching(/\/api\/contacts\/3\/coffee-chat\.pdf$/));
+    expect(screen.queryByText(/haven’t written notes/)).not.toBeInTheDocument();
+    await user.click(box);
+    await user.click(screen.getByRole("button", { name: /Send Meet link/ }));
+    await waitFor(() => expect(onScheduled).toHaveBeenCalled());
+    expect(calls[0].body).toMatchObject({ attach_coffee_chat: true });
+  });
+
+  it("says when the PDF would have only About me", () => {
+    setup();
+    expect(screen.getByText("You haven’t written notes on Douglas yet, so the PDF has only your About me.")).toBeInTheDocument();
   });
 
   it("the email follows the chosen time until you edit it", async () => {

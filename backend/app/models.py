@@ -340,7 +340,20 @@ class Meeting(Base):
     calendar_url: Mapped[str | None] = mapped_column(String(1000))
     calendar_invite: Mapped[bool] = mapped_column(Boolean)  # they were also sent a calendar invite
     gmail_message_id: Mapped[str | None] = mapped_column(String(100))
+    attachment_name: Mapped[str | None] = mapped_column(String(300))  # e.g. the coffee chat sheet sent with it
     created_at: Mapped[datetime] = _created_at()
+
+
+class Profile(Base):
+    """One row (id=1): "About me", the part of every coffee chat sheet that's the same for everyone."""
+
+    __tablename__ = "profile"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    about: Mapped[str] = mapped_column(Text, default="")
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
 
 class BookingSettings(Base):

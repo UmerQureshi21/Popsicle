@@ -78,6 +78,7 @@ def google(db, monkeypatch):
 
     g = Google()
     g.sent = []
+    g.attached = []
     monkeypatch.setattr(gmail, "load_credentials", lambda db: "creds")
     monkeypatch.setattr(gmail, "gmail_service", lambda creds: "gmail-service")
     monkeypatch.setattr(meetings, "calendar_service", lambda creds: g.calendar)
@@ -87,6 +88,7 @@ def google(db, monkeypatch):
         if g.send_error:
             raise g.send_error
         g.sent.append(dict(to=to, subject=subject, body=body, thread_id=thread_id, in_reply_to=in_reply_to))
+        g.attached.append([a.filename for a in attachments])
         return {"id": "sent1", "threadId": thread_id or "new-thread"}
 
     monkeypatch.setattr(gmail, "send", send)
@@ -146,6 +148,15 @@ class TestSchedule:
         assert meeting.ends_at - meeting.starts_at == timedelta(minutes=30)
         mine = db.scalars(select(ConversationMessage).where(ConversationMessage.gmail_message_id == "sent1")).one()
         assert (mine.from_me, mine.gmail_thread_id, mine.body) == (True, "t1", f"Hi Douglas, here's the link: {LINK}")
+
+    def test_sends_attachments_and_records_them(self, db, google):
+        from app.models import Attachment
+
+        pdf = Attachment(filename="Coffee_Chat_With_Douglas.pdf", content_type="application/pdf", size_bytes=4, data=b"%PDF")
+        meeting = schedule(db, douglas(db), attachments=[pdf])
+        assert google.attached == [["Coffee_Chat_With_Douglas.pdf"]]
+        assert meeting.attachment_name == "Coffee_Chat_With_Douglas.pdf"
+        assert schedule(db, f.contact(db, email="sam@harvey.ai")).attachment_name is None
 
     def test_without_a_calendar_invite(self, db, google):
         schedule(db, douglas(db), invite=False)

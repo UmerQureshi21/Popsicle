@@ -2,11 +2,12 @@
 
 import { safeHref } from "@/lib/safeUrl";
 import { useEffect, useState } from "react";
-import { Link2, Search, Trash2, Users } from "lucide-react";
+import { Link2, NotebookPen, Search, Trash2, Users } from "lucide-react";
 import { api, type CompanyName, type Contact, type Page } from "@/lib/api";
 import { formatDate } from "@/lib/format";
 import { useDebounced, usePaged } from "@/lib/paged";
-import { Avatar, EmptyState, StatusBadge } from "@/components/ui";
+import { Avatar, EmptyState, Modal, StatusBadge } from "@/components/ui";
+import CoffeeNotes from "@/components/coffee/CoffeeNotes";
 import LoadMore from "@/components/LoadMore";
 import PageShell from "@/components/PageShell";
 import Select from "@/components/Select";
@@ -16,6 +17,7 @@ export default function ContactsPage() {
   const [q, setQ] = useState("");
   const [companyId, setCompanyId] = useState("");
   const search = useDebounced(q.trim(), 200);
+  const [notesFor, setNotesFor] = useState<Contact | null>(null);
 
   useEffect(() => {
     api.get<CompanyName[]>("/api/companies/names").then(setCompanies, () => {});
@@ -67,7 +69,7 @@ export default function ContactsPage() {
                 <th className="hidden px-5 py-3 font-medium sm:table-cell">Company</th>
                 <th className="hidden px-5 py-3 font-medium md:table-cell">Emailed</th>
                 <th className="px-4 py-3 font-medium sm:px-5">Status</th>
-                <th className="w-12" />
+                <th className="w-20" />
               </tr>
             </thead>
             <tbody>
@@ -104,7 +106,15 @@ export default function ContactsPage() {
                     )}
                   </td>
                   <td className="px-4 py-3 sm:px-5">{c.last_status && <StatusBadge status={c.last_status} />}</td>
-                  <td className="px-3 py-3">
+                  <td className="px-3 py-3 whitespace-nowrap">
+                    <button
+                      onClick={() => setNotesFor(c)}
+                      className={`rounded-lg p-1.5 hover:bg-paper hover:text-ink ${c.notes?.trim() ? "text-ink" : "text-steel opacity-0 group-hover:opacity-100 focus:opacity-100"}`}
+                      aria-label="Notes"
+                      title={c.notes?.trim() ? "Your notes" : "Write notes"}
+                    >
+                      <NotebookPen className="size-4" />
+                    </button>
                     <button
                       onClick={() => remove(c)}
                       className="rounded-lg p-1.5 text-steel opacity-0 group-hover:opacity-100 hover:bg-paper hover:text-crimson"
@@ -128,6 +138,25 @@ export default function ContactsPage() {
             />
           )}
         </div>
+      )}
+      {notesFor && (
+        <Modal
+          open
+          wide
+          onClose={() => setNotesFor(null)}
+          title={
+            <span className="flex items-center gap-2">
+              <NotebookPen className="size-5 text-crimson" /> Notes on {notesFor.full_name || notesFor.email}
+            </span>
+          }
+        >
+          <CoffeeNotes
+            contactId={notesFor.id}
+            initial={notesFor.notes ?? ""}
+            onSaved={(notes) => list.edit((items) => items.map((x) => (x.id === notesFor.id ? { ...x, notes } : x)))}
+            className="p-6"
+          />
+        </Modal>
       )}
     </PageShell>
   );

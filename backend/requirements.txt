@@ -17,3 +17,8 @@ httplib2==0.32.0
 cryptography==50.0.2
 # Time zone data for booking hours; slim server images may not ship it.
 tzdata==2026.5
+# Coffee chat sheets (PDF), and what fpdf2 needs.
+fpdf2==2.8.5
+fonttools==4.69.1
+pillow==13.0.0
+defusedxml==0.7.1
