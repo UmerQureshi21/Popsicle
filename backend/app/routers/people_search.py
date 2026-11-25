@@ -196,9 +196,9 @@ def new_people(body: NewPeopleIn, db: Session = Depends(get_db)):
     location = [loc.model_dump(exclude_none=True) for loc in body.location] if body.location else None
     hidden = set(db.scalars(select(SeenPerson.email))) if body.hide_seen else set()
     found: list[FoundPerson] = []
-    taken: set[str] = set()
+    taken: set[str] = {e.strip().lower() for e in body.skip}  # people the page already has
     data: dict = {}
-    offset = total = pages = paid = 0
+    offset, total, pages, paid = body.offset, 0, 0, 0
     reached_end = False
     while len(found) < body.want and pages < NEW_MAX_PAGES:
         res, cached = _call(
@@ -210,13 +210,15 @@ def new_people(body: NewPeopleIn, db: Session = Depends(get_db)):
         data, meta = res.get("data") or {}, res.get("meta") or {}
         total = meta.get("results") or 0
         page = _mark_already_emailed(db, [p for p in (_person(e, "value") for e in data.get("emails") or []) if p])
-        for p in page:
+        rest = list(page)
+        while rest and len(found) < body.want:
+            p = rest.pop(0)
             if p.already_emailed_at or p.in_batch or p.email in taken or p.email.lower() in hidden:
                 continue
             taken.add(p.email)
             found.append(p)
-            if len(found) == body.want:
-                break
+        if rest:
+            break  # stopped partway through this page: the next ask starts here and skips who it has
         offset += NEW_PAGE
         if not page or offset >= total:
             reached_end = True
@@ -224,7 +226,7 @@ def new_people(body: NewPeopleIn, db: Session = Depends(get_db)):
     _remember_seen(db, found)
     return NewPeopleOut(
         domain=data.get("domain"), organization=data.get("organization"), pattern=data.get("pattern"), total=total,
-        people=found, reached_end=reached_end, pages_checked=pages, pages_paid=paid,
+        people=found, reached_end=reached_end, pages_checked=pages, pages_paid=paid, next_offset=offset,
     )
 
 

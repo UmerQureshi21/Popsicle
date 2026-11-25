@@ -366,6 +366,10 @@ class NewPeopleIn(BaseModel):
     job_titles: str | None = None
     location: list[LocationFilter] | None = None
     hide_seen: bool = False
+    # To get more than `want` at once, the page asks again from `next_offset`, passing the people it
+    # already has in `skip`. Offsets are whole pages of 10, so saved pages are reused for free.
+    offset: int = Field(0, ge=0, multiple_of=10)
+    skip: list[str] = Field(default_factory=list, max_length=100)
 
 
 class NewPeopleOut(BaseModel):
@@ -377,6 +381,7 @@ class NewPeopleOut(BaseModel):
     reached_end: bool  # every person Hunter has was checked: there are no more new ones
     pages_checked: int
     pages_paid: int  # pages fetched from Hunter now (the rest were saved earlier, free)
+    next_offset: int  # where to carry on looking for more (the page it stopped in, if it stopped mid-page)
 
 
 class CompanySuggestion(BaseModel):
