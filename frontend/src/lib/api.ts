@@ -347,6 +347,7 @@ export type NewPeople = {
   reached_end: boolean;
   pages_checked: number;
   pages_paid: number;
+  next_offset: number; // where a follow-up ask carries on
 };
 
 export type EmailFinderResult = { person: FoundPerson | null; domain: string | null; company: string | null; cached: boolean };

@@ -10,6 +10,7 @@ import { DEFAULT_LOCATION, LOCATIONS, locationById, type LocationId } from "@/li
 import { DEFAULT_TITLES, ROLES, roleOf, roleTitles, titleLabel, type RoleId } from "@/lib/roles";
 import { textChip, textToChips, type Chip } from "@/lib/chips";
 import { applyEmailed, checkEmailed } from "@/lib/emailed";
+import { gatherNewPeople } from "@/lib/newPeople";
 import { saveHandoff } from "@/lib/people";
 import { Button, EmptyState } from "@/components/ui";
 import CompanyAutocomplete, { CompanyLogo } from "@/components/CompanyAutocomplete";
@@ -43,7 +44,7 @@ type Saved = {
 };
 
 const STORAGE_KEY = "popsicle:find-people:v1";
-const PER_COMPANY = [5, 10, 25];
+const PER_COMPANY = [5, 10, 25, 100];
 const DEFAULTS: Saved = {
   chips: [],
   jobTitle: DEFAULT_TITLES,
@@ -199,13 +200,16 @@ export default function FindPeople() {
     const filters = r.filters ?? { jobTitle, location };
     update(r.query, { state: "loading", error: undefined });
     try {
-      const res = await api.post<NewPeople>("/api/people-search/company/new", {
-        query: r.query,
-        want: perCompany,
-        job_titles: filters.jobTitle.trim() || null,
-        location: locationById(filters.location).filters,
-        hide_seen: hideSeen,
-      });
+      // Asked a piece at a time (up to 25 each), so getting 100 doesn't make one long request.
+      const res = await gatherNewPeople(perCompany, (piece) =>
+        api.post<NewPeople>("/api/people-search/company/new", {
+          query: r.query,
+          ...piece,
+          job_titles: filters.jobTitle.trim() || null,
+          location: locationById(filters.location).filters,
+          hide_seen: hideSeen,
+        }),
+      );
       update(r.query, (prev) => ({
         state: "done",
         fresh: true,
