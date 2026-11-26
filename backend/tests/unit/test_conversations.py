@@ -248,6 +248,129 @@ class TestSync:
 
 
 
+def checked(db, account, gmail):
+    """One full check, finished like the background job finishes it."""
+    result = conv.sync(db, gmail, account)
+    conv.finish_sync(db, account, result)
+    return result
+
+
+class TestChangesSinceLastCheck:
+    def test_the_first_check_searches_then_later_ones_ask_what_changed(self, db, account):
+        emailed(db, "jane@stripe.com")
+        gmail = FakeGmail({"t1": [message("m1", ME, "jane@stripe.com", sent=True)]})
+        checked(db, account, gmail)
+        assert len(gmail.searches) == 1 and account.history_id == "101"
+
+        assert checked(db, account, gmail).threads_downloaded == 0
+        assert len(gmail.searches) == 1  # no search: nothing changed
+        assert gmail.history_asks == [("101", "INBOX"), ("101", "SENT")]
+
+        gmail.add("t1", message("m2", "jane@stripe.com", ME, "Yes!", at=at(3)))
+        result = checked(db, account, gmail)
+        assert (result.threads_downloaded, result.new_messages) == (1, 1)
+        assert len(gmail.searches) == 1 and gmail.header_checks == []  # a known conversation: straight to it
+        assert account.history_id == "102"
+        assert account.sync_result["people_checked"] == account.sync_result["people_total"] == 1
+
+    def test_a_new_conversation_is_found_from_its_headers_and_other_mail_is_left_alone(self, db, account):
+        jane = emailed(db, "jane@stripe.com")
+        gmail = FakeGmail({"t1": [message("m1", ME, "jane@stripe.com", sent=True)]})
+        checked(db, account, gmail)
+
+        gmail.add("t2", message("m2", "Jane <jane@stripe.com>", ME, "Different topic", at=at(3)))
+        gmail.add("t3", message("m3", "news@shop.com", ME, "Sale!", at=at(3)))
+        result = checked(db, account, gmail)
+        assert sorted(gmail.header_checks) == ["m2", "m3"]
+        assert gmail.downloads[-1:] == ["t2"] and "t3" not in gmail.downloads
+        assert result.new_messages == 1
+        assert (jane.id, "m2", False, "jane@stripe.com", "Different topic") in stored(db)
+
+    def test_a_batch_email_s_conversation_is_known_without_checking_headers(self, db, account):
+        jane = f.contact(db, email="jane@stripe.com")
+        e = f.sent_email(db, "jane@stripe.com", at(1), contact=jane)
+        e.gmail_thread_id = "t9"
+        db.commit()
+        gmail = FakeGmail()
+        checked(db, account, gmail)
+        gmail.add("t9", message("m9", "jane@stripe.com", ME, "Sure!", at=at(3)))
+        assert checked(db, account, gmail).new_messages == 1
+        assert gmail.header_checks == []
+
+    def test_someone_emailed_since_the_last_check_is_searched_for(self, db, account):
+        emailed(db, "jane@stripe.com")
+        gmail = FakeGmail({"old": [message("m0", "sam@stripe.com", ME, "Hi from before", at=at(1))]})
+        checked(db, account, gmail)
+        sam = f.contact(db, email="sam@stripe.com")
+        f.sent_email(db, "sam@stripe.com", conv.now() + timedelta(seconds=1), contact=sam)
+        checked(db, account, gmail)
+        assert gmail.searches[-1] == 'from:("sam@stripe.com") OR to:("sam@stripe.com") OR cc:("sam@stripe.com")'
+        assert (sam.id, "m0", False, "sam@stripe.com", "Hi from before") in stored(db)
+
+    def test_when_gmail_no_longer_has_that_history_it_searches_everyone_again(self, db, account):
+        emailed(db, "jane@stripe.com")
+        gmail = FakeGmail({"t1": [message("m1", ME, "jane@stripe.com", sent=True)]})
+        checked(db, account, gmail)
+        gmail.add("t1", message("m2", "jane@stripe.com", ME, "Yes!", at=at(3)))
+        gmail.history_kept_from = 1000
+        assert checked(db, account, gmail).new_messages == 1
+        assert len(gmail.searches) == 2 and account.history_id == "102"
+
+    def test_a_conversation_deleted_since_is_skipped(self, db, account):
+        emailed(db, "jane@stripe.com")
+        gmail = FakeGmail({"t1": [message("m1", ME, "jane@stripe.com", sent=True)]})
+        checked(db, account, gmail)
+        gmail.add("t1", message("m2", "jane@stripe.com", ME, "Yes!", at=at(3)))
+        gmail.add("t2", message("m3", "x@y.com", ME, "?", at=at(3)))
+        del gmail.data["t1"], gmail.data["t2"]
+        gmail.log[-1][2]["id"] = "gone"
+        assert checked(db, account, gmail).threads_downloaded == 0
+
+    def test_many_changes_come_a_page_at_a_time(self, db, account):
+        emailed(db, "jane@stripe.com")
+        gmail = FakeGmail({"t1": [message("m1", ME, "jane@stripe.com", sent=True)]}, page_size=2)
+        checked(db, account, gmail)
+        gmail.add("t1", *[message(f"r{i}", "jane@stripe.com", ME, f"Reply {i}", at=at(3)) for i in range(5)])
+        assert checked(db, account, gmail).new_messages == 5
+        assert [a for a in gmail.history_asks if a[1] == "INBOX"] == [("101", "INBOX")] * 3  # 5 changes, 2 a page
+
+    def test_syncing_one_person_doesnt_use_or_move_the_history(self, db, account):
+        jane = emailed(db, "jane@stripe.com")
+        gmail = FakeGmail({"t1": [message("m1", ME, "jane@stripe.com", sent=True)]})
+        conv.sync(db, gmail, account, [jane.id])
+        assert account.history_id is None and gmail.history_asks == []
+
+    @pytest.mark.parametrize("failing", ["history", "headers"])
+    def test_other_errors_while_asking_are_passed_on(self, db, account, failing):
+        from googleapiclient.errors import HttpError
+
+        emailed(db, "jane@stripe.com")
+        gmail = FakeGmail({"t1": [message("m1", ME, "jane@stripe.com", sent=True)]})
+        checked(db, account, gmail)
+        gmail.add("t2", message("m2", "x@y.com", ME, "?", at=at(3)))
+        boom = HttpError(type("Resp", (), {"status": 500, "reason": "Oops"})(), b"Oops")
+        # The INBOX history ask comes first; the header check right after it.
+        gmail.fail_next = [boom] if failing == "history" else []
+        if failing == "headers":
+            real = gmail.messages().get
+            gmail.messages = lambda: type("M", (), {"get": lambda self, **kw: (gmail.fail_next.append(boom), real(**kw))[1]})()
+        with pytest.raises(HttpError):
+            conv.sync(db, gmail, account)
+
+    def test_a_failed_download_is_passed_on(self, db, account, monkeypatch):
+        from googleapiclient.errors import HttpError
+
+        emailed(db, "jane@stripe.com")
+        gmail = FakeGmail({"t1": [message("m1", ME, "jane@stripe.com", sent=True)]})
+        checked(db, account, gmail)
+        gmail.add("t1", message("m2", "jane@stripe.com", ME, "Yes!", at=at(3)))
+        boom = HttpError(type("Resp", (), {"status": 500, "reason": "Oops"})(), b"Oops")
+        monkeypatch.setattr(gmail, "get", lambda **kw: type("C", (), {"execute": lambda self: (_ for _ in ()).throw(boom)})())
+        with pytest.raises(HttpError):
+            conv.sync(db, gmail, account)
+        assert account.history_id == "101"  # not moved on: the next check asks again
+
+
 def rate_limited(status=429):
     from googleapiclient.errors import HttpError
 

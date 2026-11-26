@@ -284,6 +284,8 @@ class GmailAccount(Base):
     token_json: Mapped[str] = mapped_column(Text)
     scopes: Mapped[str | None] = mapped_column(Text)  # space-separated scopes Google granted
     synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))  # last conversation sync
+    # Where the mailbox was at the last full check: the next one asks Gmail what changed since.
+    history_id: Mapped[str | None] = mapped_column(String(40))
     # A sync in progress (in the background) and how the last one went; see conversations.py.
     sync_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     sync_result: Mapped[dict | None] = mapped_column(JSONB)

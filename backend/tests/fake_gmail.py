@@ -1,4 +1,5 @@
-"""A stand-in for Gmail's API client: threads.list (a search by address) and threads.get."""
+"""A stand-in for Gmail's API client: threads.list (a search by address), threads.get, and the
+mailbox's history (getProfile, history.list, messages.get with headers only)."""
 
 import base64
 import re
@@ -50,11 +51,59 @@ class _Call:
         return self.result
 
 
+def not_found():
+    from googleapiclient.errors import HttpError
+
+    return HttpError(type("Resp", (), {"status": 404, "reason": "Not Found"})(), b"Requested entity was not found.")
+
+
+class _History:
+    def __init__(self, gmail: "FakeGmail"):
+        self.gmail = gmail
+
+    def list(self, userId, startHistoryId, historyTypes, labelId, maxResults, pageToken=None):
+        g = self.gmail
+        g.history_asks.append((startHistoryId, labelId))
+        if int(startHistoryId) < g.history_kept_from:
+            return _Call(not_found(), g.fail_next)
+        records = [
+            {"id": str(hid), "messagesAdded": [{"message": {"id": m["id"], "threadId": tid}}]}
+            for hid, tid, m in g.log
+            if hid > int(startHistoryId) and labelId in m["labelIds"]
+        ]
+        start = int(pageToken or 0)
+        res = {"history": records[start : start + g.page_size], "historyId": str(g.mailbox)}
+        if start + g.page_size < len(records):
+            res["nextPageToken"] = str(start + g.page_size)
+        return _Call(res, g.fail_next)
+
+
+class _Messages:
+    def __init__(self, gmail: "FakeGmail"):
+        self.gmail = gmail
+
+    def get(self, userId, id, format, metadataHeaders):
+        g = self.gmail
+        g.header_checks.append(id)
+        for t in g.data.values():
+            for m in t["messages"]:
+                if m["id"] == id:
+                    headers = [h for h in m["payload"]["headers"] if h["name"] in metadataHeaders]
+                    return _Call({"id": id, "payload": {"headers": headers}}, g.fail_next)
+        return _Call(not_found(), g.fail_next)
+
+
 class FakeGmail:
-    """threads: thread id -> list of messages. Bump a thread's history with `.add()`."""
+    """threads: thread id -> list of messages. Bump a thread's history with `.add()`; every added
+    message also moves the mailbox's history on (`.mailbox`), as Gmail does."""
 
     def __init__(self, threads: dict[str, list[dict]] | None = None, page_size: int = 100):
         self.data: dict[str, dict] = {}
+        self.mailbox = 100  # the mailbox's history id
+        self.log: list[tuple[int, str, dict]] = []  # (history id, thread id, message added)
+        self.history_kept_from = 0  # older history ids answer 404, like Gmail's after about a week
+        self.history_asks: list[tuple[str, str]] = []
+        self.header_checks: list[str] = []
         self.page_size = page_size
         self.searches: list[str] = []
         self.downloads: list[str] = []
@@ -67,6 +116,9 @@ class FakeGmail:
         t = self.data.setdefault(thread_id, {"id": thread_id, "historyId": "0", "messages": []})
         t["messages"] += msgs
         t["historyId"] = str(int(t["historyId"]) + 1)
+        for m in msgs:
+            self.mailbox += 1
+            self.log.append((self.mailbox, thread_id, m))
 
     # googleapiclient shape: service.users().threads().list(...).execute()
     def users(self):
@@ -74,6 +126,17 @@ class FakeGmail:
 
     def threads(self):
         return self
+
+    def history(self):
+        return _History(self)
+
+    def messages(self):
+        return _Messages(self)
+
+    def getProfile(self, userId):
+        if self.error:
+            return _Call(self.error)
+        return _Call({"emailAddress": "me@gmail.com", "historyId": str(self.mailbox)}, self.fail_next)
 
     def list(self, userId, q, maxResults, pageToken=None):
         if self.error:
@@ -95,4 +158,6 @@ class FakeGmail:
 
     def get(self, userId, id, format):
         self.downloads.append(id if format == "full" else f"{id} ({format})")
+        if id not in self.data:
+            return _Call(not_found(), self.fail_next)
         return _Call(self.data[id], self.fail_next)

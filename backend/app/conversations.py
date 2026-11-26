@@ -15,6 +15,7 @@ from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
 from email.utils import getaddresses, parseaddr
 
+from googleapiclient.errors import HttpError
 from sqlalchemy import delete, or_, select, update
 from sqlalchemy.orm import Session
 
@@ -40,6 +41,10 @@ MAX_THREADS_PER_SEARCH = 300
 UNITS_PER_MINUTE = 4200
 BURST_UNITS = 1200
 COST_SEARCH, COST_THREAD, COST_LABELS = 10, 120, 40
+COST_PROFILE, COST_HISTORY, COST_HEADERS = 1, 2, 20  # where the mailbox is; what changed; one message's From/To/Cc
+# Checks after the first ask Gmail what was added to these since last time (drafts, spam and
+# the like aren't in either, so they're never looked at).
+WATCHED_LABELS = ("INBOX", "SENT")
 # If Google still says "slow down", wait and try again: 2, 4, 8… seconds, up to a minute.
 RATE_LIMIT_RETRIES = 6
 MAX_BACKOFF = 64
@@ -305,15 +310,85 @@ def _store_thread(db: Session, thread: dict, me: str, people: dict[str, Contact]
     return new
 
 
+def _gone(e: Exception) -> bool:
+    """Gmail answering 404: a message or thread deleted since, or a history id too old to use."""
+    return isinstance(e, HttpError) and e.resp.status == 404
+
+
+def _changes(service, pace: Pace, since: str) -> tuple[dict[str, list[str]], str] | None:
+    """Threads with messages added to your Inbox or Sent since `since`: {thread id: [message ids]},
+    and where the mailbox is now. None when Gmail no longer has history that old (about a week)."""
+    threads: dict[str, list[str]] = {}
+    latest = since
+    for label in WATCHED_LABELS:
+        token = None
+        while True:
+            try:
+                res = _call(pace, COST_HISTORY, service.users().history().list(
+                    userId="me", startHistoryId=since, historyTypes=["messageAdded"], labelId=label, maxResults=500, pageToken=token,
+                ))
+            except Exception as e:
+                if _gone(e):
+                    return None
+                raise
+            for record in res.get("history") or []:
+                for added in record.get("messagesAdded") or []:
+                    m = added.get("message") or {}
+                    if m.get("threadId") and m.get("id"):
+                        threads.setdefault(m["threadId"], []).append(m["id"])
+            latest = max(latest, res.get("historyId") or latest, key=int)
+            token = res.get("nextPageToken")
+            if not token:
+                break
+    return threads, latest
+
+
+def _known_threads(db: Session, thread_ids: list[str]) -> set[str]:
+    """Which of these threads are already known to be with someone you've emailed."""
+    if not thread_ids:
+        return set()
+    return {
+        *db.scalars(select(MailThread.gmail_thread_id).where(MailThread.gmail_thread_id.in_(thread_ids))),
+        *db.scalars(select(ConversationMessage.gmail_thread_id).where(ConversationMessage.gmail_thread_id.in_(thread_ids))),
+        *db.scalars(select(Email.gmail_thread_id).where(Email.gmail_thread_id.in_(thread_ids))),
+    }
+
+
+def _involves(service, pace: Pace, message_id: str, people: dict[str, Contact]) -> bool:
+    """Whether a message is from or to someone you've emailed, from its headers alone."""
+    try:
+        msg = _call(pace, COST_HEADERS, service.users().messages().get(
+            userId="me", id=message_id, format="metadata", metadataHeaders=["From", "To", "Cc"],
+        ))
+    except Exception as e:
+        if _gone(e):
+            return False
+        raise
+    h = _headers(msg.get("payload") or {})
+    return any(a.lower() in people for _, a in getaddresses([h.get("from", ""), h.get("to", ""), h.get("cc", "")]))
+
+
+def _emailed_since(db: Session, since: datetime | None, people: dict[str, Contact]) -> list[str]:
+    """Addresses of people sent an email since `since` (everyone, if there's no last check)."""
+    if since is None:
+        return sorted(people)
+    ids = set(db.scalars(select(Email.contact_id).where(Email.status == EmailStatus.SENT, Email.sent_at > since)))
+    return sorted(a for a, c in people.items() if c.id in ids)
+
+
 def sync(db: Session, service, account: GmailAccount, contact_ids: list[int] | None = None) -> SyncResult:
     """Bring conversations up to date with Gmail, for everyone emailed (or just `contact_ids`).
     The caller holds the sync claim (claim_sync); it's renewed after each piece of work, along
-    with the progress so far, so a long sync isn't mistaken for a dead one."""
+    with the progress so far, so a long sync isn't mistaken for a dead one.
+
+    The first full check searches Gmail for everyone you've emailed (15 at a time) and notes
+    where the mailbox was. Later ones ask Gmail what was added since then, so their cost
+    follows how much new mail there is, not how many people you've emailed."""
     people = people_emailed(db, contact_ids)
     me = account.email.lower()
-    result = SyncResult(people_total=len(people))
+    result = SyncResult()  # people_total is set only while searching, so the page shows "120 of 913 people" just then
     pace = Pace()
-    addresses = sorted(people)
+    full = contact_ids is None
     seen: set[str] = set()
 
     def checkpoint():
@@ -321,35 +396,68 @@ def sync(db: Session, service, account: GmailAccount, contact_ids: list[int] | N
         account.sync_result = {**asdict(result), "error": None}
         db.commit()
 
-    for i in range(0, len(addresses), ADDRESSES_PER_SEARCH):
-        for t in _search(service, pace, _query(addresses[i : i + ADDRESSES_PER_SEARCH])):
-            if t["id"] in seen:
-                continue
-            seen.add(t["id"])
-            result.threads_checked += 1
-            stored = db.get(MailThread, t["id"])
-            if stored and stored.history_id == t.get("historyId"):
-                if not stored.skips_drafts:
-                    # Unchanged, but synced before drafts were skipped: its labels are enough
-                    # to remove any draft copied then, at a third of the cost.
-                    threads = service.users().threads()
-                    _drop_unsent(db, _call(pace, COST_LABELS, threads.get(userId="me", id=t["id"], format="minimal")))
-                    stored.skips_drafts = True
-                    checkpoint()
-                continue
-            thread = _call(pace, COST_THREAD, service.users().threads().get(userId="me", id=t["id"], format="full"))
-            result.new_messages += _store_thread(db, thread, me, people)
-            result.threads_downloaded += 1
-            # Only a full sync records the thread as done: a sync for some people may have
-            # skipped messages to others on the same thread.
-            if contact_ids is None:
-                history = thread.get("historyId") or t.get("historyId", "")
-                if stored is None:
-                    db.add(MailThread(gmail_thread_id=t["id"], history_id=history))
-                else:
-                    stored.history_id = history
-                    stored.skips_drafts = True
-            checkpoint()
-        result.people_checked = min(len(addresses), i + ADDRESSES_PER_SEARCH)
+    def download(thread_id: str, stored: MailThread | None, listed_history: str = "") -> None:
+        try:
+            thread = _call(pace, COST_THREAD, service.users().threads().get(userId="me", id=thread_id, format="full"))
+        except Exception as e:
+            if _gone(e):
+                return  # deleted since
+            raise
+        result.new_messages += _store_thread(db, thread, me, people)
+        result.threads_downloaded += 1
+        # Only a full sync records the thread as done: a sync for some people may have
+        # skipped messages to others on the same thread.
+        if full:
+            history = thread.get("historyId") or listed_history
+            if stored is None:
+                db.add(MailThread(gmail_thread_id=thread_id, history_id=history))
+            else:
+                stored.history_id = history
+                stored.skips_drafts = True
         checkpoint()
+
+    def search(addresses: list[str]) -> None:
+        for i in range(0, len(addresses), ADDRESSES_PER_SEARCH):
+            for t in _search(service, pace, _query(addresses[i : i + ADDRESSES_PER_SEARCH])):
+                if t["id"] in seen:
+                    continue
+                seen.add(t["id"])
+                result.threads_checked += 1
+                stored = db.get(MailThread, t["id"])
+                if stored and stored.history_id == t.get("historyId"):
+                    if not stored.skips_drafts:
+                        # Unchanged, but synced before drafts were skipped: its labels are enough
+                        # to remove any draft copied then, at a third of the cost.
+                        threads = service.users().threads()
+                        _drop_unsent(db, _call(pace, COST_LABELS, threads.get(userId="me", id=t["id"], format="minimal")))
+                        stored.skips_drafts = True
+                        checkpoint()
+                    continue
+                download(t["id"], stored, t.get("historyId", ""))
+            result.people_checked = min(len(addresses), i + ADDRESSES_PER_SEARCH)
+            checkpoint()
+
+    changes = _changes(service, pace, account.history_id) if full and account.history_id else None
+    if changes is not None:
+        threads, latest = changes
+        known = _known_threads(db, list(threads))
+        for thread_id, message_ids in threads.items():
+            if thread_id in known or _involves(service, pace, message_ids[-1], people):
+                seen.add(thread_id)
+                result.threads_checked += 1
+                download(thread_id, db.get(MailThread, thread_id))
+        # Someone emailed since the last check may have older conversations with you: search for them.
+        fresh = _emailed_since(db, account.synced_at, people)
+        result.people_total = len(fresh)
+        search(fresh)
+        account.history_id = latest
+        result.people_checked = result.people_total = len(people)
+    else:
+        # Where the mailbox is before searching, so whatever arrives meanwhile is in the next check.
+        start = _call(pace, COST_PROFILE, service.users().getProfile(userId="me"))["historyId"] if full else None
+        result.people_total = len(people)
+        search(sorted(people))
+        if full:
+            account.history_id = start
+    checkpoint()
     return result
