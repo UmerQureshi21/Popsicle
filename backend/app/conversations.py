@@ -386,7 +386,7 @@ def sync(db: Session, service, account: GmailAccount, contact_ids: list[int] | N
     follows how much new mail there is, not how many people you've emailed."""
     people = people_emailed(db, contact_ids)
     me = account.email.lower()
-    result = SyncResult(people_total=len(people))
+    result = SyncResult()  # people_total is set only while searching, so the page shows "120 of 913 people" just then
     pace = Pace()
     full = contact_ids is None
     seen: set[str] = set()
@@ -447,12 +447,15 @@ def sync(db: Session, service, account: GmailAccount, contact_ids: list[int] | N
                 result.threads_checked += 1
                 download(thread_id, db.get(MailThread, thread_id))
         # Someone emailed since the last check may have older conversations with you: search for them.
-        search(_emailed_since(db, account.synced_at, people))
+        fresh = _emailed_since(db, account.synced_at, people)
+        result.people_total = len(fresh)
+        search(fresh)
         account.history_id = latest
-        result.people_checked = len(people)
+        result.people_checked = result.people_total = len(people)
     else:
         # Where the mailbox is before searching, so whatever arrives meanwhile is in the next check.
         start = _call(pace, COST_PROFILE, service.users().getProfile(userId="me"))["historyId"] if full else None
+        result.people_total = len(people)
         search(sorted(people))
         if full:
             account.history_id = start
