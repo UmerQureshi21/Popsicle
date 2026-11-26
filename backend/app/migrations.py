@@ -17,6 +17,7 @@ COLUMNS = [
     ("emails", "attempted_at", "TIMESTAMPTZ"),  # handed to Gmail, not yet confirmed
     ("gmail_accounts", "sync_started_at", "TIMESTAMPTZ"),  # a conversation sync in progress
     ("gmail_accounts", "sync_result", "JSONB"),  # how the last one went
+    ("gmail_accounts", "history_id", "VARCHAR(40)"),  # where the mailbox was at the last check
     ("meetings", "attachment_name", "VARCHAR(300)"),  # a file sent along with the Meet link
     ("mail_threads", "skips_drafts", "BOOLEAN NOT NULL DEFAULT false"),  # downloaded since drafts were skipped
 ]
